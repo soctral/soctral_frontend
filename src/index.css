@@ -14,3 +14,22 @@
 .animate-heartbeat-slow {
   animation: heartbeat-slow 2s ease-in-out infinite;
 }
+
+/* Zendesk Web Widget (Messaging) – above bottom nav on mobile */
+@media (max-width: 768px) {
+  /* Launcher container Zendesk injects – 80px from bottom clears the nav bar */
+  #launcher,
+  [data-test-id="launcher"],
+  iframe#launcher {
+    right: 16px !important;
+    left: auto !important;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  /* Wrapper div some Zendesk versions use */
+  body > div[id^="launcher"],
+  body > div[class*="Launcher"] {
+    right: 16px !important;
+    left: auto !important;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
