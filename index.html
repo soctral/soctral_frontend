@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="favicon/favicon.ico" />
+
+  <!-- Viewport settings with safe area support and zoom prevention -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+  <!-- iOS specific meta tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="light-content">
+
+  <!-- Android theme color - default to black -->
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <title>Soctral</title>
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png">
+
+  <link rel="manifest" href="favicon/site.webmanifest" />
+  <link rel="shortcut icon" href="favicon/favicon.ico" />
+
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+
+  <style>
+    /* Reset default margins and paddings */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background-color: #ffffff;
+       font-family: "Archivo", sans-serif;
+    font-style: normal;
+    }
+
+    #root {
+      height: 100%;
+      width: 100%;
+      padding-top: env(safe-area-inset-top, 20px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      position: relative;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    @supports (height: 100dvh) {
+      body {
+        height: 100dvh;
+      }
+    }
+
+    .status-bar-spacer {
+      height: 24px;
+      width: 100%;
+      background-color: #000000; 
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      transition: background-color 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="status-bar-spacer"></div>
+
+    <!-- Your app content here -->
+  </div>
+
+  <script type="module" src="/src/main.jsx"></script>
+
+  <!-- Start of soctraltechnologyhelp Zendesk Widget script -->
+  <script id="ze-snippet" src="https://static.zdassets.com/ekr/snippet.js?key=d6ec870e-8340-4f72-a449-7b0d69c28472"></script>
+  <!-- End of soctraltechnologyhelp Zendesk Widget script -->
+
+  <!-- Script to dynamically show/hide spacer for Android only -->
+  <script>
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (!isAndroid) {
+      const spacer = document.querySelector('.status-bar-spacer');
+      if (spacer) spacer.style.display = 'none';
+    }
+  </script>
+</body>
+</html>

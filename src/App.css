@@ -1,0 +1,41 @@
+@keyframes heartbeat-slow {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.animate-heartbeat-slow {
+  animation: heartbeat-slow 2s ease-in-out infinite;
+}
+
+
+body{
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body{
+  min-width: 230px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+
+body {
+  overflow: hidden;
+  min-width: 230px;
+  font-family: "Archivo", sans-serif;
+    font-style: normal;
+
+}
+
+
+#root {
+  min-height: 100vh;
+  padding-top: env(safe-area-inset-top);
+  box-sizing: border-box;
+}
