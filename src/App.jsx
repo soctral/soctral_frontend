@@ -142,9 +142,7 @@ function App() {
     <UserProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/legal" element={<Legal />} />
-          <Route path="*" element={<Navigate to="/homepage" replace />} />
+         
           <Route 
             path="/" 
             element={
@@ -184,6 +182,9 @@ function App() {
               />
             } 
           />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/legal" element={<Legal />} />
+          <Route path="*" element={<Navigate to="/homepage" replace />} />
         </Routes>
       </BrowserRouter>
     </UserProvider>
