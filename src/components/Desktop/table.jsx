@@ -133,6 +133,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
   const [showRightScroll, setShowRightScroll] = useState(true);
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [loadingRowId, setLoadingRowId] = useState(null); // Track which row is loading
+  const [initiateConfirmPayload, setInitiateConfirmPayload] = useState(null); // { seller, accountData } for confirm dialog
   // React Query handles fetching, caching, retry, and polling
   const {
     data: ordersResponse,
@@ -347,23 +348,14 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
 
 
 
-  const handleInitiateTrade = async (seller, accountData) => {
-    // Set loading state immediately for visual feedback
+  const proceedWithInitiateTrade = async (seller, accountData) => {
     setLoadingRowId(accountData?.id);
-
-    // Extract username from filters array
     const extractedUsername = accountData?.filters?.find(f => f.key === 'username')?.value ||
       accountData?.accountUsername ||
       accountData?.username ||
       accountData?.handle ||
       'N/A';
-
     const sellerImage = getSellerImage(seller);
-
-    // 🚀 OPTIMIZED: Build seller data immediately without waiting for wallet
-    // 🔥 Chat Tab Routing: table.jsx is for BUYERS browsing sell orders
-    //   - Clicking here means current user is BUYER, other user is SELLER
-    //   - Current user opens chat in Buy tab, seller sees it in Sell tab
     const sellerForChat = {
       id: seller.id,
       _id: seller.id,
@@ -375,13 +367,13 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       avatarUrl: sellerImage,
       image: sellerImage,
       status: 'online',
-      chatType: 'buy', // 🔥 FIXED: Current user is BUYER, so chatType is 'buy'
-      initiatorChatType: 'buy', // 🔥 Preserved for tab routing - initiator sees Buy tab
+      chatType: 'buy',
+      initiatorChatType: 'buy',
       price: accountData?.price || seller.price || 'N/A',
       accountId: accountData?.id || seller.accountId || seller.id,
       sellOrderId: accountData?.id || accountData?._id || seller.accountId,
       sellerId: seller.id || seller._id,
-      walletAddresses: {}, // Will be fetched in background
+      walletAddresses: {},
       platform: accountData?.platform || accountData?.item?.name?.toLowerCase() || 'Unknown',
       accountUsername: extractedUsername,
       username: extractedUsername,
@@ -389,42 +381,18 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       filters: accountData?.filters || [],
       metrics: accountData?.metrics || []
     };
-
-    // 🚀 IMMEDIATE: Store and navigate right away
     localStorage.setItem('selectedChatUser', JSON.stringify(sellerForChat));
-
-    // Call parent navigation handler immediately
-    if (setMenuSection) {
-      setMenuSection('chat');
-    }
-
-    // Call chat user selection handler immediately
-    if (onSelectChatUser) {
-      onSelectChatUser(sellerForChat);
-    }
-
-    // Dispatch events immediately
-    window.dispatchEvent(new CustomEvent('initiateTrade', {
-      detail: sellerForChat
-    }));
-
-    // 🔥 BACKGROUND: Fetch wallet addresses after navigation
+    if (setMenuSection) setMenuSection('chat');
+    if (onSelectChatUser) onSelectChatUser(sellerForChat);
+    window.dispatchEvent(new CustomEvent('initiateTrade', { detail: sellerForChat }));
     if (seller.id) {
       try {
-        let walletResponse = null;
-        try {
-          walletResponse = await apiService.get(`/user?id=${seller.id}`);
-        } catch (e) {
-          walletResponse = await apiService.get(`/api/users/${seller.id}`);
-        }
-
+        let walletResponse = await apiService.get(`/user?id=${seller.id}`).catch(() => apiService.get(`/api/users/${seller.id}`));
         if (walletResponse) {
           const sellerUser = walletResponse.user || walletResponse.data || walletResponse;
           if (sellerUser?.walletAddresses) {
-            // Update stored data with wallet addresses
             const updatedData = { ...sellerForChat, walletAddresses: sellerUser.walletAddresses };
             localStorage.setItem('selectedChatUser', JSON.stringify(updatedData));
-            // Dispatch update event
             window.dispatchEvent(new CustomEvent('initiateTrade', { detail: updatedData }));
           }
         }
@@ -432,9 +400,18 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
         console.warn('⚠️ Background wallet fetch failed:', error);
       }
     }
-
-    // Clear loading state
     setLoadingRowId(null);
+  };
+
+  const handleInitiateTrade = (seller, accountData) => {
+    setInitiateConfirmPayload({ seller, accountData });
+  };
+
+  const handleConfirmInitiateTrade = async () => {
+    if (!initiateConfirmPayload) return;
+    const { seller, accountData } = initiateConfirmPayload;
+    setInitiateConfirmPayload(null);
+    await proceedWithInitiateTrade(seller, accountData);
   };
 
 
@@ -783,6 +760,35 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
           </section>
         </div>
       </div>
+
+      {/* Initiate Trade confirmation dialog (Pick of the Week / home) */}
+      {initiateConfirmPayload && (() => {
+        const { seller, accountData } = initiateConfirmPayload;
+        const name = seller?.name || seller?.displayName || 'this seller';
+        const platform = accountData?.platform || accountData?.item?.name || 'Unknown';
+        const username = accountData?.filters?.find(f => f.key === 'username')?.value ||
+          accountData?.accountUsername || accountData?.username || accountData?.handle || 'N/A';
+        const price = accountData?.price || seller?.price;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setInitiateConfirmPayload(null)}>
+            <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+              <h3 className="text-white font-semibold text-lg mb-2">Initiate trade?</h3>
+              <p className="text-gray-400 text-sm mb-4">
+                Are you sure you want to initiate a trade with <span className="text-white font-medium">{name}</span>?
+              </p>
+              <div className="bg-black/30 rounded-lg p-3 mb-5 text-sm">
+                <p className="text-gray-400"><span className="text-gray-500">Platform:</span> <span className="text-white capitalize">{platform}</span></p>
+                <p className="text-gray-400 mt-1"><span className="text-gray-500">Username:</span> <span className="text-white">{username}</span></p>
+                {price != null && price !== '' && <p className="text-gray-400 mt-1"><span className="text-gray-500">Price:</span> <span className="text-green-400">${price}</span></p>}
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button type="button" onClick={() => setInitiateConfirmPayload(null)} className="px-4 py-2 rounded-lg text-gray-400 hover:bg-white/10 transition-colors">Cancel</button>
+                <button type="button" onClick={handleConfirmInitiateTrade} className="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-opacity">Confirm</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 };

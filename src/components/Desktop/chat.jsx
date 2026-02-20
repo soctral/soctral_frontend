@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, Send, MoreVertical, ArrowLeft, X, Check, CheckCheck, Paperclip, Download, FileText, Image as ImageIcon, Flag, Trash2, Ban, MessageSquare, AlertCircle, CheckCircle, Lock, Unlock, Clock, Copy, Eye, EyeOff } from 'lucide-react';
+import { Search, Send, MoreVertical, ArrowLeft, X, Check, CheckCheck, Paperclip, Download, FileText, Image as ImageIcon, Flag, Trash2, Ban, MessageSquare, AlertCircle, CheckCircle, Lock, Unlock, Clock, Copy, Eye, EyeOff, Loader2 } from 'lucide-react';
 import ug1 from "../../assets/ug1.png";
 import ug2 from "../../assets/ug2.png";
 import ug3 from "../../assets/ug3.png";
@@ -458,44 +458,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             const isPendingOrActive = ['pending', 'active', 'escrowed'].includes(activeTxn.status?.toLowerCase());
             
             if (isBuyer && isPendingOrActive) {
-              console.log('🔔 BUYER: Has active transaction - showing release funds modal');
-              
-              // Prepare trade init data for TradeInitModal
-              const tradeInitDataForBuyer = {
-                transactionId: activeTxn._id || activeTxn.id,
-                sellerId: sellerId,
-                buyerId: buyerId,
-                accountPrice: parseFloat(activeTxn.amountUSD || activeTxn.amount || 0),
-                paymentMethod: (activeTxn.currency || 'BTC').toUpperCase(),
-                paymentNetwork: activeTxn.network || 'bitcoin',
-                initiatedAt: activeTxn.createdAt,
-                sellOrderId: activeTxn.sellOrderId,
-                accountId: activeTxn.socialAccountId,
-                socialAccount: activeTxn.platform || 'Unknown',
-                accountUsername: activeTxn.accountUsername || 'N/A',
-                seller: {
-                  id: sellerId,
-                  name: activeTxn.seller?.displayName || activeTxn.seller?.name || 'Seller',
-                  image: activeTxn.seller?.avatar || activeTxn.seller?.bitmojiUrl || ug1,
-                  ratings: '⭐ 4.5 (New)'
-                },
-                // Flag to indicate this is from active transaction check
-                isFromActiveCheck: true
-              };
-              
-              // Calculate transaction fee (2.5% of account price)
-              const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-              tradeInitDataForBuyer.transactionFee = transactionFee;
-              tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-              
-              console.log('✅ BUYER: Opening TradeInitModal for active transaction:', tradeInitDataForBuyer);
-              
-              // Set the trade init data and show the TradeInitModal
-              setTradeInitData(tradeInitDataForBuyer);
+              console.log('🔔 BUYER: Has active transaction - setting state only (Trade Details modal only on Accept click)');
               setActiveTransaction(activeTxn);
-              setShowTradeInitModal(true);
-              
-              console.log('✅ TradeInitModal opened for buyer to release funds on init');
             }
           } else {
             console.log('✅ No active transaction found on init');
@@ -589,17 +553,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       tradeInitDataForBuyer.transactionFee = transactionFee;
                       tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
                       
-                      console.log('✅ BUYER: Opening TradeInitModal for active transaction:', tradeInitDataForBuyer);
-                      
-                      // Set the trade init data and show the TradeInitModal (release fund modal)
+                      console.log('✅ BUYER: Active transaction from cancel request - setting state only (no auto-open modal)');
                       setTradeInitData(tradeInitDataForBuyer);
                       setActiveTransaction(activeTxn);
-                      setShowTradeInitModal(true);
-                      
-                      // Don't show cancel modal - show release fund modal instead
                       setShowCancelTradeModal(false);
-                      
-                      console.log('✅ TradeInitModal opened for buyer to release funds');
                     } else {
                       console.warn('⚠️ Could not fetch active transaction despite having ID');
                       // Fallback: show informational message
@@ -734,25 +691,36 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             // 🔥 NEW: Handle buyer_initiated message to start seller's timer
             if (message.buyer_initiated === true) {
               const sellerId = message.seller_id;
+              const isForCurrentChannel = !event.cid || event.cid === currentChannelRef.current?.cid;
               console.log('📦 Received buyer_initiated message:', {
                 sellerId,
                 currentUserId,
                 isForMe: sellerId === currentUserId,
-                transactionId: message.transaction_id
+                transactionId: message.transaction_id,
+                isForCurrentChannel
               });
               
-              // If current user is the seller, activate their timer
-              if (sellerId === currentUserId) {
-                console.log('🔥 SELLER: Buyer has initiated trade! Starting timer...');
-                setSellerTradeTimer(message.timer_duration || 300);
+              // If current user is the seller and this message is for the channel they're viewing, set activeTransaction so countdown banner shows
+              if (sellerId === currentUserId && isForCurrentChannel) {
+                const timerDuration = message.timer_duration || 300;
+                const initiatedAt = message.initiated_at || message.created_at || new Date().toISOString();
+                console.log('🔥 SELLER: Buyer has initiated trade! Setting activeTransaction and starting timer...');
+                setActiveTransaction({
+                  id: message.transaction_id,
+                  _id: message.transaction_id,
+                  role: 'seller',
+                  status: 'pending',
+                  sellerId: currentUserId,
+                  createdAt: initiatedAt,
+                  timerDuration
+                });
+                setSellerTradeTimer(timerDuration);
                 setIsTradeTimerActive(true);
-                
-                // Persist timer state
                 const transactionId = message.transaction_id;
                 if (transactionId) {
-                  TradeStateManager.setTimerState(transactionId, true, message.timer_duration || 300);
+                  TradeStateManager.setTimerState(transactionId, true, timerDuration);
                 }
-                console.log('✅ SELLER: Timer activated successfully');
+                console.log('✅ SELLER: Timer and countdown banner activated');
               }
             }
 
@@ -1032,6 +1000,93 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
         if (!mounted) return;
 
+        // 🔥 Fetch current active item (transaction or invoice) between these two users — no caching
+        let activeBetween = { type: null, data: null };
+        try {
+          activeBetween = await transactionService.getActiveBetweenUsers(currentUserId, otherUserId);
+        } catch (e) {
+          console.warn('⚠️ getActiveBetweenUsers failed:', e?.message);
+        }
+        if (!mounted) return;
+
+        // Normalize type (API may return 'Transaction' or 'transaction')
+        const activeType = activeBetween.type != null ? String(activeBetween.type).toLowerCase() : null;
+        const activeData = activeBetween.data;
+
+        // Drive UI from API: set active transaction only if API says there is one between these users
+        // Trade Details modal only opens when buyer clicks Accept; never auto-open when we have active txn
+        const hasActiveTransactionFromApi = activeType === 'transaction' && !!activeData;
+        const hasActiveInvoiceFromApi = activeType === 'invoice' && !!activeData;
+        console.log('🔍 [chat loadChannel] active-between check', {
+          currentUserId,
+          otherUserId,
+          activeBetweenRaw: { type: activeBetween.type, hasData: !!activeData },
+          activeType,
+          hasActiveTransactionFromApi,
+          hasActiveInvoiceFromApi,
+          willSetActiveTxn: activeType === 'transaction' && !!activeData,
+          willHideInitiateTradeForSeller: hasActiveTransactionFromApi || hasActiveInvoiceFromApi
+        });
+
+        if (activeType === 'transaction' && activeData) {
+          const txn = activeData;
+          const buyerId = txn.buyer?.userId || txn.buyer?._id || txn.buyerId;
+          const sellerId = txn.seller?.userId || txn.seller?._id || txn.sellerId;
+          const isCurrentUserBuyer = buyerId === currentUserId;
+          const txnWithRole = {
+            ...txn,
+            _id: txn._id || txn.id,
+            id: txn._id || txn.id,
+            role: isCurrentUserBuyer ? 'buyer' : 'seller',
+            createdAt: txn.createdAt || txn.created_at,
+            timerDuration: txn.timerDuration ?? txn.timer_duration ?? 300
+          };
+          console.log('🔍 [chat loadChannel] setting active transaction', {
+            transactionId: txn._id || txn.id,
+            buyerId,
+            sellerId,
+            currentUserRole: txnWithRole.role,
+            status: txn.status,
+            createdAt: txnWithRole.createdAt
+          });
+          setActiveTransaction(txnWithRole);
+          // So Release Funds button shows: set pendingTransaction and tradeData for buyer
+          if (txnWithRole.role === 'buyer') {
+            setPendingTransaction({
+              _id: txn._id || txn.id,
+              id: txn._id || txn.id,
+              amount: txn.amount,
+              amountUSD: txn.amountUSD || txn.amount,
+              currency: txn.currency || 'BTC',
+              status: txn.status || 'locked'
+            });
+            setTradeData({
+              seller: selectedUser,
+              socialAccount: txn.platform || selectedUser?.platform || 'Unknown',
+              accountUsername: txn.accountUsername || selectedUser?.accountUsername || 'N/A',
+              paymentMethod: (txn.currency || 'BTC').toUpperCase(),
+              accountPrice: parseFloat(txn.amountUSD || txn.amount || 0),
+              transactionFee: 0,
+              sellOrderId: txn.sellOrderId,
+              sellerId: txn.seller?.userId || txn.seller?._id || txn.sellerId,
+              transactionId: txn._id || txn.id,
+              totalAmount: parseFloat(txn.amountUSD || txn.amount || 0)
+            });
+          }
+          // When there is an active transaction, seller must NOT see Initiate Trade
+          if (txnWithRole.role === 'seller') {
+            setShowSellerTradePrompt(false);
+          }
+        } else if (activeType === 'invoice' && activeData) {
+          console.log('🔍 [chat loadChannel] active item is invoice, clearing active transaction');
+          setActiveTransaction(null);
+          // Seller already sent an invoice — hide Initiate Trade so they don't see the button
+          setShowSellerTradePrompt(false);
+        } else {
+          console.log('🔍 [chat loadChannel] no active transaction/invoice', { activeType, hasData: !!activeData });
+          setActiveTransaction(null);
+        }
+
         const channelMessages = channel.state.messages || [];
 
         // 🔥 STEP 2: Extract PERSISTENT metadata from channel (THIS SURVIVES RELOAD)
@@ -1240,40 +1295,39 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         setMessages(latestTradeMessages);
 
         // 🔥 Load per-channel credential data from localStorage
-        // 🔥 FIX: Only restore if the credentials belong to the CURRENT trade, not a previous one
+        // 🔥 FIX: Clear credentials when trade completed and no new trade with creds — never show old account info when initiating a new trade
         const chId = channel.id || channel.cid?.split(':')[1] || '';
         if (chId) {
           try {
+            const lastFundsReleasedMsg = [...channelMessages].reverse().find(msg =>
+              msg.funds_released_data || msg.funds_released === true
+            );
             const savedCred = localStorage.getItem(`soctra_cred_${chId}`);
-            if (savedCred) {
-              // Check if a NEW trade has started after the last funds_released
-              // If so, these credentials belong to the OLD trade and should be cleared
-              const lastFundsReleasedMsg = [...channelMessages].reverse().find(msg =>
-                msg.funds_released_data || msg.funds_released === true
-              );
-              const lastNewTradeMsg = [...channelMessages].reverse().find(msg =>
-                msg.seller_ready === true || msg.trade_init_data
-              );
 
-              let isNewTradeAfterCompletion = false;
-              if (lastFundsReleasedMsg && lastNewTradeMsg) {
-                const releasedTime = new Date(lastFundsReleasedMsg.created_at).getTime();
-                const newTradeTime = new Date(lastNewTradeMsg.created_at).getTime();
-                isNewTradeAfterCompletion = newTradeTime > releasedTime;
-              }
-
-              if (isNewTradeAfterCompletion) {
-                console.log('🧹 New trade started after completion — clearing old credentials from localStorage');
-                localStorage.removeItem(`soctra_cred_${chId}`);
-                setCredentialData(null);
-                setShowCredentialModal(false);
-              } else {
+            if (lastFundsReleasedMsg) {
+              // Trade completed. Only restore if a NEW trade has buyer_initiated AFTER funds_released (credentials are for new trade)
+              const buyerInitiatedAfterRelease = [...channelMessages].reverse().find(msg => {
+                if (!(msg.buyer_initiated === true || msg.transaction_created === true)) return false;
+                return new Date(msg.created_at).getTime() > new Date(lastFundsReleasedMsg.created_at).getTime();
+              });
+              if (buyerInitiatedAfterRelease && savedCred) {
                 setCredentialData(JSON.parse(savedCred));
                 setShowCredentialModal(true);
-                console.log('✅ Restored credential data for channel:', chId);
+                console.log('✅ Restored credential data for new trade after completion');
+              } else {
+                // Completed trade, no new creds — clear so we don't show old account info when initiating new trade
+                if (savedCred) {
+                  console.log('🧹 Trade completed — clearing old credentials');
+                  localStorage.removeItem(`soctra_cred_${chId}`);
+                }
+                setCredentialData(null);
+                setShowCredentialModal(false);
               }
+            } else if (savedCred) {
+              setCredentialData(JSON.parse(savedCred));
+              setShowCredentialModal(true);
+              console.log('✅ Restored credential data for channel:', chId);
             } else {
-              // Clear stale credential UI from previous channel
               setCredentialData(null);
               setShowCredentialModal(false);
             }
@@ -1456,6 +1510,73 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         setAcceptanceData(null);
         setPendingTransaction(null);
 
+        // Restore buyer pending state so Release Funds button shows after refresh (CLEAR above would wipe it)
+        if (hasActiveTransactionFromApi && activeType === 'transaction' && activeData) {
+          const txn = activeData;
+          if ((txn.buyer?.userId || txn.buyer?._id || txn.buyerId) === currentUserId) {
+            setPendingTransaction({
+              _id: txn._id || txn.id,
+              id: txn._id || txn.id,
+              amount: txn.amount,
+              amountUSD: txn.amountUSD || txn.amount,
+              currency: txn.currency || 'BTC',
+              status: txn.status || 'locked'
+            });
+            setTradeData({
+              seller: selectedUser,
+              socialAccount: txn.platform || selectedUser?.platform || 'Unknown',
+              accountUsername: txn.accountUsername || selectedUser?.accountUsername || 'N/A',
+              paymentMethod: (txn.currency || 'BTC').toUpperCase(),
+              accountPrice: parseFloat(txn.amountUSD || txn.amount || 0),
+              transactionFee: 0,
+              sellOrderId: txn.sellOrderId,
+              sellerId: txn.seller?.userId || txn.seller?._id || txn.sellerId,
+              transactionId: txn._id || txn.id,
+              totalAmount: parseFloat(txn.amountUSD || txn.amount || 0)
+            });
+          }
+        }
+
+        // Restore Accept/Decline for buyer when seller sent an invoice (active invoice from API)
+        if (activeType === 'invoice' && activeData) {
+          const inv = activeData;
+          const invoiceBuyerId = inv.buyer?.userId || inv.buyer?._id || inv.buyerId || inv.buyer;
+          const invoiceSellerId = inv.seller?.userId || inv.seller?._id || inv.sellerId || inv.seller;
+          const isBuyerFromInvoice = (invoiceBuyerId === currentUserId || String(invoiceBuyerId) === String(currentUserId));
+          const isBuyerFromChat = chatType === 'buy' && isCreator;
+          const shouldShowAcceptDecline = isBuyerFromInvoice || isBuyerFromChat;
+          console.log('🔍 [chat loadChannel] active invoice restore', {
+            invoiceBuyerId,
+            invoiceSellerId,
+            currentUserId,
+            chatType,
+            isCreator,
+            isBuyerFromInvoice,
+            isBuyerFromChat,
+            shouldShowAcceptDecline
+          });
+          if (shouldShowAcceptDecline) {
+            const price = inv.amountUSD ?? inv.amount ?? inv.price ?? selectedUser?.price;
+            const priceForDisplay = (price != null && price !== '' && Number(price) >= 0) ? String(Number(price)) : 'N/A';
+            setPendingRequest({
+              user: {
+                ...selectedUser,
+                name: selectedUser?.name || selectedUser?.displayName || 'Seller',
+                displayName: selectedUser?.displayName || selectedUser?.name || 'Seller',
+                price: priceForDisplay,
+                accountId: inv.sellOrderId ?? inv.accountId ?? selectedUser?.accountId,
+                platform: inv.platform ?? selectedUser?.platform,
+                accountUsername: inv.accountUsername ?? selectedUser?.accountUsername
+              },
+              channel: channel,
+              isNewAccount: false,
+              wasDeleted: false,
+              invoiceId: inv._id || inv.id
+            });
+            setShowRequestModal(true);
+          }
+        }
+
         // 🔥 REMOVED: Duplicate active transaction check was here causing TradeInitModal to show twice
         // The active transaction check in initChat (lines ~352-455) already handles this case
         // Keeping this comment for future reference - do NOT re-add modal trigger here
@@ -1552,9 +1673,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 sellerId: activeTransaction.sellerId,
               },
             });
-          } else if (isSeller && mounted) {
-            // 🔥 FIX: Check if buyer already initiated the trade (buyer_initiated message exists)
-            // If so, restore the trade timer instead of showing "waiting" state
+          } else if (isSeller && mounted && hasActiveTransactionFromApi) {
+            // 🔥 Only show "Trade accepted" / "Timer expired" when there is an active TRANSACTION (buyer accepted).
+            // When we only have an invoice (hasActiveInvoiceFromApi), do not show this — trade has not started.
             const buyerInitiatedMsg = [...currentTradeMessages].reverse().find(msg =>
               msg.buyer_initiated === true || msg.transaction_created === true
             );
@@ -1671,14 +1792,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           }
         }
         // 🔥 PRIORITY 2: SELLER - Show "Ready to Initiate Trade" button
-        // 🔥 FIX: NEVER show for completed trades
-        else if (chatType === 'buy' && isReceiver && !sellerReady && !tradeInitiated && !tradeCompleted && mounted) {
+        // 🔥 FIX: NEVER show when there is already an active transaction or invoice (seller sent invoice, buyer can accept/decline)
+        else if (chatType === 'buy' && isReceiver && !sellerReady && !tradeInitiated && !tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && mounted) {
           console.log('🎯 SELLER (User2/RECEIVER) - Show "Ready to Initiate Trade" button');
 
           setShowSellerTradePrompt(true);
         }
         // 🔥 PRIORITY 2S: SELL TAB - Creator is the seller responding to buy order
-        else if (chatType === 'sell' && isCreator && !sellerReady && !tradeInitiated && !tradeCompleted && mounted) {
+        else if (chatType === 'sell' && isCreator && !sellerReady && !tradeInitiated && !tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && mounted) {
           console.log('🎯 SELL TAB: SELLER (User2/CREATOR) - Show "Ready to Initiate Trade" button');
           setShowSellerTradePrompt(true);
         }
@@ -1730,20 +1851,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           setShowRequestModal(true);
         }
         // 🔥 PRIORITY 4: After buyer accepts - SELLER waits or sees trade timer
-        // 🔥 FIX: NEVER show for completed trades
-        else if (chatType === 'buy' && isReceiver && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted) {
-          // 🔥 FIX: Check if buyer already initiated the trade (buyer_initiated message exists)
+        // 🔥 Only when there is an active transaction (not just invoice) — avoid "Trade timer expired" before trade starts
+        else if (chatType === 'buy' && isReceiver && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted && hasActiveTransactionFromApi) {
           const buyerInitiatedMsg = [...currentTradeMessages].reverse().find(msg =>
             msg.buyer_initiated === true || msg.transaction_created === true
           );
 
           if (buyerInitiatedMsg) {
-            // Transaction was created - seller should see the trade timer, not "waiting"
             console.log('⏱️ SELLER - buyer already initiated trade, restoring trade timer');
             const txnId = buyerInitiatedMsg.transaction_id;
             const timerDuration = buyerInitiatedMsg.timer_duration || 300;
 
-            // Calculate remaining time from when buyer_initiated was sent
             const initiatedAt = new Date(buyerInitiatedMsg.created_at).getTime();
             const elapsed = Math.floor((Date.now() - initiatedAt) / 1000);
             const remainingTime = Math.max(0, timerDuration - elapsed);
@@ -1785,8 +1903,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           }
         }
         // 🔥 PRIORITY 4S: SELL TAB - Creator (seller) waits after receiver (buyer) accepts
-        else if (chatType === 'sell' && isCreator && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted) {
-          // 🔥 FIX: Check if buyer already initiated the trade (buyer_initiated message exists)
+        // 🔥 Only when there is an active transaction (not just invoice)
+        else if (chatType === 'sell' && isCreator && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted && hasActiveTransactionFromApi) {
           const buyerInitiatedMsg = [...currentTradeMessages].reverse().find(msg =>
             msg.buyer_initiated === true || msg.transaction_created === true
           );
@@ -1954,9 +2072,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             }
           } else {
             // 🔥 FIX: No transaction_created msg — accept may have failed (e.g. insufficient funds)
-            // Re-show TradeInitModal so buyer can retry instead of showing "waiting" forever
-            if (tradeInitDataMessage?.trade_init_data) {
-              console.log('🔄 BUYER - trade_accepted but no transaction created yet — re-showing TradeInitModal');
+            // Re-show TradeInitModal only if we don't already have an active transaction from API (e.g. after refresh)
+            if (tradeInitDataMessage?.trade_init_data && !hasActiveTransactionFromApi) {
+              console.log('🔄 BUYER - trade_accepted but no transaction created yet — re-showing TradeInitModal for retry');
               try {
                 const parsedTradeData = JSON.parse(tradeInitDataMessage.trade_init_data);
 
@@ -2143,9 +2261,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             }
           } else {
             // 🔥 FIX: No transaction_created msg — accept may have failed (e.g. insufficient funds)
-            // Re-show TradeInitModal so buyer can retry
-            if (tradeInitDataMessage?.trade_init_data) {
-              console.log('🔄 SELL TAB: BUYER - trade_accepted but no transaction created — re-showing TradeInitModal');
+            // Re-show TradeInitModal only if no active transaction from API (e.g. after refresh)
+            if (tradeInitDataMessage?.trade_init_data && !hasActiveTransactionFromApi) {
+              console.log('🔄 SELL TAB: BUYER - trade_accepted but no transaction created — re-showing TradeInitModal for retry');
               try {
                 const parsedTradeData = JSON.parse(tradeInitDataMessage.trade_init_data);
 
@@ -2418,59 +2536,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
   const handleAcceptRequest = async () => {
     try {
-      console.log('✅ User2 accepting trade request...');
+      console.log('✅ Accept clicked — no API call; showing Initiate Trade dialog. /invoices/accept will be called when user clicks Initiate Trade in the dialog.');
 
-      const { hasActiveTransaction, activeTransaction } = await checkActiveTransactions();
-
-      if (hasActiveTransaction) {
-        // ... existing transaction check code ...
-        const channelAccountId = pendingRequest.user.accountId;
-        const txnSellOrderId = activeTransaction.sellOrderId;
-        const txnAccountId = activeTransaction.accountId || txnSellOrderId;
-        const buyerId = activeTransaction.buyer?.userId || activeTransaction.buyer?._id || activeTransaction.buyerId;
-        const currentUserId = userData?._id || userData?.id;
-
-        const matchesBySellOrder = txnSellOrderId === channelAccountId;
-        const matchesByAccountId = txnAccountId === channelAccountId;
-        const matches = matchesBySellOrder || matchesByAccountId;
-        const isBuyer = buyerId === currentUserId || buyerId === String(currentUserId);
-
-        if (matches && isBuyer) {
-          console.log('💰 Active transaction matches - switching to Release Funds');
-
-          setShowRequestModal(false);
-          setPendingRequest(null);
-
-          setPendingTransaction(activeTransaction);
-          setTradeData({
-            seller: pendingRequest.user,
-            socialAccount: pendingRequest.user.platform || currentChannel?.data?.metadata?.platform || channelMetadata?.platform || 'Unknown',
-            accountUsername: pendingRequest.user.accountUsername || currentChannel?.data?.metadata?.accountUsername || channelMetadata?.accountUsername || 'N/A',
-            paymentMethod: activeTransaction.currency || 'BTC',
-            accountPrice: parseFloat(activeTransaction.amount) || 0,
-            transactionFee: 0,
-            sellOrderId: activeTransaction.sellOrderId,
-            sellerId: activeTransaction.sellerId,
-            transactionId: activeTransaction._id || activeTransaction.id,
-            totalAmount: parseFloat(activeTransaction.amount) || 0
-          });
-
-          return;
-        } else {
-          setErrorModalData({
-            message: `You already have an active transaction for a different account. Please complete or cancel it before starting a new trade.`,
-            details: {
-              transactionId: activeTransaction._id || activeTransaction.id,
-              amount: activeTransaction.amount,
-              currency: activeTransaction.currency,
-              status: activeTransaction.status
-            }
-          });
-          setShowErrorModal(true);
-          setShowRequestModal(false);
-          return;
-        }
-      }
+      // 🔥 No API on Accept — just show the Initiate Trade dialog. /invoices/accept is called when they click Initiate Trade in the modal.
 
       // 🔥 FIXED: Use stored tradeData if available (contains credentials from seller)
       // Preserve the seller object if it already exists in tradeData
@@ -2493,6 +2561,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       // Ensure totalAmount is calculated
       if (!trade.totalAmount) {
         trade.totalAmount = (trade.accountPrice || 0) + (trade.transactionFee || 0);
+      }
+
+      // So Initiate Trade dialog can call /invoices/accept with the correct id
+      if (pendingRequest.invoiceId != null || pendingRequest.tradeData?.invoiceId != null) {
+        trade.invoiceId = pendingRequest.invoiceId ?? pendingRequest.tradeData?.invoiceId;
       }
 
       // 🔥 FIXED: Send acceptance message as regular message with custom data
@@ -2856,7 +2929,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
       // 🔥 FIX: The stored transactionId is often the INVOICE ID, not the real TRANSACTION ID.
       // Always fetch the real transaction ID from the API first.
-      let transactionId = tradeData.transactionId || pendingTransaction?._id || pendingTransaction?.id;
+      let transactionId = tradeData.transactionId || pendingTransaction?._id || pendingTransaction?.id
+        || accountReviewData?.transaction?._id || accountReviewData?.transaction?.id;
       
       try {
         const activeCheck = await checkActiveTransactions();
@@ -2906,7 +2980,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       setIsTradeTimerActive(false);
       setSellerTradeTimer(300);
 
-      // Close all modals
+      // Close all modals and clear credential data (don't show old account info when initiating new trade)
       setShowReleaseFundsModal(false);
       setShowPinModal(false);
       setAgreeFullAccess(false);
@@ -2916,6 +2990,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       setActiveTransaction(null);
       setShowRequestModal(false);
       setShowSellerTradePrompt(false);
+      setCredentialData(null);
+      setShowCredentialModal(false);
+      const credChId = currentChannelRef.current?.id || currentChannelRef.current?.cid?.split(':')[1] || '';
+      if (credChId) localStorage.removeItem(`soctra_cred_${credChId}`);
 
       // 🔥 NEW: Show full-screen transaction success modal for buyer
       const releasedAmount = pendingTransaction?.amountUSD || tradeData?.accountPrice || tradeData?.totalAmount || pendingTransaction?.amount || 0;
@@ -4020,42 +4098,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               const currentUserIsBuyer = txnBuyerId === currentUserId || String(txnBuyerId) === String(currentUserId);
               
               if (currentUserIsBuyer) {
-                console.log('🔔 Current user is buyer - showing release funds modal');
-                
-                // Prepare trade init data for TradeInitModal
-                const tradeInitDataForBuyer = {
-                  transactionId: activeTxn._id || activeTxn.id || activeTransactionId,
-                  sellerId: txnSellerId,
-                  buyerId: txnBuyerId,
-                  accountPrice: parseFloat(activeTxn.amountUSD || activeTxn.amount || 0),
-                  paymentMethod: (activeTxn.currency || 'BTC').toUpperCase(),
-                  paymentNetwork: activeTxn.network || 'bitcoin',
-                  initiatedAt: activeTxn.createdAt,
-                  sellOrderId: activeTxn.sellOrderId,
-                  accountId: activeTxn.socialAccountId,
-                  socialAccount: activeTxn.platform || 'Unknown',
-                  accountUsername: activeTxn.accountUsername || 'N/A',
-                  seller: {
-                    id: txnSellerId,
-                    name: activeTxn.seller?.displayName || activeTxn.seller?.name || selectedUser?.name || 'Seller',
-                    image: activeTxn.seller?.avatar || activeTxn.seller?.bitmojiUrl || selectedUser?.image || ug1,
-                    ratings: '⭐ 4.5 (New)'
-                  },
-                  isFromActiveCheck: true
-                };
-                
-                // Calculate transaction fee
-                const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                tradeInitDataForBuyer.transactionFee = transactionFee;
-                tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-                
-                // Close seller initiate modal and show trade init modal
+                console.log('🔔 Current user is buyer - setting active transaction only (Trade Details modal only on Accept click)');
                 setShowSellerInitiateModal(false);
-                setTradeInitData(tradeInitDataForBuyer);
                 setActiveTransaction(activeTxn);
-                setShowTradeInitModal(true);
-                
-                console.log('✅ TradeInitModal opened for buyer to release funds');
                 setIsProcessingTrade(false);
                 return; // Exit early
               }
@@ -4245,7 +4290,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       return !shouldExclude;
     });
 
-    return visibleChannels.map((channel) => {
+    const mapped = visibleChannels.map((channel) => {
       const otherMembers = Object.values(channel.state.members).filter(
         (member) => member.user_id !== currentUserId
       );
@@ -4344,6 +4389,27 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         _tradeCompleted: channel._tradeCompleted || false,
       };
     });
+
+    // 🔥 One chat per (otherUser, chatType): dedupe by (id, chatType), prefer stable channel ID
+    const byKey = {};
+    const stableId = (cid) => {
+      if (!cid) return false;
+      const parts = cid.split('_');
+      return parts.length === 3 && (parts[2] === 'buy' || parts[2] === 'sell');
+    };
+    mapped.forEach((u) => {
+      const key = `${u.id}_${u.chatType}`;
+      const current = byKey[key];
+      const cid = u._channel?.id || '';
+      const stable = stableId(cid);
+      if (!current) {
+        byKey[key] = u;
+        return;
+      }
+      const curStable = stableId(current._channel?.id);
+      if (stable && !curStable) byKey[key] = u;
+    });
+    return Object.values(byKey);
   };
 
 
@@ -4506,7 +4572,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     }));
   }, [buyUnreadCount, sellUnreadCount]);
 
-  // 🔥 NEW: Transaction Countdown Banner Component with 15-minute timer
+  // 🔥 Seller countdown: only when there is an active transaction (buyer accepted). Time from transaction.createdAt. After expiry: show Cancel + Appeal (no auto-cancel).
+  const TRANSACTION_TIMER_DURATION = 300; // 5 minutes
   const TransactionCountdownBanner = ({ 
     activeTransaction, 
     setActiveTransaction, 
@@ -4520,30 +4587,32 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     showAppealMenu,
     handleReportUser
   }) => {
-    const [timeRemaining, setTimeRemaining] = React.useState(900); // 15 minutes = 900 seconds
+    const duration = activeTransaction?.timerDuration ?? activeTransaction?.timer_duration ?? TRANSACTION_TIMER_DURATION;
+    const [timeRemaining, setTimeRemaining] = React.useState(duration);
     const timerRef = React.useRef(null);
 
-    // Calculate time remaining from createdAt
+    // Calculate time remaining from transaction.createdAt
     React.useEffect(() => {
       if (!activeTransaction?.createdAt) {
-        setTimeRemaining(900); // Default 15 minutes
+        setTimeRemaining(duration);
         return;
       }
 
       const initiatedTime = new Date(activeTransaction.createdAt).getTime();
       const now = Date.now();
       const elapsedSeconds = Math.floor((now - initiatedTime) / 1000);
-      const remainingSeconds = Math.max(0, 900 - elapsedSeconds); // 15 mins = 900 seconds
+      const remainingSeconds = Math.max(0, duration - elapsedSeconds);
       
       setTimeRemaining(remainingSeconds);
 
-      // Start countdown timer
+      if (remainingSeconds <= 0) return;
+
+      // Countdown interval
       timerRef.current = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
-            // Timer expired - auto cancel trade
             clearInterval(timerRef.current);
-            handleAutoCancel();
+            // Do NOT auto-cancel; seller sees Cancel and Appeal buttons
             return 0;
           }
           return prev - 1;
@@ -4555,7 +4624,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           clearInterval(timerRef.current);
         }
       };
-    }, [activeTransaction?.createdAt]);
+    }, [activeTransaction?.createdAt, duration]);
 
     // Auto-cancel function when timer expires
     const handleAutoCancel = async () => {
@@ -4605,13 +4674,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const isExpired = timeRemaining <= 0;
+
     return (
       <div className="flex items-center justify-center w-full">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-white font-extralight text-xs">Trade has been Initiated</h3>
+            {isExpired ? (
+              <h3 className="text-white font-extralight text-xs">Time&apos;s up</h3>
+            ) : (
+              <h3 className="text-white font-extralight text-xs">Trade has been Initiated</h3>
+            )}
           </div>
-          <div className={`flex items-center gap-1 text-white bg-[#222125] text-xs py-2 px-3 rounded-full font-mono ml-2 ${timeRemaining <= 60 ? 'border border-red-500/50' : timeRemaining <= 300 ? 'border border-yellow-500/50' : ''}`}>
+          {!isExpired && (
+            <div className={`flex items-center gap-1 text-white bg-[#222125] text-xs py-2 px-3 rounded-full font-mono ml-2 ${timeRemaining <= 60 ? 'border border-red-500/50' : timeRemaining <= 300 ? 'border border-yellow-500/50' : ''}`}>
             <div className='flex items-center gap-1 text-xs'>
               <Clock className={`w-5 h-5 ${timeRemaining <= 60 ? 'text-red-400 animate-pulse' : timeRemaining <= 300 ? 'text-yellow-400' : 'text-purple-400'}`} />
               <p className='text-xs'>Time Left</p>
@@ -4620,6 +4696,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               {formatTime(timeRemaining)}
             </span>
           </div>
+          )}
 
           <div className="flex items-center gap-3 ml-3">
             <button
@@ -4628,22 +4705,19 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             >
               Cancel Trade
             </button>
-            <div className="relative">
-              <button
-                onClick={() => {
-                  // Open Zendesk chat widget for appeal
-                  if (window.zE) {
-                    window.zE('messenger', 'open');
-                  } else {
-                    window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                  }
-                }}
-                className="flex ml-0 items-end justify-end gap-2 px-4 py-2  hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
-              >
-                Appeal
-                <MoreVertical className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                if (window.zE) {
+                  window.zE('messenger', 'open');
+                } else {
+                  window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
+                }
+              }}
+              className="flex ml-0 items-end justify-end gap-2 px-4 py-2 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              Appeal
+              <MoreVertical className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -5237,8 +5311,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   };
 
   // 🔥 FIXED: Inline Credential Card - Displays IN the chat area (not as modal overlay)
+  // 🔥 Only show when there is an active transaction (buyer has initiated) — never show old creds when no active trade
   const CredentialCard = () => {
-    if (!showCredentialModal || !credentialData) return null;
+    const hasActiveTransaction = !!(pendingTransaction && pendingTransaction.status !== 'cancelled') ||
+      !!(activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled');
+    if (!showCredentialModal || !credentialData || !hasActiveTransaction) return null;
 
     const [copiedField, setCopiedField] = React.useState(null);
 
@@ -6017,17 +6094,24 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               )}
             </div>
             <div>
-              <h3 className="text-white text-xs md:text-sm font-medium">{selectedUser.name || selectedUser.displayName}</h3>
-              <p className="text-gray-400 hidden md:block text-xs md:text-sm">
-                {selectedUser.status === 'online' ? 'Online' : 'Last seen recently'}
-              </p>
-              {/* 🔥 Channel ID for complaint tracking */}
-              {currentChannel && (
-                <div className="flex items-center gap-1 mt-0.5">
-                  <p className="text-gray-500 text-[10px] font-mono truncate max-w-[80px] md:max-w-[120px]">
-                    Channel ID: {currentChannel.id || currentChannel.cid?.split(':')[1] || 'N/A'}
+              {isLoading ? (
+                <div className="flex items-center gap-2 py-1">
+                  <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0" />
+                  <span className="text-gray-400 text-xs">Loading account details...</span>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-white text-xs md:text-sm font-medium">{selectedUser.name || selectedUser.displayName}</h3>
+                  <p className="text-gray-400 hidden md:block text-xs md:text-sm">
+                    {selectedUser.status === 'online' ? 'Online' : 'Last seen recently'}
                   </p>
-                  <button
+                  {/* 🔥 Channel ID for complaint tracking */}
+                  {currentChannel && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-gray-500 text-[10px] font-mono truncate max-w-[80px] md:max-w-[120px]">
+                        Channel ID: {currentChannel.id || currentChannel.cid?.split(':')[1] || 'N/A'}
+                      </p>
+                      <button
                     onClick={(e) => {
                       e.stopPropagation();
                       const channelId = currentChannel.id || currentChannel.cid?.split(':')[1] || '';
@@ -6046,12 +6130,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   </button>
                 </div>
               )}
+                  </>
+              )}
             </div>
           </div>
 
 
- {/* 🔥 FIXED: Transaction Status Banner with 15-minute countdown - ONLY shows after buyer accepts */}
-          {activeTransaction && activeTransaction.role === 'seller' && activeTransaction.status === 'pending' && isTradeTimerActive && (
+ {/* 🔥 Seller timer: ONLY when we have an active transaction (buyer has accepted invoice). Time from transaction.createdAt. */}
+          {activeTransaction && activeTransaction.role === 'seller' && (
             <TransactionCountdownBanner 
               activeTransaction={activeTransaction}
               setActiveTransaction={setActiveTransaction}
@@ -6154,6 +6240,27 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
 
           {/* Priority 1: Trade Timer for SELLER is handled by TransactionCountdownBanner in header */}
+          {(() => {
+            const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+              ? pendingTransaction
+              : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+            const showInitiateTrade = !activeTransaction && showSellerTradePrompt;
+            const showReleaseFunds = !!effectivePendingTxn;
+            if (typeof window !== 'undefined' && (showInitiateTrade || showReleaseFunds || activeTransaction)) {
+              console.log('🔍 [chat footer] UI decision', {
+                showInitiateTrade,
+                showReleaseFunds,
+                hasActiveTransaction: !!activeTransaction,
+                activeTransactionRole: activeTransaction?.role,
+                activeTransactionStatus: activeTransaction?.status,
+                showSellerTradePrompt,
+                hasPendingTransaction: !!pendingTransaction,
+                pendingStatus: pendingTransaction?.status,
+                effectivePendingTxn: !!effectivePendingTxn
+              });
+            }
+            return null;
+          })()}
           {!activeTransaction && showSellerTradePrompt ? (
             // Show "Ready to Initiate Trade" button only if no active transaction
             <div className="flex items-center justify-center z-[60] px-4">
@@ -6171,8 +6278,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </button>
               </div>
             </div>
-          ) : pendingTransaction && pendingTransaction.status !== 'cancelled' ? (
+          ) : (() => {
+            // Priority 2: BUYER only — Release Funds / Locked Transaction. Never show for seller (seller sees timer banner above).
+            const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+              ? pendingTransaction
+              : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+            return effectivePendingTxn && activeTransaction?.role !== 'seller';
+          })() ? (
             // Priority 2: Buyer with active transaction sees Release Funds (only if not cancelled)
+            (() => {
+              const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+                ? pendingTransaction
+                : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+              if (!effectivePendingTxn || activeTransaction?.role === 'seller') return null;
+              return (
             <div className="flex items-center justify-center z-[60] px-4">
               <div className="flex gap-2 items-center w-full">
                 <div className="flex items-center gap-1">
@@ -6180,7 +6299,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   <div className="flex-1 flex items-center gap-1">
                     <p className="text-white text-sm">Locked Transaction:</p>
                     <p className="text-gray-400 text-sm">
-                      ${pendingTransaction.amountUSD || tradeData?.accountPrice || pendingTransaction.amount || '0'} {(pendingTransaction.currency || tradeData?.paymentMethod || 'BTC').toUpperCase()}
+                      ${effectivePendingTxn.amountUSD || tradeData?.accountPrice || effectivePendingTxn.amount || '0'} {(effectivePendingTxn.currency || tradeData?.paymentMethod || 'BTC').toUpperCase()}
                     </p>
                   </div>
                 </div>
@@ -6188,9 +6307,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 <button
                   onClick={async () => {
                     // Fetch real backend transaction to get accurate token amount
-                    let tokenAmount = pendingTransaction?.amount || 0;
-                    let usdPrice = tradeData?.accountPrice || pendingTransaction?.amountUSD || pendingTransaction?.amount || 0;
-                    let currency = pendingTransaction?.currency || 'BTC';
+                    let tokenAmount = effectivePendingTxn?.amount || 0;
+                    let usdPrice = tradeData?.accountPrice || effectivePendingTxn?.amountUSD || effectivePendingTxn?.amount || 0;
+                    let currency = effectivePendingTxn?.currency || 'BTC';
 
                     try {
                       const activeCheck = await checkActiveTransactions();
@@ -6208,7 +6327,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
                     setAccountReviewData({
                       seller: selectedUser,
-                      transaction: pendingTransaction,
+                      transaction: effectivePendingTxn,
                       tradeData: tradeData,
                       accountDetails: {
                         platform: channelMetadata?.platform || tradeData?.socialAccount || selectedUser?.platform || 'Unknown',
@@ -6244,6 +6363,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </button>
               </div>
             </div>
+              );
+            })()
           ) : showRequestModal && pendingRequest ? (
             // Priority 3: BUYER (User1) sees Accept/Decline after SELLER initiates
             <div className="flex items-center justify-center z-[60] px-4">
@@ -6403,57 +6524,81 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
          
 
-          {/* 🔥 PERMANENT: Account Info Banner - Always visible when trading */}
-          {/* 🔥 FIX: Sources data from channel metadata (persisted) so it survives refresh */}
-          {selectedUser && (
+          {/* 🔥 PERMANENT: Account Info Banner - Role-aware (buyer vs seller) */}
+          {selectedUser && (() => {
+            const chMeta = currentChannel?.data?.metadata || {};
+            let channelCreatorId = chMeta.initiator_id;
+            if (!channelCreatorId && currentChannel?.data?.name) {
+              try {
+                const parts = currentChannel.data.name.split('|');
+                if (parts.length > 1) channelCreatorId = JSON.parse(parts[1]).initiator_id;
+              } catch (e) {}
+            }
+            if (!channelCreatorId) channelCreatorId = currentChannel?.data?.created_by_id;
+            const chatType = selectedUser.chatType || 'buy';
+            const isCreator = channelCreatorId && (channelCreatorId === currentUserId || channelCreatorId === String(currentUserId));
+            const isReceiver = channelCreatorId && !isCreator;
+            const isBuyer = (chatType === 'buy' && isCreator) || (chatType === 'sell' && isReceiver);
+            const otherName = selectedUser.name || selectedUser.displayName || 'User';
+            return (
             <div className="mb-4 bg-[#1a1a1a]/80 backdrop-blur-sm max-w-[28rem] mx-auto rounded-lg border border-white/5 p-3 shadow-lg">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <h3 className="text-white font-semibold text-sm mb-2">
-                    {selectedUser.name || 'User'} <span className='text-sm font-medium text-gray-400'>has shown interest in purchasing your account </span>
+                    {isBuyer ? (
+                      <>You have shown interest in purchasing <span className="text-primary">{otherName}</span>&apos;s account</>
+                    ) : (
+                      <>{otherName} <span className='text-sm font-medium text-gray-400'>has shown interest in purchasing your account</span></>
+                    )}
                   </h3>
 
                   <div className="">
                     <p className="text-gray-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Account Info:</p>
                     <div className="space-y-1.5">
-                      {(() => {
-                        // 🔥 FIX: Pull from persisted channel metadata first (survives refresh),
-                        // then component state, then selectedUser as fallback
-                        const chMeta = currentChannel?.data?.metadata || {};
-                        const platform = chMeta.platform || channelMetadata.platform || selectedUser?.platform || 'Unknown';
-                        const username = chMeta.accountUsername || channelMetadata.accountUsername || selectedUser?.accountUsername || 'N/A';
-                        const displayPrice = tradeData?.offerPrice || tradeData?.offer_amount ||
-                          chMeta.trade_price || chMeta.offer_amount ||
-                          selectedUser?.price;
-                        return (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-400 text-xs">Platform:</span>
-                              <span className="text-white font-medium text-xs capitalize">
-                                {platform !== 'Unknown' ? platform : 'Unknown'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-400 text-xs">Username:</span>
-                              <span className="text-white font-medium text-xs">
-                                {username !== 'N/A' ? username : 'N/A'}
-                              </span>
-                            </div>
-                            {displayPrice && displayPrice !== 'N/A' && (
-                              <div className="flex items-center gap-2 pt-1 border-t border-white/10">
-                                <span className="text-gray-400 text-xs">Price:</span>
-                                <span className="text-green-400 font-semibold text-xs">${displayPrice}</span>
+                      {isLoading ? (
+                        <div className="flex items-center gap-2 py-2">
+                          <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0" />
+                          <span className="text-gray-400 text-xs">Loading account details...</span>
+                        </div>
+                      ) : (
+                        (() => {
+                          const chMeta = currentChannel?.data?.metadata || {};
+                          const platform = chMeta.platform || channelMetadata.platform || selectedUser?.platform || 'Unknown';
+                          const username = chMeta.accountUsername || channelMetadata.accountUsername || selectedUser?.accountUsername || 'N/A';
+                          const displayPrice = tradeData?.offerPrice || tradeData?.offer_amount ||
+                            chMeta.trade_price || chMeta.offer_amount ||
+                            selectedUser?.price;
+                          return (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400 text-xs">Platform:</span>
+                                <span className="text-white font-medium text-xs capitalize">
+                                  {platform !== 'Unknown' ? platform : 'Unknown'}
+                                </span>
                               </div>
-                            )}
-                          </>
-                        );
-                      })()}
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400 text-xs">Username:</span>
+                                <span className="text-white font-medium text-xs">
+                                  {username !== 'N/A' ? username : 'N/A'}
+                                </span>
+                              </div>
+                              {displayPrice && displayPrice !== 'N/A' && (
+                                <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                                  <span className="text-gray-400 text-xs">Price:</span>
+                                  <span className="text-green-400 font-semibold text-xs">${displayPrice}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* 🔥 INLINE Credential Card - Display IN the chat area */}
           <CredentialCard />

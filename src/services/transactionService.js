@@ -76,6 +76,53 @@ class TransactionService {
   // ========================================
 
   /**
+   * Get active item (invoice or transaction) between two users.
+   * Use this when opening a chat to show current trade context and timer.
+   * GET /invoices/active-between-users?user1=id&user2=id
+   * @param {string} user1 - First user ID
+   * @param {string} user2 - Second user ID
+   * @returns {Promise<{ type: 'invoice'|'transaction'|null, data: object|null }>}
+   */
+  async getActiveBetweenUsers(user1, user2) {
+    try {
+      if (!this.isAuthenticated()) {
+        console.log('🔍 [active-between-users] skip: not authenticated');
+        return { type: null, data: null };
+      }
+      if (!user1 || !user2) {
+        console.log('🔍 [active-between-users] skip: missing user1 or user2', { user1: !!user1, user2: !!user2 });
+        return { type: null, data: null };
+      }
+      const params = new URLSearchParams({ user1, user2 });
+      const url = `/invoices/active-between-users?${params.toString()}`;
+      const response = await this.requestWithRetry(url);
+      const payload = response?.data ?? response;
+      const rawType = payload?.type ?? null;
+      const type = rawType != null ? String(rawType).toLowerCase() : null;
+      const data = payload?.data ?? null;
+      console.log('🔍 [active-between-users] response', {
+        url,
+        user1,
+        user2,
+        rawType,
+        type,
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        buyerId: data?.buyer?.userId ?? data?.buyer?._id ?? data?.buyerId,
+        sellerId: data?.seller?.userId ?? data?.seller?._id ?? data?.sellerId,
+        status: data?.status
+      });
+      return { type, data };
+    } catch (error) {
+      console.warn('🔍 [active-between-users] error', { message: error?.message, user1, user2 });
+      if (error.message?.includes('401') || error.message?.includes('403')) {
+        throw error;
+      }
+      return { type: null, data: null };
+    }
+  }
+
+  /**
    * 🔥 NEW: Get current active transaction
    * @returns {Promise<Object>} Current transaction or null
    */
