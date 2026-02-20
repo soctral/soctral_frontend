@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Onboarding from "./components/Onboarding";
 import DesktopOnboardingSteps from "./components/StepOneDesktop";
 import MobileOnboardingSteps from "./components/StepOneMobile";
