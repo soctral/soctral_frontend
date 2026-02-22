@@ -35,6 +35,7 @@ import bnb from "../../assets/bnb.svg";
 import solana from "../../assets/sol.svg";
 import rumble from "../../assets/rumble.png";
 import Filters from "../../components/Desktop/Filter";
+import { useUser } from "../../context/userContext";
 import { useAllSellOrders, useAllBuyOrders } from "../../hooks/useOrders";
 import { queryKeys } from "../../hooks/queryKeys";
 import logo from "../../assets/SoctralbgLogo.png";
@@ -141,6 +142,9 @@ const BuySellTable = ({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [loadingRowId, setLoadingRowId] = useState(null); // Track which row is loading
   const [initiateConfirmPayload, setInitiateConfirmPayload] = useState(null); // { user, accountData } for confirm dialog
+  const [showOwnOrderDialog, setShowOwnOrderDialog] = useState(null); // 'sell' | 'buy' when user clicked own order
+  const { user: currentUser } = useUser();
+  const currentUserId = currentUser?._id || currentUser?.id;
   const queryClient = useQueryClient();
 
   // 🔥 Invalidate order caches when a trade completes
@@ -598,6 +602,15 @@ const BuySellTable = ({
   };
 
   const handleInitiateTrade = (user, accountData) => {
+    const otherId = user?.id || user?._id;
+    if (activeTab === 'buy' && String(otherId) === String(currentUserId)) {
+      setShowOwnOrderDialog('sell');
+      return;
+    }
+    if (activeTab === 'sell' && String(otherId) === String(currentUserId)) {
+      setShowOwnOrderDialog('buy');
+      return;
+    }
     setInitiateConfirmPayload({ user, accountData });
   };
 
@@ -1078,7 +1091,7 @@ const BuySellTable = ({
                                 <button
                                   onClick={() => handleInitiateTrade(activeTab === 'buy' ? row.seller : row.buyer, row)}
                                   disabled={loadingRowId === row.id}
-                                  className={`py-[12px] px-[30px] font-medium bg-[#DCD0FF] hover:opacity-60 text-xs text-primary rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''}`}
+                                  className={`py-[12px] px-[30px] font-medium bg-[#DCD0FF] hover:opacity-60 text-xs text-primary rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''} ${((activeTab === 'buy' && String(row.seller?.id || row.seller?._id) === String(currentUserId)) || (activeTab === 'sell' && String(row.buyer?.id || row.buyer?._id) === String(currentUserId))) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   aria-label="View item"
                                 >
                                   {loadingRowId === row.id ? (
@@ -1217,7 +1230,7 @@ const BuySellTable = ({
 
                         <button
                           onClick={() => handleInitiateTrade(activeTab === 'buy' ? row.seller : row.buyer, row)}
-                          className="w-full py-2 px-3 font-medium bg-[#DCD0FF] hover:opacity-80 text-[10px] text-primary rounded-full transition-all duration-200 whitespace-nowrap"
+                          className={`w-full py-2 px-3 font-medium bg-[#DCD0FF] hover:opacity-80 text-[10px] text-primary rounded-full transition-all duration-200 whitespace-nowrap ${((activeTab === 'buy' && String(row.seller?.id || row.seller?._id) === String(currentUserId)) || (activeTab === 'sell' && String(row.buyer?.id || row.buyer?._id) === String(currentUserId))) ? 'opacity-50 cursor-not-allowed' : ''}`}
                           aria-label="Initiate trade"
                         >
                           {activeTab === 'buy' ? 'Initiate Trade' : 'Initiate Trade'}
@@ -1229,6 +1242,21 @@ const BuySellTable = ({
               </div>
             </div>
           </div>
+
+          {/* Own order dialog - cannot initiate trade on own sell/buy orders */}
+          {showOwnOrderDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOwnOrderDialog(null)}>
+              <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-semibold text-lg mb-2">Cannot initiate trade</h3>
+                <p className="text-gray-400 text-sm">
+                  You cannot initiate a trade on your own {showOwnOrderDialog === 'sell' ? 'sell orders' : 'buy orders'}.
+                </p>
+                <div className="flex justify-end mt-4">
+                  <button type="button" onClick={() => setShowOwnOrderDialog(null)} className="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-opacity">OK</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Initiate Trade confirmation dialog */}
           {initiateConfirmPayload && (() => {

@@ -134,6 +134,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [loadingRowId, setLoadingRowId] = useState(null); // Track which row is loading
   const [initiateConfirmPayload, setInitiateConfirmPayload] = useState(null); // { seller, accountData } for confirm dialog
+  const [showOwnSellOrderDialog, setShowOwnSellOrderDialog] = useState(false);
   // React Query handles fetching, caching, retry, and polling
   const {
     data: ordersResponse,
@@ -404,6 +405,11 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
   };
 
   const handleInitiateTrade = (seller, accountData) => {
+    const sellerId = seller?.id || seller?._id;
+    if (String(sellerId) === String(currentUser?._id || currentUser?.id)) {
+      setShowOwnSellOrderDialog(true);
+      return;
+    }
     setInitiateConfirmPayload({ seller, accountData });
   };
 
@@ -728,7 +734,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
                               <button
                                 onClick={() => handleInitiateTrade(row.seller, row)}
                                 disabled={loadingRowId === row.id}
-                                className={`py-[12px] px-[30px] font-medium bg-primary hover:bg-primary text-xs text-white rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''}`}
+                                className={`py-[12px] px-[30px] font-medium bg-primary hover:bg-primary text-xs text-white rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''} ${String(row.seller?.id || row.seller?._id) === String(currentUser?._id || currentUser?.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 aria-label="Initiate trade"
                               >
                                 {loadingRowId === row.id ? (
@@ -760,6 +766,21 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
           </section>
         </div>
       </div>
+
+      {/* Own sell order dialog - cannot initiate trade on own sell orders */}
+      {showOwnSellOrderDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOwnSellOrderDialog(false)}>
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-semibold text-lg mb-2">Cannot initiate trade</h3>
+            <p className="text-gray-400 text-sm">
+              You cannot initiate a trade on your own sell orders.
+            </p>
+            <div className="flex justify-end mt-4">
+              <button type="button" onClick={() => setShowOwnSellOrderDialog(false)} className="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-opacity">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Initiate Trade confirmation dialog (Pick of the Week / home) */}
       {initiateConfirmPayload && (() => {
