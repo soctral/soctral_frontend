@@ -1303,10 +1303,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           setChannelMetadata({ ...persistedMetadata, platform: displayPlatform, accountUsername: displayUsername });
 
           const streamMeta = channel.data?.metadata || {};
-          const existingInitiatorId = toId(backendMeta?.initiator_id) || toId(streamMeta?.initiator_id);
+          // When user initiates from homepage, they are the initiator (buyer in buy flow). Always set initiator_id = currentUserId so roles can flip.
           const fullMetadata = {
             participantIds: [String(currentUserId), String(otherUserId)],
-            initiator_id: existingInitiatorId || currentUserId,
+            initiator_id: currentUserId,
             chatType: selectedUser.chatType ?? streamMeta.chatType ?? chatType,
             platform: displayPlatform,
             accountUsername: displayUsername,
@@ -1334,10 +1334,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           };
           setChannelMetadata(improvedMetadata);
           const streamMeta = channel.data?.metadata || {};
-          const existingInitiatorId = toId(backendMeta?.initiator_id) || toId(streamMeta?.initiator_id);
+          // When user initiates from homepage, they are the initiator. Always set initiator_id = currentUserId so roles can flip.
           const fullMetadata = {
             participantIds: [String(currentUserId), String(otherUserId)],
-            initiator_id: existingInitiatorId || currentUserId,
+            initiator_id: currentUserId,
             chatType: selectedUser.chatType ?? streamMeta.chatType ?? chatType,
             platform: improvedMetadata.platform,
             accountUsername: improvedMetadata.accountUsername,
