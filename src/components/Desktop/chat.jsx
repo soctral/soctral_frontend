@@ -1033,7 +1033,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         // 🔥 STEP 1: Initialize metadata from selectedUser (temporary until channel loads)
         let tempMetadata = {
           platform: selectedUser.platform || 'Unknown',
-          accountUsername: selectedUser.filters?.find(f => f.key === 'username')?.value ||
+          accountUsername: selectedUser.filters?.find(f => f.key === 'username' || f.key === 'channel_username')?.value ||
             selectedUser.accountUsername ||
             selectedUser.username ||
             selectedUser.handle ||
@@ -6849,7 +6849,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       ) : (
                         (() => {
                           const chMeta = currentChannel?.data?.metadata || {};
-                          const selectedUsername = selectedUser?.filters?.find(f => f.key === 'username')?.value ||
+                          const selectedUsername = selectedUser?.filters?.find(f => f.key === 'username' || f.key === 'channel_username')?.value ||
                             selectedUser?.accountUsername || selectedUser?.username || selectedUser?.handle;
                           // Priority: channelMetadata (computed; cameFromTable overrides) → selectedUser → tradeData → chMeta
                           const platform = channelMetadata?.platform || selectedUser?.platform || tradeData?.socialAccount || chMeta.platform || 'Unknown';
