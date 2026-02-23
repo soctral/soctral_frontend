@@ -2306,72 +2306,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               });
             }
           } else {
-            // 🔥 FIX: No transaction_created msg — accept may have failed (e.g. insufficient funds)
-            // Re-show TradeInitModal only if we don't already have an active transaction from API (e.g. after refresh)
-            if (tradeInitDataMessage?.trade_init_data && !hasActiveTransactionFromApi) {
-              console.log('🔄 BUYER - trade_accepted but no transaction created yet — re-showing TradeInitModal for retry');
-              try {
-                const parsedTradeData = JSON.parse(tradeInitDataMessage.trade_init_data);
-
-                // Build the same data structure as Priority 2 so TradeInitModal shows correct amounts
-                const sellerMember = channel.state?.members?.[parsedTradeData.seller_id];
-                const sellerMemberUser = sellerMember?.user;
-                const resolvedSellerName = parsedTradeData.seller_name ||
-                  sellerMemberUser?.name || sellerMemberUser?.displayName ||
-                  selectedUser?.name || selectedUser?.displayName || 'Seller';
-                const resolvedSellerImage = sellerMemberUser?.image || sellerMemberUser?.avatar ||
-                  selectedUser?.image || selectedUser?.avatar || selectedUser?.bitmojiUrl;
-
-                const tradeInitDataForBuyer = {
-                  transactionId: parsedTradeData.transaction_id,
-                  sellerId: parsedTradeData.seller_id,
-                  buyerId: parsedTradeData.buyer_id,
-                  accountPrice: parsedTradeData.offer_amount,
-                  paymentMethod: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                  paymentNetwork: parsedTradeData.payment_network,
-                  initiatedAt: parsedTradeData.initiated_at,
-                  sellOrderId: channel.data?.metadata?.sellOrderId || channel.data?.metadata?.accountId,
-                  accountId: channel.data?.metadata?.accountId,
-                  socialAccount: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                  accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                  accountOriginalEmail: parsedTradeData.account_original_email || '',
-                  originalEmailPassword: parsedTradeData.original_email_password || '',
-                  socialAccountPassword: parsedTradeData.social_account_password || '',
-                  seller: {
-                    id: parsedTradeData.seller_id,
-                    name: resolvedSellerName,
-                    image: resolvedSellerImage,
-                    social: getSocialIcon(parsedTradeData.platform || channelMetadata?.platform || 'Unknown'),
-                    ratings: '⭐ 4.5 (New)',
-                    price: parsedTradeData.offer_amount,
-                    currency: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                    platform: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                    accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                    accountId: channel.data?.metadata?.accountId
-                  }
-                };
-
-                const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                tradeInitDataForBuyer.transactionFee = transactionFee;
-                tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-
-                console.log('✅ BUYER RETRY: Constructed tradeInitData:', tradeInitDataForBuyer);
-
-                setTradeInitData(tradeInitDataForBuyer);
-                setShowTradeInitModal(true);
-              } catch (e) {
-                console.error('❌ Failed to parse trade_init_data for retry:', e);
-                setShowAcceptanceNotification(true);
-                setAcceptanceData({
-                  acceptedBy: 'You',
-                  message: 'Trade accepted! Waiting for transaction to be created...',
-                  isWaiting: true,
-                  amount: finalPrice,
-                  currency: selectedUser?.currency || 'BTC'
-                });
-              }
-            } else {
-              console.log('⏳ BUYER - accepted, no transaction_created and no trade_init_data, showing waiting');
+            // No transaction_created — only show "waiting" if invoice still active (backend may mark invoice cancelled when txn cancelled)
+            if (hasActiveInvoiceFromApi) {
+              console.log('⏳ BUYER - trade_accepted, invoice still active — showing waiting (no auto-open modal on refresh)');
               setShowAcceptanceNotification(true);
               setAcceptanceData({
                 acceptedBy: 'You',
@@ -2380,6 +2317,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 amount: finalPrice,
                 currency: selectedUser?.currency || 'BTC'
               });
+            } else {
+              console.log('⏳ BUYER - trade_accepted but no active invoice/transaction (cancelled) — not showing waiting');
             }
           }
         }
@@ -2495,71 +2434,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               });
             }
           } else {
-            // 🔥 FIX: No transaction_created msg — accept may have failed (e.g. insufficient funds)
-            // Re-show TradeInitModal only if no active transaction from API (e.g. after refresh)
-            if (tradeInitDataMessage?.trade_init_data && !hasActiveTransactionFromApi) {
-              console.log('🔄 SELL TAB: BUYER - trade_accepted but no transaction created — re-showing TradeInitModal for retry');
-              try {
-                const parsedTradeData = JSON.parse(tradeInitDataMessage.trade_init_data);
-
-                const sellerMember = channel.state?.members?.[parsedTradeData.seller_id];
-                const sellerMemberUser = sellerMember?.user;
-                const resolvedSellerName = parsedTradeData.seller_name ||
-                  sellerMemberUser?.name || sellerMemberUser?.displayName ||
-                  selectedUser?.name || selectedUser?.displayName || 'Seller';
-                const resolvedSellerImage = sellerMemberUser?.image || sellerMemberUser?.avatar ||
-                  selectedUser?.image || selectedUser?.avatar || selectedUser?.bitmojiUrl;
-
-                const tradeInitDataForBuyer = {
-                  transactionId: parsedTradeData.transaction_id,
-                  sellerId: parsedTradeData.seller_id,
-                  buyerId: parsedTradeData.buyer_id,
-                  accountPrice: parsedTradeData.offer_amount,
-                  paymentMethod: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                  paymentNetwork: parsedTradeData.payment_network,
-                  initiatedAt: parsedTradeData.initiated_at,
-                  sellOrderId: channel.data?.metadata?.sellOrderId || channel.data?.metadata?.accountId,
-                  accountId: channel.data?.metadata?.accountId,
-                  socialAccount: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                  accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                  accountOriginalEmail: parsedTradeData.account_original_email || '',
-                  originalEmailPassword: parsedTradeData.original_email_password || '',
-                  socialAccountPassword: parsedTradeData.social_account_password || '',
-                  seller: {
-                    id: parsedTradeData.seller_id,
-                    name: resolvedSellerName,
-                    image: resolvedSellerImage,
-                    social: getSocialIcon(parsedTradeData.platform || channelMetadata?.platform || 'Unknown'),
-                    ratings: '⭐ 4.5 (New)',
-                    price: parsedTradeData.offer_amount,
-                    currency: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                    platform: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                    accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                    accountId: channel.data?.metadata?.accountId
-                  }
-                };
-
-                const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                tradeInitDataForBuyer.transactionFee = transactionFee;
-                tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-
-                console.log('✅ SELL TAB: BUYER RETRY: Constructed tradeInitData:', tradeInitDataForBuyer);
-
-                setTradeInitData(tradeInitDataForBuyer);
-                setShowTradeInitModal(true);
-              } catch (e) {
-                console.error('❌ SELL TAB: Failed to parse trade_init_data for retry:', e);
-                setShowAcceptanceNotification(true);
-                setAcceptanceData({
-                  acceptedBy: 'You',
-                  message: 'Trade accepted! Waiting for transaction to be created...',
-                  isWaiting: true,
-                  amount: finalPrice,
-                  currency: selectedUser?.currency || 'BTC'
-                });
-              }
-            } else {
-              console.log('⏳ SELL TAB: BUYER (RECEIVER) - accepted, no transaction_created and no trade_init_data');
+            // No transaction_created — only show "waiting" if invoice still active (backend may mark invoice cancelled when txn cancelled)
+            if (hasActiveInvoiceFromApi) {
+              console.log('⏳ SELL TAB: BUYER - trade_accepted, invoice still active — showing waiting');
               setShowAcceptanceNotification(true);
               setAcceptanceData({
                 acceptedBy: 'You',
@@ -2568,6 +2445,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 amount: finalPrice,
                 currency: selectedUser?.currency || 'BTC'
               });
+            } else {
+              console.log('⏳ SELL TAB: BUYER - trade_accepted but no active invoice/transaction (cancelled) — not showing waiting');
             }
           }
         }
