@@ -1671,10 +1671,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           console.log('🆕 New trade request on same channel — overriding tradeCompleted to false');
           tradeCompleted = false;
         }
-        // 🔥 FIX: When trade completed and no messages after funds_released, allow seller to initiate again
-        // (Buyer may have expressed interest via metadata update; isNewTradeRequest is caller-based and often false for seller)
-        if (tradeCompleted && currentTradeMessages.length === 0) {
-          console.log('🆕 Post-completion, no new trade messages — allowing seller to initiate');
+        // 🔥 FIX: When trade completed and no active transaction/invoice, allow seller to initiate again
+        // (Previously required no messages after funds_released, which hid the button if they kept chatting.)
+        if (tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi) {
+          console.log('🆕 Post-completion, no active trade — allowing seller to initiate');
           tradeCompleted = false;
         }
 
