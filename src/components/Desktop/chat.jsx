@@ -1176,7 +1176,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         const selectedPlatform = selectedUser?.platform ||
           (selectedUser?.item?.name && String(selectedUser.item.name).toLowerCase()) ||
           (selectedUser?.socialAccount && String(selectedUser.socialAccount).toLowerCase());
-        const selectedUsername = selectedUser?.filters?.find(f => f.key === 'username')?.value ||
+        const selectedUsername = selectedUser?.filters?.find(f => f.key === 'username' || f.key === 'channel_username')?.value ||
           selectedUser?.accountUsername || selectedUser?.username || selectedUser?.handle;
 
         console.log('🔍 Metadata extraction:', {
