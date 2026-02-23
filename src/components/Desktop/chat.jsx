@@ -143,6 +143,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     accountUsername: 'N/A'
   });
   const [metadataResolved, setMetadataResolved] = useState(false); // true only after API + resolution complete — avoid N/A/Unknown flash
+  const [selectedChannelCanInitiateAgain, setSelectedChannelCanInitiateAgain] = useState(false); // hide Completed badge when seller can initiate
+  const [selectedChannelBadgeResolved, setSelectedChannelBadgeResolved] = useState(false); // true only after loadChannel + API — badge hidden until then
   const [accountCardIsBuyer, setAccountCardIsBuyer] = useState(null); // true = "You have shown interest...", false = "X has shown interest in your account"
   // 🔥 NEW: Sell Flow States
   const [showSellerTradePrompt, setShowSellerTradePrompt] = useState(false);
@@ -1706,6 +1708,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         setShowAcceptanceNotification(false);
         setAcceptanceData(null);
         setPendingTransaction(null);
+        setSelectedChannelCanInitiateAgain(false);
+        setSelectedChannelBadgeResolved(false);
 
         // Restore buyer pending state so Release Funds button shows after refresh (CLEAR above would wipe it)
         if (hasActiveTransactionFromApi && activeType === 'transaction' && activeData) {
@@ -1775,6 +1779,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             });
             setShowRequestModal(true);
           }
+        }
+
+        // 🔥 Hide Completed badge in list for both buyer and seller when channel is post-completion with no active trade
+        if (lastFundsReleased && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && mounted) {
+          setSelectedChannelCanInitiateAgain(true);
         }
 
         // 🔥 REMOVED: Duplicate active transaction check was here causing TradeInitModal to show twice
@@ -2018,13 +2027,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         // 🔥 OPTION 1: Only show when we have required order metadata (accountId/sellOrderId) to create invoice
         else if (resolvedChatType === 'buy' && isReceiver && !sellerReady && !tradeInitiated && !tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && hasRequiredOrderMetadata && mounted) {
           console.log('🎯 SELLER (User2/RECEIVER) - Show "Ready to Initiate Trade" button');
-
           setShowSellerTradePrompt(true);
+          setSelectedChannelCanInitiateAgain(true); // hide Completed badge in list for this channel
         }
         // 🔥 PRIORITY 2S: SELL TAB - Creator is the seller responding to buy order
         else if (resolvedChatType === 'sell' && isCreator && !sellerReady && !tradeInitiated && !tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && hasRequiredOrderMetadata && mounted) {
           console.log('🎯 SELL TAB: SELLER (User2/CREATOR) - Show "Ready to Initiate Trade" button');
           setShowSellerTradePrompt(true);
+          setSelectedChannelCanInitiateAgain(true); // hide Completed badge in list for this channel
         }
         // 🔥 PRIORITY 3: BUYER - Show Accept/Decline after SELLER clicks ready
         // 🔥 FIX: NEVER show for completed trades
@@ -2570,6 +2580,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           hasPendingRequest: !!pendingRequest,
           hasAcceptanceData: !!acceptanceData
         });
+
+        setSelectedChannelBadgeResolved(true); // show Completed badge only after API + resolution
 
         console.log('🔄 Channel load complete');
 
@@ -4623,8 +4635,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         chatType: chatType,
         accountId: accountId,
         _channel: channel,
-        // Only show Completed badge when there are messages in latest trade (not "No messages yet")
-        _tradeCompleted: (channel._tradeCompleted && latestTradeMessages.length > 0) || false,
+        // Only show Completed badge after API call (selectedChannelBadgeResolved); until then hide for selected channel
+        // isSelected: use BOTH currentChannel (set in loadChannel) and selectedUser._channel (set on click) so we hide badge immediately on click (no flash) and stay correct for buyer/seller
+        _tradeCompleted: (() => {
+          const chId = channel?.id || channel?.cid?.split?.(':')?.[1] || '';
+          const curId = currentChannel?.id || currentChannel?.cid?.split?.(':')?.[1] || '';
+          const selChId = selectedUser?._channel?.id || selectedUser?._channel?.cid?.split?.(':')?.[1] || '';
+          const isSelected = (curId && chId === curId) || (selectedUser && selChId && chId === selChId);
+          if (isSelected && !selectedChannelBadgeResolved) return false; // hide until API + resolution
+          const isSelectedAndCanInitiate = selectedChannelCanInitiateAgain && isSelected;
+          return isSelectedAndCanInitiate ? false : ((channel._tradeCompleted && latestTradeMessages.length > 0) || false);
+        })(),
       };
     });
 
@@ -6246,7 +6267,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         )}
       </div>
     </div>
-  ), [filteredUsers, activeTab, buyUnreadCount, sellUnreadCount, isLoading, debouncedSearchQuery, selectedUser, channels]);
+  ), [filteredUsers, activeTab, buyUnreadCount, sellUnreadCount, isLoading, debouncedSearchQuery, selectedUser, channels, selectedChannelCanInitiateAgain, selectedChannelBadgeResolved, currentChannel?.id]);
 
   const MainContent = () => {
     // Show channel error modal
