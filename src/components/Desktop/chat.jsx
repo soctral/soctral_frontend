@@ -1166,6 +1166,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           setHasActiveInvoice(false);
         }
 
+        // 🔥 Only treat invoice as "for this channel" when order matches: sell channel = buy_order, buy channel = sell_order
+        let hasActiveInvoiceMatchingChannel = false;
+        if (activeType === 'invoice' && activeData) {
+          const inv = activeData;
+          const streamMetaForMatch = channel.data?.metadata || {};
+          const resolvedCt = selectedUser?.chatType ?? streamMetaForMatch.chatType ?? chatType;
+          const invOrderId = toId(inv.orderId ?? inv.order_id ?? inv.accountId);
+          const channelBuyOrderId = toId(streamMetaForMatch.buyOrderId ?? streamMetaForMatch.accountId);
+          const channelSellOrderId = toId(streamMetaForMatch.sellOrderId ?? streamMetaForMatch.accountId);
+          hasActiveInvoiceMatchingChannel =
+            (resolvedCt === 'sell' && (inv.orderType === 'buy_order' || invOrderId === channelBuyOrderId)) ||
+            (resolvedCt === 'buy' && (inv.orderType === 'sell_order' || invOrderId === channelSellOrderId));
+        }
+
         const channelMessages = channel.state.messages || [];
 
         // 🔥 STEP 2: Extract PERSISTENT metadata
@@ -1303,16 +1317,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           setChannelMetadata({ ...persistedMetadata, platform: displayPlatform, accountUsername: displayUsername });
 
           const streamMeta = channel.data?.metadata || {};
-          // When user initiates from homepage, they are the initiator (buyer in buy flow). Always set initiator_id = currentUserId so roles can flip.
+          const resolvedChatType = selectedUser.chatType ?? streamMeta.chatType ?? chatType;
+          // When chatType is sell, only send buyOrderId; when buy, only send sellOrderId.
           const fullMetadata = {
             participantIds: [String(currentUserId), String(otherUserId)],
             initiator_id: currentUserId,
-            chatType: selectedUser.chatType ?? streamMeta.chatType ?? chatType,
+            chatType: resolvedChatType,
             platform: displayPlatform,
             accountUsername: displayUsername,
             accountId: selectedUser.accountId ?? streamMeta.accountId ?? accountId,
-            sellOrderId: selectedUser.sellOrderId ?? streamMeta.sellOrderId ?? streamMeta.accountId,
-            buyOrderId: selectedUser.buyOrderId ?? streamMeta.buyOrderId,
+            ...(resolvedChatType === 'sell'
+              ? { buyOrderId: selectedUser.buyOrderId ?? streamMeta.buyOrderId }
+              : { sellOrderId: selectedUser.sellOrderId ?? streamMeta.sellOrderId ?? streamMeta.accountId }),
             trade_price: selectedUser.price ?? streamMeta.trade_price ?? tradePrice
           };
           try {
@@ -1334,16 +1350,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           };
           setChannelMetadata(improvedMetadata);
           const streamMeta = channel.data?.metadata || {};
-          // When user initiates from homepage, they are the initiator. Always set initiator_id = currentUserId so roles can flip.
+          const resolvedChatType = selectedUser.chatType ?? streamMeta.chatType ?? chatType;
+          // When chatType is sell, only send buyOrderId; when buy, only send sellOrderId.
           const fullMetadata = {
             participantIds: [String(currentUserId), String(otherUserId)],
             initiator_id: currentUserId,
-            chatType: selectedUser.chatType ?? streamMeta.chatType ?? chatType,
+            chatType: resolvedChatType,
             platform: improvedMetadata.platform,
             accountUsername: improvedMetadata.accountUsername,
             accountId: selectedUser.accountId ?? streamMeta.accountId ?? accountId,
-            sellOrderId: selectedUser.sellOrderId ?? streamMeta.sellOrderId ?? streamMeta.accountId,
-            buyOrderId: selectedUser.buyOrderId ?? streamMeta.buyOrderId,
+            ...(resolvedChatType === 'sell'
+              ? { buyOrderId: selectedUser.buyOrderId ?? streamMeta.buyOrderId }
+              : { sellOrderId: selectedUser.sellOrderId ?? streamMeta.sellOrderId ?? streamMeta.accountId }),
             trade_price: selectedUser.price ?? streamMeta.trade_price ?? tradePrice
           };
           const saved = await persistChannelMetadata(channel.id, fullMetadata) || await createChannelMetadata(channel.id, fullMetadata);
@@ -1412,16 +1430,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         let isCreator = creatorIdStr ? (creatorIdStr === String(currentUserId)) : false;
         let isReceiver = creatorIdStr ? (creatorIdStr !== String(currentUserId)) : false;
 
-        // 🔥 FIX: When user initiated from table (no _channel), they are the initiator
-        // buy flow: initiator = buyer; sell flow: initiator = seller — don't show wrong role UI
+        // 🔥 FIX: When user initiated from table (no _channel), they are the initiator only in BUY flow.
+        // Buy flow: initiator = buyer (isCreator); sell flow: initiator = seller (isCreator) — use metadata initiator_id for sell so seller sees "waiting", buyer sees Accept/Decline.
         if (cameFromTable && resolvedChatType === 'buy') {
           isCreator = true;
           isReceiver = false;
         }
-        if (cameFromTable && resolvedChatType === 'sell') {
-          isCreator = true;
-          isReceiver = false;
-        }
+        // Sell: do NOT override — initiator_id = seller = isCreator; other user = buyer = isReceiver
 
         console.log('🎭 User Role:', {
           isCreator,
@@ -1744,7 +1759,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           const invoiceBuyerId = inv.buyer?.userId || inv.buyer?._id || inv.buyerId || inv.buyer;
           const invoiceSellerId = inv.seller?.userId || inv.seller?._id || inv.sellerId || inv.seller;
           const isBuyerFromInvoice = (invoiceBuyerId === currentUserId || String(invoiceBuyerId) === String(currentUserId));
-          const isBuyerFromChat = resolvedChatType === 'buy' && isCreator;
+          const isBuyerFromChat = (resolvedChatType === 'buy' && isCreator) || (resolvedChatType === 'sell' && isReceiver);
           const shouldShowAcceptDecline = isBuyerFromInvoice || isBuyerFromChat;
           console.log('🔍 [chat loadChannel] active invoice restore', {
             invoiceBuyerId,
@@ -1754,12 +1769,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             isCreator,
             isBuyerFromInvoice,
             isBuyerFromChat,
-            shouldShowAcceptDecline
+            shouldShowAcceptDecline,
+            hasActiveInvoiceMatchingChannel
           });
           // 🔥 When buyer selected new account (cameFromTable): only show if invoice matches selected account
-          const invMatchesSelectedAccount = !selectedUser?.accountId && !selectedUser?.sellOrderId ||
-            inv.sellOrderId === selectedUser?.sellOrderId || inv.accountId === selectedUser?.accountId;
-          if (shouldShowAcceptDecline && (!cameFromTable || invMatchesSelectedAccount)) {
+          const invMatchesSelectedAccount = !selectedUser?.accountId && !selectedUser?.sellOrderId && !selectedUser?.buyOrderId ||
+            inv.sellOrderId === selectedUser?.sellOrderId || inv.accountId === selectedUser?.accountId || inv.orderId === selectedUser?.buyOrderId || inv.orderId === selectedUser?.accountId;
+          if (shouldShowAcceptDecline && hasActiveInvoiceMatchingChannel && (!cameFromTable || invMatchesSelectedAccount)) {
             const price = inv.amountUSD ?? inv.amount ?? inv.price ?? selectedUser?.price;
             const priceForDisplay = (price != null && price !== '' && Number(price) >= 0) ? String(Number(price)) : 'N/A';
             setPendingRequest({
@@ -1944,8 +1960,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             }
           }
         }
-        // 🔥 PRIORITY 1.7: SELLER - Invoice sent, waiting for buyer to accept
-        else if (((resolvedChatType === 'buy' && isReceiver) || (resolvedChatType === 'sell' && isCreator)) && mounted && hasActiveInvoiceFromApi && !hasActiveTransactionFromApi) {
+        // 🔥 PRIORITY 1.7: SELLER - Invoice sent, waiting for buyer to accept (only when invoice matches this channel)
+        else if (((resolvedChatType === 'buy' && isReceiver) || (resolvedChatType === 'sell' && isCreator)) && mounted && hasActiveInvoiceMatchingChannel && !hasActiveTransactionFromApi) {
             console.log('🎯 SELLER: Invoice sent — showing "Waiting for buyer to accept invoice"');
             setShowAcceptanceNotification(true);
             setAcceptanceData({
@@ -3784,21 +3800,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       let orderId, buyerId, sellerId;
 
       if (chatType === 'sell') {
-        // SELL ORDER: Current user is buyer, other user is seller
-        orderId = selectedUser?.sellOrderId ||
-          currentChannel?.data?.metadata?.sellOrderId ||
+        // SELL TAB: Current user is SELLER (sends invoice), other user is BUYER
+        orderId = selectedUser?.buyOrderId ||
+          currentChannel?.data?.metadata?.buyOrderId ||
           currentChannel?.data?.metadata?.accountId;
 
-        sellerId = selectedUser?.sellerId ||
+        sellerId = currentUserId; // Current user is the seller
+        buyerId = selectedUser?.buyerId ||
           selectedUser?.id ||
           selectedUser?._id;
-
-        buyerId = currentUserId; // Current user is the buyer
 
         console.log('🔍 Sell Order Context:', { orderId, sellerId, buyerId });
 
         if (!orderId) {
-          throw new Error('Sell order ID not found. Please try reopening the chat.');
+          throw new Error('Buy order ID not found. Please try reopening the chat.');
         }
 
       } else {
@@ -3958,11 +3973,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
       // Remove undefined keys
       Object.keys(invoicePayload).forEach(key => invoicePayload[key] === undefined && delete invoicePayload[key]);
+      if(chatType === 'sell'){
+        console.log('📦 Invoice Payload (/invoices/from-buy-order):', invoicePayload);
+      } else {
+        console.log('📦 Invoice Payload (/invoices/from-sell-order):', invoicePayload);
+      }
 
-      console.log('📦 Invoice Payload (/invoices/from-sell-order):', invoicePayload);
+     
 
       // 🔥 NEW: Use /invoices/from-sell-order endpoint
-      response = await apiService.post('/invoices/from-sell-order', invoicePayload);
+      if(chatType === 'sell'){
+        response = await apiService.post('/invoices/from-buy-order', invoicePayload);
+      } else {
+        response = await apiService.post('/invoices/from-sell-order', invoicePayload);
+      }
 
       console.log('✅ Transaction initiated successfully:', response);
 
@@ -4128,6 +4152,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       
       // 🔥 Invoice created — show "Waiting for buyer to accept" (no timer until buyer accepts)
       setActiveTransaction(null);
+      setShowRequestModal(false);
+      setPendingRequest(null);
       setShowAcceptanceNotification(true);
       setAcceptanceData({
         waitingForInvoiceAccept: true,
@@ -4626,80 +4652,27 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     const isInitiator = channelCreatorId === currentUserId ||
       channelCreatorId === String(currentUserId);
 
-    // Get the channel's base chatType from the channel ID or metadata
-    const baseChatType = user.chatType; // This is the stored chatType ('buy' or 'sell')
+    // Get the channel's chatType from the channel ID or metadata
+    const baseChatType = user.chatType; // 'buy' or 'sell'
 
-    // 🔥 ROLE-BASED DISPLAY:
-    // - If user is INITIATOR of a 'buy' channel → show in "Buy" tab
-    // - If user is RECEIVER of a 'buy' channel → show in "Sell" tab
-    // - If user is INITIATOR of a 'sell' channel → show in "Sell" tab
-    // - If user is RECEIVER of a 'sell' channel → show in "Buy" tab
-
-    // 🔥 SIMPLIFIED LOGIC: Always show based on who initiated
-    // - INITIATOR → Always sees it in "Buy" tab (they initiated the trade)
-    // - RECEIVER → Always sees it in "Sell" tab (they received the trade request)
-    // This ensures consistent behavior after chat deletion when roles may swap
-    const shouldShowInBuyTab = isInitiator;
-    const shouldShowInSellTab = !isInitiator;
+    // 🔥 CHANNEL-TYPE-BASED DISPLAY: Same section for both seller and buyer
+    // - chatType 'buy' (sell_order) → always show in "Buy" tab
+    // - chatType 'sell' (buy_order) → always show in "Sell" tab
+    const shouldShowInBuyTab = baseChatType === 'buy';
+    const shouldShowInSellTab = baseChatType === 'sell';
 
     const matchesTab = activeTab === 'Buy' ? shouldShowInBuyTab : shouldShowInSellTab;
 
     return matchesSearch && matchesTab;
   });
 
-  // 🔥 ROLE-BASED: Calculate unread counts
+  // 🔥 CHANNEL-TYPE-BASED: Unread counts by chatType (same as list categorization)
   const buyUnreadCount = chatUsers
-    .filter(user => {
-      const channel = user._channel;
-      const channelMetadata = channel?.data?.metadata || {};
-      let channelCreatorId = channelMetadata.initiator_id;
-
-      if (!channelCreatorId) {
-        try {
-          const channelName = channel?.data?.name || '';
-          const parts = channelName.split('|');
-          if (parts.length > 1) {
-            const parsed = JSON.parse(parts[1]);
-            channelCreatorId = parsed.initiator_id;
-          }
-        } catch (e) {
-          channelCreatorId = channel?.data?.created_by_id;
-        }
-      }
-
-      const isInitiator = channelCreatorId === currentUserId ||
-        channelCreatorId === String(currentUserId);
-
-      // 🔥 SIMPLIFIED: Initiator always Buy tab
-      return isInitiator;
-    })
+    .filter(user => user.chatType === 'buy')
     .reduce((total, user) => total + user.unreadCount, 0);
 
   const sellUnreadCount = chatUsers
-    .filter(user => {
-      const channel = user._channel;
-      const channelMetadata = channel?.data?.metadata || {};
-      let channelCreatorId = channelMetadata.initiator_id;
-
-      if (!channelCreatorId) {
-        try {
-          const channelName = channel?.data?.name || '';
-          const parts = channelName.split('|');
-          if (parts.length > 1) {
-            const parsed = JSON.parse(parts[1]);
-            channelCreatorId = parsed.initiator_id;
-          }
-        } catch (e) {
-          channelCreatorId = channel?.data?.created_by_id;
-        }
-      }
-
-      const isInitiator = channelCreatorId === currentUserId ||
-        channelCreatorId === String(currentUserId);
-
-      // 🔥 SIMPLIFIED: Receiver always Sell tab
-      return !isInitiator;
-    })
+    .filter(user => user.chatType === 'sell')
     .reduce((total, user) => total + user.unreadCount, 0);
 
   // Emit total unread count for navbar badge
