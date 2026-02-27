@@ -626,6 +626,116 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                   <h3 className="text-sm font-semibold mt-5">
                     {viewMode ? `${selectedButton.charAt(0).toUpperCase() + selectedButton.slice(1)} Account Details` : `Specify ${selectedButton.charAt(0).toUpperCase() + selectedButton.slice(1)} Account Requirements`}
                   </h3>
+
+                  {/* Full Account Details Section (View Mode) */}
+                  {viewMode && viewAccountData && (
+                    <div className="mt-4 p-4 bg-[rgba(255,255,255,0.05)] rounded-lg space-y-3">
+                      {/* Buyer / Seller Info */}
+                      {viewAccountData.buyer && (
+                        <div className="flex items-center gap-3 pb-3 border-b border-gray-700/50">
+                          <img
+                            src={viewAccountData.buyer.image}
+                            alt={viewAccountData.buyer.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          <div>
+                            <p className="text-white text-sm font-semibold flex items-center gap-1">
+                              {viewAccountData.buyer.name || 'Anonymous'}
+                              {viewAccountData.buyer.verified && (
+                                <span className="text-purple-400 text-xs">✓</span>
+                              )}
+                            </p>
+                            <p className="text-gray-400 text-xs">Buyer</p>
+                          </div>
+                        </div>
+                      )}
+                      {viewAccountData.seller && (
+                        <div className="flex items-center gap-3 pb-3 border-b border-gray-700/50">
+                          <img
+                            src={viewAccountData.seller.image}
+                            alt={viewAccountData.seller.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          <div>
+                            <p className="text-white text-sm font-semibold flex items-center gap-1">
+                              {viewAccountData.seller.name || 'Anonymous'}
+                              {viewAccountData.seller.verified && (
+                                <span className="text-purple-400 text-xs">✓</span>
+                              )}
+                            </p>
+                            <p className="text-gray-400 text-xs">Seller</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Account Details Grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Username */}
+                        {viewAccountData.accountUsername && viewAccountData.accountUsername !== 'N/A' && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Username</p>
+                            <p className="text-white text-sm font-medium">@{viewAccountData.accountUsername}</p>
+                          </div>
+                        )}
+
+                        {/* Max Budget / Price */}
+                        {(viewAccountData.maxPrice || viewAccountData.price) && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">
+                              {viewAccountData.isBuyOrder ? 'Max Budget' : 'Price'}
+                            </p>
+                            <p className="text-white text-sm font-semibold">
+                              {viewAccountData.isBuyOrder
+                                ? `${viewAccountData.maxPrice} ${viewAccountData.currency || 'USD'}`
+                                : `${viewAccountData.price} ${viewAccountData.currency || 'USD'}`
+                              }
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Followers */}
+                        {viewAccountData.followers && viewAccountData.followers !== '0' && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Followers</p>
+                            <p className="text-white text-sm font-medium">{viewAccountData.followers}</p>
+                          </div>
+                        )}
+
+                        {/* Platform */}
+                        <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Platform</p>
+                          <p className="text-white text-sm font-medium capitalize">{viewAccountData.platform}</p>
+                        </div>
+
+                        {/* Urgency */}
+                        {viewAccountData.isUrgent && (
+                          <div className="bg-[rgba(255,100,100,0.08)] rounded-lg p-3 border border-red-500/20">
+                            <p className="text-red-400 text-[10px] uppercase tracking-wider mb-1">Priority</p>
+                            <p className="text-red-300 text-sm font-semibold">🔥 Urgent</p>
+                          </div>
+                        )}
+
+                        {/* Account Type */}
+                        {viewAccountData.accountType && viewAccountData.accountType !== '0' && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Account Type</p>
+                            <p className="text-white text-sm font-medium capitalize">{viewAccountData.accountType}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Description */}
+                      {viewAccountData.description && (
+                        <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Description</p>
+                          <p className="text-white text-sm leading-relaxed">{viewAccountData.description}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mt-4 p-3 bg-[rgba(255,255,255,0.05)] rounded-lg">
                     {/* Metrics Section */}
                     <div className={`${viewMode ? '' : 'border-b border-gray-500'}`}>
@@ -650,11 +760,11 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
 
                       {/* Display Metrics Data in View Mode */}
                       {viewMode && currentAccountId && platformData[currentAccountId]?.metrics && (
-                        <div className="grid grid-cols-3 gap-1 px-3 space-y-2 rounded-lg ">
+                        <div className="flex flex-wrap gap-2 px-3 rounded-lg">
                           {platformData[currentAccountId].metrics.map((metric, index) => (
-                            <div key={index} className="flex items-center whitespace-nowrap w-fit bg-[rgba(255,255,255,0.05)] rounded-full p-2 gap-2 justify-between items-left py-2 last:border-b-0">
-                              <div className="flex w-fit items-center gap-1">
-                                <img src={star} className="h-4 w-4" alt="" />
+                            <div key={index} className="flex items-center bg-[rgba(255,255,255,0.05)] rounded-full px-3 py-2 gap-2">
+                              <div className="flex items-center gap-1">
+                                <img src={star} className="h-4 w-4 shrink-0" alt="" />
 
                                 <div className="flex gap-1">
                                   <span className="text-xs text-gray-300 capitalize font-medium">
@@ -698,11 +808,11 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
 
                       {/* Display Filters Data in View Mode */}
                       {viewMode && currentAccountId && platformData[currentAccountId]?.filters && (
-                        <div className="grid grid-cols-3 gap-1 px-3 space-y-2 rounded-lg mt-2">
+                        <div className="flex flex-wrap gap-2 px-3 rounded-lg mt-2">
                           {platformData[currentAccountId].filters.map((filter, index) => (
-                            <div key={index} className="flex items-center whitespace-nowrap w-fit bg-[rgba(255,255,255,0.05)] rounded-full p-2 gap-2 justify-between items-left py-2 last:border-b-0">
-                              <div className="flex w-fit items-center whitespace-nowrap gap-1">
-                                <img src={star} className="h-4 w-4" alt="" />
+                            <div key={index} className="flex items-center bg-[rgba(255,255,255,0.05)] rounded-full px-3 py-2 gap-2">
+                              <div className="flex items-center gap-1">
+                                <img src={star} className="h-4 w-4 shrink-0" alt="" />
 
                                 <div className="flex gap-1">
                                   <span className="text-xs text-gray-300 capitalize font-medium">

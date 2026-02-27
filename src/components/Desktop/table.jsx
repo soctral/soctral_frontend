@@ -111,6 +111,7 @@ const PLATFORM_ICONS = {
   flickr: flickr,
   vimeo: vimeo,
   qoura: qoura,
+  quora: qoura,
   twitch: twitch,
   tumblr: tumblr,
   steam: steam,

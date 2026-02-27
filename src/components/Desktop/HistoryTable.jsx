@@ -119,7 +119,7 @@ const HistoryTable = ({
         label: transaction.label || type,
         isNativeTransfer: transaction.isNativeTransfer || false,
         source: transaction.source || 'blockchain',
-        usdValue: transaction.usdValue?.toString() || transaction.amount?.toString() || '0',
+        usdValue: transaction.amountUsd?.toString() || transaction.tradeTransactionId?.amountUSD?.toString() || transaction.usdValue?.toString() || '0',
         notes: transaction.notes || ''
       };
     });
