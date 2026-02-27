@@ -99,36 +99,23 @@ class ChatService {
       const userIds = [this.currentUser.id, otherUserId].sort();
       const userId = this.currentUser.id;
 
-      // 🔥 CRITICAL: Include chatType AND orderId in channelId to create separate channels per trade
-      // 🔥 FIX: Stream Chat has a 64-char max for channel IDs
-      // Full MongoDB ObjectIds are 24 chars each, so we truncate userIds to last 12 chars
-      // Format: {last12ofUser1}_{last12ofUser2}_{chatType}_{orderId} ≈ 54 chars max
-      const orderId = additionalData.sellOrderId || additionalData.buyOrderId || additionalData.accountId || '';
+      // 🔥 STABLE CHANNEL ID: One channel per (user1, user2, tradeType). No orderId.
+      // Stream Chat 64-char max: truncate userIds to last 12 chars.
+      // Format: {last12ofUser1}_{last12ofUser2}_{chatType} — reused for all trades between this pair + type.
       const shortUser1 = userIds[0].slice(-12);
       const shortUser2 = userIds[1].slice(-12);
-      const baseChannelId = orderId
-        ? `${shortUser1}_${shortUser2}_${chatType}_${orderId}`
-        : `${shortUser1}_${shortUser2}_${chatType}`;
+      const baseChannelId = `${shortUser1}_${shortUser2}_${chatType}`;
       const uniqueMembers = [...new Set([this.currentUser.id, otherUserId])];
 
-      // 🔥 NEW: Check if this channel was previously deleted by current user
+      // When user had "deleted" this chat, reuse the same channel (don't create a new one).
       const deletionKey = `deletedChannel_${userId}_${baseChannelId}`;
-      const deletedTimestamp = localStorage.getItem(deletionKey);
+      if (localStorage.getItem(deletionKey)) {
+        localStorage.removeItem(deletionKey);
+        const otherUserDeletionKey = `deletedChannel_${otherUserId}_${baseChannelId}`;
+        localStorage.removeItem(otherUserDeletionKey);
+      }
 
       let channelId = baseChannelId;
-      let forceNewChannel = false;
-
-      if (deletedTimestamp) {
-        // 🔥 Create a NEW channel with timestamp suffix to avoid old history
-        channelId = `${baseChannelId}_${Date.now()}`;
-        forceNewChannel = true;
-        console.log('🆕 Creating FRESH channel (previous was deleted):', channelId);
-
-        // 🔥 FIXED: Clear deletion markers for BOTH users
-        const otherUserDeletionKey = `deletedChannel_${otherUserId}_${baseChannelId}`;
-        console.log('📝 Clearing deletion markers for both users:', deletionKey, otherUserDeletionKey);
-        localStorage.removeItem(deletionKey);
-      }
 
       // 🔥 CRITICAL: Extract ALL possible metadata sources with priority order
       const requestedAccountId = additionalData.accountId || additionalData.account_id;
@@ -151,38 +138,29 @@ class ChatService {
         'N/A';
 
       console.log('🔧 ========== CREATE/GET CHANNEL ==========');
-      console.log('📋 Input Data:', { channelId, baseChannelId, forceNewChannel, members: uniqueMembers, chatType });
+      console.log('📋 Input Data:', { channelId, members: uniqueMembers, chatType });
 
-      // Query for existing channel - only if not forcing new channel
-      let existingChannels = [];
-      if (!forceNewChannel) {
-        existingChannels = await this.client.queryChannels({
-          type: channelTypeStr,
-          id: channelId
-        });
+      // Query for existing channel (stable ID only; legacy lookup for backward compat)
+      let existingChannels = await this.client.queryChannels({
+        type: channelTypeStr,
+        id: channelId
+      });
 
-        // 🔥 BACKWARD COMPAT: If no channel found with new short ID format,
-        // try the old full-length userId format for existing channels
-        if (existingChannels.length === 0) {
-          const legacyChannelId = orderId
-            ? `${userIds[0]}_${userIds[1]}_${chatType}_${orderId}`
-            : `${userIds[0]}_${userIds[1]}_${chatType}`;
-          if (legacyChannelId !== channelId) {
-            console.log('🔄 Trying legacy channel ID format:', legacyChannelId);
-            const legacyChannels = await this.client.queryChannels({
-              type: channelTypeStr,
-              id: legacyChannelId
-            });
-            if (legacyChannels.length > 0) {
-              console.log('✅ Found existing channel with legacy ID format');
-              existingChannels = legacyChannels;
-              channelId = legacyChannelId;
-            }
+      if (existingChannels.length === 0) {
+        const legacyChannelId = `${userIds[0]}_${userIds[1]}_${chatType}`;
+        if (legacyChannelId !== channelId) {
+          const legacyChannels = await this.client.queryChannels({
+            type: channelTypeStr,
+            id: legacyChannelId
+          });
+          if (legacyChannels.length > 0) {
+            existingChannels = legacyChannels;
+            channelId = legacyChannelId;
           }
         }
       }
 
-      let isNewChannel = existingChannels.length === 0 || forceNewChannel;
+      let isNewChannel = existingChannels.length === 0;
       let isNewTradeRequest = false;
       let channel;
 

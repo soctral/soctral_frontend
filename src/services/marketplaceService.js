@@ -547,13 +547,8 @@ class MarketplaceService {
         throw new Error('Buyer ID is required');
       }
 
-      if (!transactionData.accountOriginalEmail) {
-        throw new Error('Account original email is required');
-      }
-
-      if (!transactionData.originalEmailPassword) {
-        throw new Error('Original email password is required');
-      }
+      // accountOriginalEmail and originalEmailPassword are optional
+      // (depends on whether original email was available during upload)
 
       if (!transactionData.socialAccountPassword) {
         throw new Error('Social account password is required');
@@ -891,8 +886,6 @@ class MarketplaceService {
       // Validate all required fields
       const requiredFields = [
         'buyOrderId',
-        'accountOriginalEmail',
-        'originalEmailPassword',
         'socialAccountPassword',
         'paymentMethod',
         'paymentNetwork',

@@ -1,26 +1,27 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Search, Send, MoreVertical, ArrowLeft, X, Check, CheckCheck, Paperclip, Download, FileText, Image as ImageIcon, Flag, Trash2, Ban, MessageSquare, AlertCircle, CheckCircle, Lock, Unlock, Clock, Copy, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Ban, Check, CheckCheck, CheckCircle, Clock, Copy, Download, Eye, EyeOff, FileText, Flag, Loader2, Lock, MessageSquare, MoreVertical, Paperclip, Search, Send, Trash2, Unlock, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import bnb from "../../assets/bnb.svg";
+import btc from "../../assets/btc.svg";
+import eth from "../../assets/eth.svg";
+import successcard from "../../assets/fram.svg";
+import arrow1 from "../../assets/marrow.png";
+import solana from "../../assets/sol.svg";
+import success from "../../assets/suc.png";
+import warning from "../../assets/triangle.svg";
+import tron from "../../assets/trx.svg";
 import ug1 from "../../assets/ug1.png";
 import ug2 from "../../assets/ug2.png";
 import ug3 from "../../assets/ug3.png";
 import ug4 from "../../assets/ug4.jpg";
-import chatService from '../../services/chatService';
+import usdt from "../../assets/usdt.svg";
+import usdc from "../../assets/usdc.svg";
 import { useUser } from '../../context/userContext';
 import apiService from '../../services/api.js';
-import authService from '../../services/authService.js';
-import walletService from '../../services/walletService';
-import transactionService from '../../services/transactionService';
+import { createChannelMetadata, getChannelMetadata, setChannelMetadata as persistChannelMetadata } from '../../services/channelMetadataService';
+import chatService from '../../services/chatService';
 import TradeStateManager from '../../services/tradeStateManager';
-import warning from "../../assets/triangle.svg";
-import btc from "../../assets/btc.svg";
-import usdt from "../../assets/usdt.svg";
-import eth from "../../assets/eth.svg";
-import solana from "../../assets/sol.svg";
-import bnb from "../../assets/bnb.svg";
-import tron from "../../assets/trx.svg";
-import success from "../../assets/suc.png";
-import arrow1 from "../../assets/marrow.png"
-import successcard from "../../assets/fram.svg"
+import transactionService from '../../services/transactionService';
+import walletService from '../../services/walletService';
 
 
 // Add this function in chat.jsx after the imports
@@ -48,6 +49,12 @@ const migrateChannelMetadata = async (channel, defaultChatType = 'buy') => {
   } catch (error) {
     console.error('❌ Failed to migrate channel:', channel.id, error);
   }
+};
+
+const toId = (v) => {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  return v?.$oid ?? v?.oid ?? v?.id ?? (typeof v?._id === 'string' ? v._id : toId(v?._id)) ?? null;
 };
 
 const extractChatTypeFromChannelId = (channelId) => {
@@ -121,6 +128,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
   // 🔥 NEW: Transaction Banner States
   const [activeTransaction, setActiveTransaction] = useState(null);
+  const [hasActiveInvoice, setHasActiveInvoice] = useState(false); // From getActiveBetweenUsers when type='invoice'
   const [transactionTimer, setTransactionTimer] = useState(null);
   const [showCancelTradeModal, setShowCancelTradeModal] = useState(false);
   const [showAppealMenu, setShowAppealMenu] = useState(false);
@@ -135,6 +143,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     platform: 'Unknown',
     accountUsername: 'N/A'
   });
+  const [metadataResolved, setMetadataResolved] = useState(false); // true only after API + resolution complete — avoid N/A/Unknown flash
+  const [selectedChannelCanInitiateAgain, setSelectedChannelCanInitiateAgain] = useState(false); // hide Completed badge when seller can initiate
+  const [selectedChannelBadgeResolved, setSelectedChannelBadgeResolved] = useState(false); // true only after loadChannel + API — badge hidden until then
+  const [accountCardIsBuyer, setAccountCardIsBuyer] = useState(null); // true = "You have shown interest...", false = "X has shown interest in your account"
   // 🔥 NEW: Sell Flow States
   const [showSellerTradePrompt, setShowSellerTradePrompt] = useState(false);
   const [showSellerInitiateModal, setShowSellerInitiateModal] = useState(false);
@@ -145,7 +157,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     accountEmail: '',
     emailPassword: '',
     accountPassword: '',
-    paymentMethod: 'BTC',
+    paymentMethod: 'USDT',
     paymentNetwork: '',
     offerPrice: ''
   });
@@ -161,6 +173,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const fetchChannelsThrottleRef = useRef(null);
   const lastFetchTimeRef = useRef(0);
   const messagesContainerRef = useRef(null); // 🔥 FIX: Track scroll container for position preservation
+  const buyerSelectedNewAccountRef = useRef(false); // 🔥 When true, skip checks 1 & 2 until seller initiates for new account
 
   const { user: userData, isAuthenticated } = useUser();
 
@@ -458,44 +471,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             const isPendingOrActive = ['pending', 'active', 'escrowed'].includes(activeTxn.status?.toLowerCase());
             
             if (isBuyer && isPendingOrActive) {
-              console.log('🔔 BUYER: Has active transaction - showing release funds modal');
-              
-              // Prepare trade init data for TradeInitModal
-              const tradeInitDataForBuyer = {
-                transactionId: activeTxn._id || activeTxn.id,
-                sellerId: sellerId,
-                buyerId: buyerId,
-                accountPrice: parseFloat(activeTxn.amountUSD || activeTxn.amount || 0),
-                paymentMethod: (activeTxn.currency || 'BTC').toUpperCase(),
-                paymentNetwork: activeTxn.network || 'bitcoin',
-                initiatedAt: activeTxn.createdAt,
-                sellOrderId: activeTxn.sellOrderId,
-                accountId: activeTxn.socialAccountId,
-                socialAccount: activeTxn.platform || 'Unknown',
-                accountUsername: activeTxn.accountUsername || 'N/A',
-                seller: {
-                  id: sellerId,
-                  name: activeTxn.seller?.displayName || activeTxn.seller?.name || 'Seller',
-                  image: activeTxn.seller?.avatar || activeTxn.seller?.bitmojiUrl || ug1,
-                  ratings: '⭐ 4.5 (New)'
-                },
-                // Flag to indicate this is from active transaction check
-                isFromActiveCheck: true
-              };
-              
-              // Calculate transaction fee (2.5% of account price)
-              const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-              tradeInitDataForBuyer.transactionFee = transactionFee;
-              tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-              
-              console.log('✅ BUYER: Opening TradeInitModal for active transaction:', tradeInitDataForBuyer);
-              
-              // Set the trade init data and show the TradeInitModal
-              setTradeInitData(tradeInitDataForBuyer);
+              console.log('🔔 BUYER: Has active transaction - setting state only (Trade Details modal only on Accept click)');
               setActiveTransaction(activeTxn);
-              setShowTradeInitModal(true);
-              
-              console.log('✅ TradeInitModal opened for buyer to release funds on init');
             }
           } else {
             console.log('✅ No active transaction found on init');
@@ -589,17 +566,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       tradeInitDataForBuyer.transactionFee = transactionFee;
                       tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
                       
-                      console.log('✅ BUYER: Opening TradeInitModal for active transaction:', tradeInitDataForBuyer);
-                      
-                      // Set the trade init data and show the TradeInitModal (release fund modal)
+                      console.log('✅ BUYER: Active transaction from cancel request - setting state only (no auto-open modal)');
                       setTradeInitData(tradeInitDataForBuyer);
                       setActiveTransaction(activeTxn);
-                      setShowTradeInitModal(true);
-                      
-                      // Don't show cancel modal - show release fund modal instead
                       setShowCancelTradeModal(false);
-                      
-                      console.log('✅ TradeInitModal opened for buyer to release funds');
                     } else {
                       console.warn('⚠️ Could not fetch active transaction despite having ID');
                       // Fallback: show informational message
@@ -632,7 +602,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             if (message.trade_init_data) {
               try {
                 const tradeData = JSON.parse(message.trade_init_data);
-                
+                // 🔥 SKIP when buyer initiated second trade (new account): wait for seller to initiate again
+                if (buyerSelectedNewAccountRef.current) {
+                  console.log('⏸️ BUYER: Skipping trade_init_data — selected new account, waiting for seller to initiate again');
+                } else {
                 console.log('📦 Parsed trade init data:', tradeData);
                 console.log('🔍 Checking if for current user:', {
                   buyer_id: tradeData.buyer_id,
@@ -726,33 +699,90 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 } else {
                   console.log('ℹ️ Trade init message not for current user or already processed');
                 }
+                }
               } catch (parseError) {
                 console.error('❌ Failed to parse trade_init_data:', parseError);
+              }
+            }
+
+            // 🔥 NEW: Handle seller_ready when buyer is elsewhere (e.g. home, different channel)
+            // Skip if buyer is already viewing this channel — channel listener handles it
+            // 🔥 SKIP when buyer initiated second trade (new account): wait for seller to initiate again
+            if (message.seller_ready === true && message.user?.id !== currentUserId && event.cid !== currentChannelRef.current?.cid && !buyerSelectedNewAccountRef.current) {
+              const channelId = event.cid?.split(':')[1];
+              if (channelId) {
+                console.log('🔔 BUYER: Seller ready (GLOBAL listener) — fetching channel and showing Accept/Decline');
+                client.channel('messaging', channelId).watch().then(channel => {
+                  const sellerId = message.user?.id || message.seller_initiator_id;
+                  const sellerName = message.seller_name || message.user?.name || 'Seller';
+                  const price = message.trade_price || channel.data?.metadata?.trade_price || 'N/A';
+                  const accId = channel.data?.metadata?.accountId || channel.data?.metadata?.sellOrderId;
+                  const meta = channel.data?.metadata || {};
+                  setPendingRequest({
+                    user: {
+                      id: sellerId,
+                      _id: sellerId,
+                      name: sellerName,
+                      displayName: sellerName,
+                      price,
+                      accountId: accId,
+                      platform: meta.platform,
+                      accountUsername: meta.accountUsername
+                    },
+                    channel,
+                    isNewAccount: false,
+                    wasDeleted: false
+                  });
+                  setShowRequestModal(true);
+                  if (onSelectUser) {
+                    onSelectUser({
+                      id: sellerId,
+                      _id: sellerId,
+                      name: sellerName,
+                      displayName: sellerName,
+                      _channel: channel
+                    });
+                  }
+                  console.log('✅ BUYER: Accept/Decline shown (from seller_ready)');
+                }).catch(err => console.error('❌ Failed to fetch channel for seller_ready:', err));
               }
             }
 
             // 🔥 NEW: Handle buyer_initiated message to start seller's timer
             if (message.buyer_initiated === true) {
               const sellerId = message.seller_id;
+              const isForCurrentChannel = !event.cid || event.cid === currentChannelRef.current?.cid;
               console.log('📦 Received buyer_initiated message:', {
                 sellerId,
                 currentUserId,
                 isForMe: sellerId === currentUserId,
-                transactionId: message.transaction_id
+                transactionId: message.transaction_id,
+                isForCurrentChannel
               });
               
-              // If current user is the seller, activate their timer
-              if (sellerId === currentUserId) {
-                console.log('🔥 SELLER: Buyer has initiated trade! Starting timer...');
-                setSellerTradeTimer(message.timer_duration || 300);
+              // If current user is the seller and this message is for the channel they're viewing, set activeTransaction so countdown banner shows
+              if (sellerId === currentUserId && isForCurrentChannel) {
+                const timerDuration = message.timer_duration || 300;
+                const initiatedAt = message.initiated_at || message.created_at || new Date().toISOString();
+                console.log('🔥 SELLER: Buyer has initiated trade! Setting activeTransaction and starting timer...');
+                setShowAcceptanceNotification(false);
+                setAcceptanceData(null);
+                setActiveTransaction({
+                  id: message.transaction_id,
+                  _id: message.transaction_id,
+                  role: 'seller',
+                  status: 'pending',
+                  sellerId: currentUserId,
+                  createdAt: initiatedAt,
+                  timerDuration
+                });
+                setSellerTradeTimer(timerDuration);
                 setIsTradeTimerActive(true);
-                
-                // Persist timer state
                 const transactionId = message.transaction_id;
                 if (transactionId) {
-                  TradeStateManager.setTimerState(transactionId, true, message.timer_duration || 300);
+                  TradeStateManager.setTimerState(transactionId, true, timerDuration);
                 }
-                console.log('✅ SELLER: Timer activated successfully');
+                console.log('✅ SELLER: Timer and countdown banner activated');
               }
             }
 
@@ -798,6 +828,12 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               } catch (parseError) {
                 console.error('❌ Failed to parse funds_released_data:', parseError);
               }
+            }
+
+            // 🔥 Handle invoice_declined — clear "Waiting for buyer" banner when buyer declines
+            if (message.invoice_declined === true && message.user?.id !== currentUserId) {
+              setShowAcceptanceNotification(false);
+              setAcceptanceData(null);
             }
 
             // 🔥 NEW: Handle trade_cancelled message to clear buyer's state
@@ -948,7 +984,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
 
   useEffect(() => {
-    if (!selectedUser || !isInitialized) {
+    if (!selectedUser) {
+      setAccountCardIsBuyer(null);
+      return;
+    }
+    if (!isInitialized) {
       return;
     }
 
@@ -962,12 +1002,16 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
     const loadChannel = async () => {
       try {
+        console.log('🔄 loadChannel START', { otherUser: selectedUser?.id, accountId: selectedUser?.accountId, hasChannel: !!selectedUser?._channel });
         setIsLoading(true);
+        setMetadataResolved(false);
+        setAccountCardIsBuyer(null);
         const otherUserId = selectedUser.id || selectedUser._id;
         const otherUserName = selectedUser.name || selectedUser.displayName;
         const currentUserId = userData?._id || userData?.id;
 
         if (otherUserId === currentUserId) {
+          setMetadataResolved(true);
           setIsLoading(false);
           return;
         }
@@ -990,7 +1034,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         // 🔥 STEP 1: Initialize metadata from selectedUser (temporary until channel loads)
         let tempMetadata = {
           platform: selectedUser.platform || 'Unknown',
-          accountUsername: selectedUser.filters?.find(f => f.key === 'username')?.value ||
+          accountUsername: selectedUser.filters?.find(f => f.key === 'username' || f.key === 'channel_username')?.value ||
             selectedUser.accountUsername ||
             selectedUser.username ||
             selectedUser.handle ||
@@ -1029,29 +1073,191 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
         const channel = result.channel || result;
         const isNewTradeRequest = result.isNewTradeRequest === true;
+        const resolvedChatType = extractChatTypeFromChannelId(channel?.id) || chatType;
 
         if (!mounted) return;
 
+        // 🔥 Fetch current active item (transaction or invoice) between these two users — no caching
+        let activeBetween = { type: null, data: null };
+        try {
+          activeBetween = await transactionService.getActiveBetweenUsers(currentUserId, otherUserId);
+        } catch (e) {
+          console.warn('⚠️ getActiveBetweenUsers failed:', e?.message);
+        }
+        if (!mounted) return;
+
+        // Normalize type (API may return 'Transaction' or 'transaction')
+        const activeType = activeBetween.type != null ? String(activeBetween.type).toLowerCase() : null;
+        const activeData = activeBetween.data;
+
+        // Drive UI from API: set active transaction only if API says there is one between these users
+        // Trade Details modal only opens when buyer clicks Accept; never auto-open when we have active txn
+        const hasActiveTransactionFromApi = activeType === 'transaction' && !!activeData;
+        const hasActiveInvoiceFromApi = activeType === 'invoice' && !!activeData;
+        console.log('🔍 [chat loadChannel] active-between check', {
+          currentUserId,
+          otherUserId,
+          activeBetweenRaw: { type: activeBetween.type, hasData: !!activeData },
+          activeType,
+          hasActiveTransactionFromApi,
+          hasActiveInvoiceFromApi,
+          willSetActiveTxn: activeType === 'transaction' && !!activeData,
+          willHideInitiateTradeForSeller: hasActiveTransactionFromApi || hasActiveInvoiceFromApi
+        });
+
+        if (activeType === 'transaction' && activeData) {
+          const txn = activeData;
+          const buyerId = txn.buyer?.userId || txn.buyer?._id || txn.buyerId;
+          const sellerId = txn.seller?.userId || txn.seller?._id || txn.sellerId;
+          const isCurrentUserBuyer = buyerId === currentUserId;
+          const txnWithRole = {
+            ...txn,
+            _id: txn._id || txn.id,
+            id: txn._id || txn.id,
+            role: isCurrentUserBuyer ? 'buyer' : 'seller',
+            createdAt: txn.createdAt || txn.created_at,
+            timerDuration: txn.timerDuration ?? txn.timer_duration ?? 300
+          };
+          console.log('🔍 [chat loadChannel] setting active transaction', {
+            transactionId: txn._id || txn.id,
+            buyerId,
+            sellerId,
+            currentUserRole: txnWithRole.role,
+            status: txn.status,
+            createdAt: txnWithRole.createdAt
+          });
+          setActiveTransaction(txnWithRole);
+          setHasActiveInvoice(false);
+          // So Release Funds button shows: set pendingTransaction and tradeData for buyer
+          if (txnWithRole.role === 'buyer') {
+            setPendingTransaction({
+              _id: txn._id || txn.id,
+              id: txn._id || txn.id,
+              amount: txn.amount,
+              amountUSD: txn.amountUSD || txn.amount,
+              currency: txn.currency || 'BTC',
+              status: txn.status || 'locked'
+            });
+            setTradeData({
+              seller: selectedUser,
+              socialAccount: txn.platform || selectedUser?.platform || 'Unknown',
+              accountUsername: txn.accountUsername || selectedUser?.accountUsername || 'N/A',
+              paymentMethod: (txn.currency || 'BTC').toUpperCase(),
+              accountPrice: parseFloat(txn.amountUSD || txn.amount || 0),
+              transactionFee: 0,
+              sellOrderId: txn.sellOrderId,
+              sellerId: txn.seller?.userId || txn.seller?._id || txn.sellerId,
+              transactionId: txn._id || txn.id,
+              totalAmount: parseFloat(txn.amountUSD || txn.amount || 0)
+            });
+          }
+          // When there is an active transaction, seller must NOT see Initiate Trade
+          if (txnWithRole.role === 'seller') {
+            setShowSellerTradePrompt(false);
+          }
+        } else if (activeType === 'invoice' && activeData) {
+          console.log('🔍 [chat loadChannel] active item is invoice, clearing active transaction');
+          setActiveTransaction(null);
+          setHasActiveInvoice(true);
+          // Seller already sent an invoice — hide Initiate Trade so they don't see the button
+          setShowSellerTradePrompt(false);
+        } else {
+          console.log('🔍 [chat loadChannel] no active transaction/invoice', { activeType, hasData: !!activeData });
+          setActiveTransaction(null);
+          setHasActiveInvoice(false);
+        }
+
+        // 🔥 Only treat invoice as "for this channel" when order matches: sell channel = buy_order, buy channel = sell_order
+        let hasActiveInvoiceMatchingChannel = false;
+        if (activeType === 'invoice' && activeData) {
+          const inv = activeData;
+          const streamMetaForMatch = channel.data?.metadata || {};
+          const resolvedCt = selectedUser?.chatType ?? streamMetaForMatch.chatType ?? chatType;
+          const invOrderId = toId(inv.orderId ?? inv.order_id ?? inv.accountId);
+          const channelBuyOrderId = toId(streamMetaForMatch.buyOrderId ?? streamMetaForMatch.accountId);
+          const channelSellOrderId = toId(streamMetaForMatch.sellOrderId ?? streamMetaForMatch.accountId);
+          hasActiveInvoiceMatchingChannel =
+            (resolvedCt === 'sell' && (inv.orderType === 'buy_order' || invOrderId === channelBuyOrderId)) ||
+            (resolvedCt === 'buy' && (inv.orderType === 'sell_order' || invOrderId === channelSellOrderId));
+        }
+
         const channelMessages = channel.state.messages || [];
 
-        // 🔥 STEP 2: Extract PERSISTENT metadata from channel (THIS SURVIVES RELOAD)
+        // 🔥 STEP 2: Extract PERSISTENT metadata
+        // When cameFromTable: selectedUser is fresh from the listing just clicked — override channel/backend
+        const cameFromTable = !selectedUser?._channel;
+        // 🔥 When buyer initiates second trade (new account, same seller): skip checks 1 & 2 until seller initiates again
+        buyerSelectedNewAccountRef.current = cameFromTable;
+        const selectedPlatform = selectedUser?.platform ||
+          (selectedUser?.item?.name && String(selectedUser.item.name).toLowerCase()) ||
+          (selectedUser?.socialAccount && String(selectedUser.socialAccount).toLowerCase());
+        const selectedUsername = selectedUser?.filters?.find(f => f.key === 'username' || f.key === 'channel_username')?.value ||
+          selectedUser?.accountUsername || selectedUser?.username || selectedUser?.handle;
+
+        console.log('🔍 Metadata extraction:', {
+          cameFromTable,
+          selectedPlatform,
+          selectedUsername,
+          selectedUserKeys: selectedUser ? Object.keys(selectedUser) : []
+        });
+
         let persistedMetadata = {
           platform: 'Unknown',
           accountUsername: 'N/A'
         };
 
+        // PRIORITY 0a: When user just clicked from homepage, selectedUser overrides (fresh account context)
+        if (cameFromTable && (selectedPlatform || selectedUsername)) {
+          if (selectedPlatform && selectedPlatform !== 'Unknown') {
+            persistedMetadata.platform = selectedPlatform;
+            console.log('✅ Platform from selectedUser (cameFromTable):', persistedMetadata.platform);
+          }
+          if (selectedUsername && selectedUsername !== 'N/A') {
+            persistedMetadata.accountUsername = selectedUsername;
+            console.log('✅ Username from selectedUser (cameFromTable):', persistedMetadata.accountUsername);
+          }
+        }
 
-        // Try to get from channel.data.metadata first (most reliable)
-        if (selectedUser?.platform && selectedUser.platform !== 'Unknown') {
-          persistedMetadata.platform = selectedUser.platform;
+        // PRIORITY 0b: Backend metadata (custom API - source of truth when not cameFromTable)
+        const backendMeta = await getChannelMetadata(channel.id);
+        if (backendMeta && (backendMeta.platform || backendMeta.accountUsername)) {
+          if (persistedMetadata.platform === 'Unknown' && backendMeta.platform && backendMeta.platform !== 'Unknown') {
+            persistedMetadata.platform = backendMeta.platform;
+            console.log('✅ Platform from backend metadata:', persistedMetadata.platform);
+          }
+          if (persistedMetadata.accountUsername === 'N/A' && backendMeta.accountUsername && backendMeta.accountUsername !== 'N/A') {
+            persistedMetadata.accountUsername = backendMeta.accountUsername;
+            console.log('✅ Username from backend metadata:', persistedMetadata.accountUsername);
+          }
+        }
+
+        // PRIORITY 1: selectedUser (fallback when not cameFromTable)
+        if (!cameFromTable && selectedPlatform && selectedPlatform !== 'Unknown') {
+          persistedMetadata.platform = selectedPlatform;
           console.log('✅ Platform from selectedUser:', persistedMetadata.platform);
         }
-
-        if (selectedUser?.accountUsername && selectedUser.accountUsername !== 'N/A') {
-          persistedMetadata.accountUsername = selectedUser.accountUsername;
+        if (!cameFromTable && selectedUsername && selectedUsername !== 'N/A') {
+          persistedMetadata.accountUsername = selectedUsername;
           console.log('✅ Username from selectedUser:', persistedMetadata.accountUsername);
         }
-        if (channel.data?.metadata && typeof channel.data.metadata === 'object') {
+
+        // PRIORITY 2: API data (active transaction or invoice from getActiveBetweenUsers)
+        if ((persistedMetadata.platform === 'Unknown' || persistedMetadata.accountUsername === 'N/A') && activeData) {
+          const apiPlatform = activeData.platform || activeData.socialAccount;
+          const apiUsername = activeData.accountUsername || activeData.account_username;
+          if (persistedMetadata.platform === 'Unknown' && apiPlatform) {
+            persistedMetadata.platform = apiPlatform;
+            console.log('✅ Platform from API (active trade):', persistedMetadata.platform);
+          }
+          if (persistedMetadata.accountUsername === 'N/A' && apiUsername) {
+            persistedMetadata.accountUsername = apiUsername;
+            console.log('✅ Username from API (active trade):', persistedMetadata.accountUsername);
+          }
+        }
+
+        // PRIORITY 3: Channel metadata (fallback)
+        if ((persistedMetadata.platform === 'Unknown' || persistedMetadata.accountUsername === 'N/A') &&
+            channel.data?.metadata && typeof channel.data.metadata === 'object') {
           if (persistedMetadata.platform === 'Unknown' && channel.data.metadata.platform) {
             persistedMetadata.platform = channel.data.metadata.platform;
             console.log('✅ Platform from channel.data.metadata:', persistedMetadata.platform);
@@ -1059,20 +1265,6 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           if (persistedMetadata.accountUsername === 'N/A' && channel.data.metadata.accountUsername) {
             persistedMetadata.accountUsername = channel.data.metadata.accountUsername;
             console.log('✅ Username from channel.data.metadata:', persistedMetadata.accountUsername);
-          }
-        }
-        else {
-          try {
-            const channelName = channel.data?.name || '';
-            const parts = channelName.split('|');
-            if (parts.length > 1) {
-              const parsed = JSON.parse(parts[1]);
-              persistedMetadata.platform = parsed.platform || 'Unknown';
-              persistedMetadata.accountUsername = parsed.accountUsername || parsed.username || 'N/A';
-              console.log('✅ Metadata loaded from channel name (Strategy 2):', persistedMetadata);
-            }
-          } catch (e) {
-            console.warn('⚠️ Could not parse channel metadata from name');
           }
         }
 
@@ -1115,56 +1307,86 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
         // 🔥 STEP 3: Update component state with PERSISTENT metadata
         setChannelMetadata(persistedMetadata);
+        setMetadataResolved(true); // API + resolution complete — safe to show card (avoid N/A/Unknown flash)
         console.log('📊 Final metadata set in component:', persistedMetadata);
 
-        // 🔥 CRITICAL: ALWAYS update channel if we have better data from selectedUser
-        if (selectedUser && (
-          (selectedUser.platform && selectedUser.platform !== 'Unknown') ||
-          (selectedUser.accountUsername && selectedUser.accountUsername !== 'N/A')
-        )) {
+        // 🔥 When cameFromTable: ALWAYS persist to backend — overwrite with new account context
+        // Ensures switching accounts (same seller) updates backend and UI
+        if (selectedUser && cameFromTable) {
+          const displayPlatform = selectedPlatform && selectedPlatform !== 'Unknown' ? selectedPlatform : persistedMetadata.platform;
+          const displayUsername = selectedUsername && selectedUsername !== 'N/A' ? selectedUsername : persistedMetadata.accountUsername;
+          setChannelMetadata({ ...persistedMetadata, platform: displayPlatform, accountUsername: displayUsername });
+
+          const streamMeta = channel.data?.metadata || {};
+          const resolvedChatType = selectedUser.chatType ?? streamMeta.chatType ?? chatType;
+          // When chatType is sell, only send buyOrderId; when buy, only send sellOrderId.
+          const fullMetadata = {
+            participantIds: [String(currentUserId), String(otherUserId)],
+            initiator_id: currentUserId,
+            chatType: resolvedChatType,
+            platform: displayPlatform,
+            accountUsername: displayUsername,
+            accountId: selectedUser.accountId ?? streamMeta.accountId ?? accountId,
+            ...(resolvedChatType === 'sell'
+              ? { buyOrderId: selectedUser.buyOrderId ?? streamMeta.buyOrderId }
+              : { sellOrderId: selectedUser.sellOrderId ?? streamMeta.sellOrderId ?? streamMeta.accountId }),
+            trade_price: selectedUser.price ?? streamMeta.trade_price ?? tradePrice
+          };
           try {
-            // Get existing metadata
-            const existingMetadata = channel.data?.metadata || {};
-
-            // Merge with priority to selectedUser data
-            const improvedMetadata = {
-              ...existingMetadata,
-              platform: selectedUser.platform || persistedMetadata.platform,
-              accountUsername: selectedUser.accountUsername || persistedMetadata.accountUsername,
-              updated_at: Date.now()
-            };
-
-            console.log('🔄 Updating channel with selectedUser metadata:', improvedMetadata);
-
-            // Update channel
-            await channel.update({
-              metadata: improvedMetadata
-            });
-
-            // Update local state immediately
-            setChannelMetadata({
-              platform: improvedMetadata.platform,
-              accountUsername: improvedMetadata.accountUsername
-            });
-
-            console.log('✅ Channel metadata updated and persisted:', improvedMetadata);
-          } catch (updateError) {
-            console.warn('⚠️ Could not update channel metadata:', updateError);
+            console.log('📤 Persisting channel metadata (cameFromTable):', { channelId: channel.id, platform: fullMetadata.platform, accountUsername: fullMetadata.accountUsername, accountId: fullMetadata.accountId, initiator_id: fullMetadata.initiator_id });
+            const saved = await persistChannelMetadata(channel.id, fullMetadata) || await createChannelMetadata(channel.id, fullMetadata);
+            console.log('📤 Channel metadata persisted (cameFromTable):', saved ? 'OK' : 'fallback');
+            // 🔥 Re-enable checks 1 & 2 after 2s so seller's new initiate will show; skip window prevents old in-flight messages
+            setTimeout(() => { buyerSelectedNewAccountRef.current = false; }, 2000);
+          } catch (e) {
+            console.warn('⚠️ Channel metadata persist failed:', e?.message);
           }
+        } else if (selectedUser && (
+          (selectedPlatform && selectedPlatform !== 'Unknown') ||
+          (selectedUsername && selectedUsername !== 'N/A')
+        )) {
+          const improvedMetadata = {
+            platform: selectedPlatform || persistedMetadata.platform,
+            accountUsername: selectedUsername || persistedMetadata.accountUsername
+          };
+          setChannelMetadata(improvedMetadata);
+          const streamMeta = channel.data?.metadata || {};
+          const resolvedChatType = selectedUser.chatType ?? streamMeta.chatType ?? chatType;
+          // When chatType is sell, only send buyOrderId; when buy, only send sellOrderId.
+          const fullMetadata = {
+            participantIds: [String(currentUserId), String(otherUserId)],
+            initiator_id: currentUserId,
+            chatType: resolvedChatType,
+            platform: improvedMetadata.platform,
+            accountUsername: improvedMetadata.accountUsername,
+            accountId: selectedUser.accountId ?? streamMeta.accountId ?? accountId,
+            ...(resolvedChatType === 'sell'
+              ? { buyOrderId: selectedUser.buyOrderId ?? streamMeta.buyOrderId }
+              : { sellOrderId: selectedUser.sellOrderId ?? streamMeta.sellOrderId ?? streamMeta.accountId }),
+            trade_price: selectedUser.price ?? streamMeta.trade_price ?? tradePrice
+          };
+          const saved = await persistChannelMetadata(channel.id, fullMetadata) || await createChannelMetadata(channel.id, fullMetadata);
+          if (saved) console.log('✅ Channel metadata persisted via backend');
         }
 
 
         let channelCreatorId = null;
         let extractedMetadata = {};
-        let actualTradePrice = tradePrice;
 
-        if (channel.data?.metadata && typeof channel.data.metadata === 'object') {
-          channelCreatorId = channel.data.metadata.initiator_id;
-          extractedMetadata = channel.data.metadata;
-          actualTradePrice = channel.data.metadata.trade_price ||
-            channel.data.metadata.price ||
-            tradePrice;
+        // 🔥 Use backend metadata first for initiator_id and trade details (source of truth)
+        // Normalize MongoDB ObjectId format ({ $oid: "..." }) to plain string
+        if (backendMeta?.initiator_id) {
+          channelCreatorId = toId(backendMeta.initiator_id);
+          extractedMetadata = { ...extractedMetadata, ...backendMeta };
         }
+        if (!channelCreatorId && channel.data?.metadata && typeof channel.data.metadata === 'object') {
+          channelCreatorId = toId(channel.data.metadata.initiator_id);
+          extractedMetadata = { ...extractedMetadata, ...channel.data.metadata };
+        }
+
+        let actualTradePrice = extractedMetadata.trade_price ||
+          extractedMetadata.price ||
+          tradePrice;
 
         if (!channelCreatorId) {
           try {
@@ -1172,7 +1394,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             const parts = channelName.split('|');
             if (parts.length > 1) {
               const parsed = JSON.parse(parts[1]);
-              channelCreatorId = parsed.initiator_id;
+              channelCreatorId = toId(parsed.initiator_id);
               extractedMetadata = parsed;
               actualTradePrice = parsed.trade_price || parsed.price || tradePrice;
             }
@@ -1182,10 +1404,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         }
 
         if (!channelCreatorId) {
-          channelCreatorId = channel.data?.created_by_id || channel.data?.created_by?.id;
+          channelCreatorId = toId(channel.data?.created_by_id) || toId(channel.data?.created_by?.id);
         }
 
-        if (!channelCreatorId && chatType === 'buy') {
+        if (!channelCreatorId && resolvedChatType === 'buy') {
           const channelMembers = Object.values(channel.state?.members || {});
           const sortedMembers = channelMembers.sort((a, b) => {
             const aTime = new Date(a.created_at || 0).getTime();
@@ -1202,32 +1424,40 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           actualTradePrice = selectedUser?.price || selectedUser?.maxPrice || 'N/A';
         }
 
-        const storedAccountId = channel.data?.metadata?.accountId || channel.data?.accountId;
+        const storedAccountId = extractedMetadata?.accountId || channel.data?.metadata?.accountId || channel.data?.accountId;
         const finalPrice = actualTradePrice !== 'N/A' ? actualTradePrice : tradePrice;
 
-        const isCreator = channelCreatorId ?
-          (channelCreatorId === currentUserId || channelCreatorId === String(currentUserId)) :
-          false;
+        const creatorIdStr = channelCreatorId ? String(toId(channelCreatorId)) : null;
+        let isCreator = creatorIdStr ? (creatorIdStr === String(currentUserId)) : false;
+        let isReceiver = creatorIdStr ? (creatorIdStr !== String(currentUserId)) : false;
 
-        const isReceiver = channelCreatorId ?
-          (channelCreatorId !== currentUserId && channelCreatorId !== String(currentUserId)) :
-          false;
+        // 🔥 FIX: When user initiated from table (no _channel), they are the initiator only in BUY flow.
+        // Buy flow: initiator = buyer (isCreator); sell flow: initiator = seller (isCreator) — use metadata initiator_id for sell so seller sees "waiting", buyer sees Accept/Decline.
+        if (cameFromTable && resolvedChatType === 'buy') {
+          isCreator = true;
+          isReceiver = false;
+        }
+        // Sell: do NOT override — initiator_id = seller = isCreator; other user = buyer = isReceiver
 
         console.log('🎭 User Role:', {
           isCreator,
           isReceiver,
           channelCreatorId,
           currentUserId,
-          chatType,
+          chatType: resolvedChatType,
           persistedMetadata
         });
+
+        const isBuyerForCard = (resolvedChatType === 'buy' && isCreator) || (resolvedChatType === 'sell' && isReceiver);
+        if (!mounted) return;
+        setAccountCardIsBuyer(isBuyerForCard);
 
         // Set channel and messages
         setCurrentChannel(channel);
         currentChannelRef.current = channel;
 
         // 🔥 NEW: Only show messages from the LATEST trade (after last funds_released)
-        // This prevents old completed trade messages from polluting the chat view
+        // When funds released and no new messages, show empty — list view uses same logic
         const latestTradeMsgCutoffIdx = channelMessages.map((msg, i) =>
           (msg.funds_released_data || msg.funds_released === true) ? i : -1
         ).filter(i => i !== -1).pop() ?? -1;
@@ -1240,40 +1470,39 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         setMessages(latestTradeMessages);
 
         // 🔥 Load per-channel credential data from localStorage
-        // 🔥 FIX: Only restore if the credentials belong to the CURRENT trade, not a previous one
+        // 🔥 FIX: Clear credentials when trade completed and no new trade with creds — never show old account info when initiating a new trade
         const chId = channel.id || channel.cid?.split(':')[1] || '';
         if (chId) {
           try {
+            const lastFundsReleasedMsg = [...channelMessages].reverse().find(msg =>
+              msg.funds_released_data || msg.funds_released === true
+            );
             const savedCred = localStorage.getItem(`soctra_cred_${chId}`);
-            if (savedCred) {
-              // Check if a NEW trade has started after the last funds_released
-              // If so, these credentials belong to the OLD trade and should be cleared
-              const lastFundsReleasedMsg = [...channelMessages].reverse().find(msg =>
-                msg.funds_released_data || msg.funds_released === true
-              );
-              const lastNewTradeMsg = [...channelMessages].reverse().find(msg =>
-                msg.seller_ready === true || msg.trade_init_data
-              );
 
-              let isNewTradeAfterCompletion = false;
-              if (lastFundsReleasedMsg && lastNewTradeMsg) {
-                const releasedTime = new Date(lastFundsReleasedMsg.created_at).getTime();
-                const newTradeTime = new Date(lastNewTradeMsg.created_at).getTime();
-                isNewTradeAfterCompletion = newTradeTime > releasedTime;
-              }
-
-              if (isNewTradeAfterCompletion) {
-                console.log('🧹 New trade started after completion — clearing old credentials from localStorage');
-                localStorage.removeItem(`soctra_cred_${chId}`);
-                setCredentialData(null);
-                setShowCredentialModal(false);
-              } else {
+            if (lastFundsReleasedMsg) {
+              // Trade completed. Only restore if a NEW trade has buyer_initiated AFTER funds_released (credentials are for new trade)
+              const buyerInitiatedAfterRelease = [...channelMessages].reverse().find(msg => {
+                if (!(msg.buyer_initiated === true || msg.transaction_created === true)) return false;
+                return new Date(msg.created_at).getTime() > new Date(lastFundsReleasedMsg.created_at).getTime();
+              });
+              if (buyerInitiatedAfterRelease && savedCred) {
                 setCredentialData(JSON.parse(savedCred));
                 setShowCredentialModal(true);
-                console.log('✅ Restored credential data for channel:', chId);
+                console.log('✅ Restored credential data for new trade after completion');
+              } else {
+                // Completed trade, no new creds — clear so we don't show old account info when initiating new trade
+                if (savedCred) {
+                  console.log('🧹 Trade completed — clearing old credentials');
+                  localStorage.removeItem(`soctra_cred_${chId}`);
+                }
+                setCredentialData(null);
+                setShowCredentialModal(false);
               }
+            } else if (savedCred) {
+              setCredentialData(JSON.parse(savedCred));
+              setShowCredentialModal(true);
+              console.log('✅ Restored credential data for channel:', chId);
             } else {
-              // Clear stale credential UI from previous channel
               setCredentialData(null);
               setShowCredentialModal(false);
             }
@@ -1314,6 +1543,40 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           // 🔥 SKIP: cancel_request_data is handled by the GLOBAL message listener to prevent duplicates
           if (newMessage.cancel_request_data) {
             console.log('💬 Channel: Skipping cancel_request_data - handled by global listener');
+          }
+
+          // 🔥 React to invoice_declined — clear "Waiting for buyer" when buyer declines
+          if (newMessage.invoice_declined === true && newMessage.user?.id !== currentUserId) {
+            setShowAcceptanceNotification(false);
+            setAcceptanceData(null);
+          }
+
+          // 🔥 React to buyer_initiated — clear "Waiting for buyer" when buyer accepts (global listener also sets timer)
+          if (newMessage.buyer_initiated === true && newMessage.seller_id === currentUserId) {
+            setShowAcceptanceNotification(false);
+            setAcceptanceData(null);
+          }
+
+          // 🔥 NEW: React to seller_ready — show Accept/Decline when buyer is in chat
+          // 🔥 SKIP when buyer initiated second trade (new account): wait for seller to initiate again
+          if (newMessage.seller_ready === true && newMessage.user?.id !== currentUserId && !buyerSelectedNewAccountRef.current) {
+            const sellerName = newMessage.seller_name || newMessage.user?.name || selectedUser?.name || selectedUser?.displayName || 'Seller';
+            const price = newMessage.trade_price || channel.data?.metadata?.trade_price || selectedUser?.price || 'N/A';
+            const accId = channel.data?.metadata?.accountId || selectedUser?.accountId;
+            console.log('🔔 BUYER: Seller ready (channel listener) — showing Accept/Decline');
+            setPendingRequest({
+              user: {
+                ...selectedUser,
+                name: sellerName,
+                displayName: sellerName,
+                price,
+                accountId: accId
+              },
+              channel,
+              isNewAccount: false,
+              wasDeleted: false
+            });
+            setShowRequestModal(true);
           }
           
           // 🔥 FIX: Decouple fetchChannels from listener to prevent selectedUser remount
@@ -1426,6 +1689,12 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           console.log('🆕 New trade request on same channel — overriding tradeCompleted to false');
           tradeCompleted = false;
         }
+        // 🔥 FIX: When trade completed and no active transaction/invoice, allow seller to initiate again
+        // (Previously required no messages after funds_released, which hid the button if they kept chatting.)
+        if (tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi) {
+          console.log('🆕 Post-completion, no active trade — allowing seller to initiate');
+          tradeCompleted = false;
+        }
 
         // Only show unprocessed trade init if trade is NOT completed
         const hasUnprocessedTradeInit = !!tradeInitDataMessage && !tradeAcceptedMessage && !tradeCompleted;
@@ -1455,6 +1724,84 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         setShowAcceptanceNotification(false);
         setAcceptanceData(null);
         setPendingTransaction(null);
+        setSelectedChannelCanInitiateAgain(false);
+        setSelectedChannelBadgeResolved(false);
+
+        // Restore buyer pending state so Release Funds button shows after refresh (CLEAR above would wipe it)
+        if (hasActiveTransactionFromApi && activeType === 'transaction' && activeData) {
+          const txn = activeData;
+          if ((txn.buyer?.userId || txn.buyer?._id || txn.buyerId) === currentUserId) {
+            setPendingTransaction({
+              _id: txn._id || txn.id,
+              id: txn._id || txn.id,
+              amount: txn.amount,
+              amountUSD: txn.amountUSD || txn.amount,
+              currency: txn.currency || 'BTC',
+              status: txn.status || 'locked'
+            });
+            setTradeData({
+              seller: selectedUser,
+              socialAccount: txn.platform || selectedUser?.platform || 'Unknown',
+              accountUsername: txn.accountUsername || selectedUser?.accountUsername || 'N/A',
+              paymentMethod: (txn.currency || 'BTC').toUpperCase(),
+              accountPrice: parseFloat(txn.amountUSD || txn.amount || 0),
+              transactionFee: 0,
+              sellOrderId: txn.sellOrderId,
+              sellerId: txn.seller?.userId || txn.seller?._id || txn.sellerId,
+              transactionId: txn._id || txn.id,
+              totalAmount: parseFloat(txn.amountUSD || txn.amount || 0)
+            });
+          }
+        }
+
+        // Restore Accept/Decline for buyer when seller sent an invoice (active invoice from API)
+        if (activeType === 'invoice' && activeData) {
+          const inv = activeData;
+          const invoiceBuyerId = inv.buyer?.userId || inv.buyer?._id || inv.buyerId || inv.buyer;
+          const invoiceSellerId = inv.seller?.userId || inv.seller?._id || inv.sellerId || inv.seller;
+          const isBuyerFromInvoice = (invoiceBuyerId === currentUserId || String(invoiceBuyerId) === String(currentUserId));
+          const isBuyerFromChat = (resolvedChatType === 'buy' && isCreator) || (resolvedChatType === 'sell' && isReceiver);
+          const shouldShowAcceptDecline = isBuyerFromInvoice || isBuyerFromChat;
+          console.log('🔍 [chat loadChannel] active invoice restore', {
+            invoiceBuyerId,
+            invoiceSellerId,
+            currentUserId,
+            chatType: resolvedChatType,
+            isCreator,
+            isBuyerFromInvoice,
+            isBuyerFromChat,
+            shouldShowAcceptDecline,
+            hasActiveInvoiceMatchingChannel
+          });
+          // 🔥 When buyer selected new account (cameFromTable): only show if invoice matches selected account
+          const invMatchesSelectedAccount = !selectedUser?.accountId && !selectedUser?.sellOrderId && !selectedUser?.buyOrderId ||
+            inv.sellOrderId === selectedUser?.sellOrderId || inv.accountId === selectedUser?.accountId || inv.orderId === selectedUser?.buyOrderId || inv.orderId === selectedUser?.accountId;
+          if (shouldShowAcceptDecline && hasActiveInvoiceMatchingChannel && (!cameFromTable || invMatchesSelectedAccount)) {
+            const price = inv.amountUSD ?? inv.amount ?? inv.price ?? selectedUser?.price;
+            const priceForDisplay = (price != null && price !== '' && Number(price) >= 0) ? String(Number(price)) : 'N/A';
+            setPendingRequest({
+              user: {
+                ...selectedUser,
+                name: selectedUser?.name || selectedUser?.displayName || 'Seller',
+                displayName: selectedUser?.displayName || selectedUser?.name || 'Seller',
+                price: priceForDisplay,
+                accountId: inv.sellOrderId ?? inv.accountId ?? selectedUser?.accountId,
+                platform: inv.platform ?? selectedUser?.platform,
+                accountUsername: inv.accountUsername ?? selectedUser?.accountUsername
+              },
+              channel: channel,
+              isNewAccount: false,
+              wasDeleted: false,
+              invoiceId: inv._id || inv.id
+            });
+            setShowRequestModal(true);
+          }
+        }
+
+        // 🔥 Hide Completed badge in list for both buyer and seller when channel is post-completion with no active trade
+        if (lastFundsReleased && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && mounted) {
+          setSelectedChannelCanInitiateAgain(true);
+        }
 
         // 🔥 REMOVED: Duplicate active transaction check was here causing TradeInitModal to show twice
         // The active transaction check in initChat (lines ~352-455) already handles this case
@@ -1466,13 +1813,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           if (metadata.accountId && metadata.trade_price !== 'N/A') {
             // Get account info from selectedUser
             const accountInfoData = {
-              buyerName: chatType === 'buy' && isReceiver ? selectedUser?.name || 'Buyer' : null,
+              buyerName: resolvedChatType === 'buy' && isReceiver ? selectedUser?.name || 'Buyer' : null,
               platform: selectedUser?.platform || 'Unknown',
               username: selectedUser?.accountUsername || 'N/A'
             };
 
             // Show modal only for seller (receiver in buy chat)
-            if (chatType === 'buy' && isReceiver) {
+            if (resolvedChatType === 'buy' && isReceiver) {
               setAccountInfo(accountInfoData);
               setShowAccountInfoModal(true);
             }
@@ -1485,6 +1832,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           // Don't show any trade prompts for completed trades
           // Credential card persistence is handled separately
         }
+
+        // 🔥 OPTION 1: Only show Initiate Trade when we have required order metadata to create invoice
+        // Use backend metadata first, then Stream
+        const chMetaForOrder = backendMeta || channel.data?.metadata || extractedMetadata || {};
+        const hasSellOrderMetadata = !!(chMetaForOrder.accountId || chMetaForOrder.sellOrderId);
+        const hasBuyOrderMetadata = !!(chMetaForOrder.accountId || chMetaForOrder.buyOrderId);
+        const hasOrderId = resolvedChatType === 'buy' ? hasSellOrderMetadata : hasBuyOrderMetadata;
+        // Use persistedMetadata (selectedUser → API → channel) for platform/username
+        const hasValidPlatform = !!(persistedMetadata.platform && persistedMetadata.platform !== 'Unknown');
+        const hasValidUsername = !!(persistedMetadata.accountUsername && persistedMetadata.accountUsername !== 'N/A');
+        const hasRequiredOrderMetadata = hasOrderId && hasValidPlatform && hasValidUsername;
 
         // 🔥 PRIORITY 1: Check for active transactions FIRST (only if trade NOT completed)
         const { hasActiveTransaction, activeTransaction } = tradeCompleted
@@ -1552,9 +1910,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 sellerId: activeTransaction.sellerId,
               },
             });
-          } else if (isSeller && mounted) {
-            // 🔥 FIX: Check if buyer already initiated the trade (buyer_initiated message exists)
-            // If so, restore the trade timer instead of showing "waiting" state
+          } else if (isSeller && mounted && hasActiveTransactionFromApi) {
+            // 🔥 Only show "Trade accepted" / "Timer expired" when there is an active TRANSACTION (buyer accepted).
+            // When we only have an invoice (hasActiveInvoiceFromApi), do not show this — trade has not started.
             const buyerInitiatedMsg = [...currentTradeMessages].reverse().find(msg =>
               msg.buyer_initiated === true || msg.transaction_created === true
             );
@@ -1603,9 +1961,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             }
           }
         }
+        // 🔥 PRIORITY 1.7: SELLER - Invoice sent, waiting for buyer to accept (only when invoice matches this channel)
+        else if (((resolvedChatType === 'buy' && isReceiver) || (resolvedChatType === 'sell' && isCreator)) && mounted && hasActiveInvoiceMatchingChannel && !hasActiveTransactionFromApi) {
+            console.log('🎯 SELLER: Invoice sent — showing "Waiting for buyer to accept invoice"');
+            setShowAcceptanceNotification(true);
+            setAcceptanceData({
+              waitingForInvoiceAccept: true,
+              message: 'Waiting for buyer to accept invoice',
+              isWaiting: true
+            });
+        }
         // 🔥 PRIORITY 1.5: BUYER - Seller submitted trade (trade_init_data exists, not yet accepted)
         // This handles the case where buyer was on another page when seller submitted SellerInitiateModal
-        else if (hasUnprocessedTradeInit && mounted) {
+        // 🔥 SKIP when buyer selected new account (cameFromTable): wait for seller to initiate again
+        else if (hasUnprocessedTradeInit && mounted && !cameFromTable) {
           console.log('🎯 BUYER: Found unprocessed trade_init_data in channel history - showing Accept/Decline');
           try {
             const parsedTradeData = JSON.parse(tradeInitDataMessage.trade_init_data);
@@ -1671,20 +2040,23 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           }
         }
         // 🔥 PRIORITY 2: SELLER - Show "Ready to Initiate Trade" button
-        // 🔥 FIX: NEVER show for completed trades
-        else if (chatType === 'buy' && isReceiver && !sellerReady && !tradeInitiated && !tradeCompleted && mounted) {
+        // 🔥 FIX: NEVER show when there is already an active transaction or invoice (seller sent invoice, buyer can accept/decline)
+        // 🔥 OPTION 1: Only show when we have required order metadata (accountId/sellOrderId) to create invoice
+        else if (resolvedChatType === 'buy' && isReceiver && !sellerReady && !tradeInitiated && !tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && hasRequiredOrderMetadata && mounted) {
           console.log('🎯 SELLER (User2/RECEIVER) - Show "Ready to Initiate Trade" button');
-
           setShowSellerTradePrompt(true);
+          setSelectedChannelCanInitiateAgain(true); // hide Completed badge in list for this channel
         }
         // 🔥 PRIORITY 2S: SELL TAB - Creator is the seller responding to buy order
-        else if (chatType === 'sell' && isCreator && !sellerReady && !tradeInitiated && !tradeCompleted && mounted) {
+        else if (resolvedChatType === 'sell' && isCreator && !sellerReady && !tradeInitiated && !tradeCompleted && !hasActiveTransactionFromApi && !hasActiveInvoiceFromApi && hasRequiredOrderMetadata && mounted) {
           console.log('🎯 SELL TAB: SELLER (User2/CREATOR) - Show "Ready to Initiate Trade" button');
           setShowSellerTradePrompt(true);
+          setSelectedChannelCanInitiateAgain(true); // hide Completed badge in list for this channel
         }
         // 🔥 PRIORITY 3: BUYER - Show Accept/Decline after SELLER clicks ready
         // 🔥 FIX: NEVER show for completed trades
-        else if (chatType === 'buy' && isCreator && sellerReady && !tradeAccepted && !tradeCompleted && mounted) {
+        // 🔥 SKIP when buyer selected new account (cameFromTable): wait for seller to initiate again
+        else if (resolvedChatType === 'buy' && isCreator && sellerReady && !tradeAccepted && !tradeCompleted && mounted && !cameFromTable) {
           console.log('🎯 BUYER (User1/CREATOR) - Seller ready, show Accept/Decline');
 
           // 🔥 FIX: Prefer seller_name from the sellerReady message over selectedUser.name
@@ -1708,7 +2080,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           setShowRequestModal(true);
         }
         // 🔥 PRIORITY 3S: SELL TAB - Receiver (buyer/uploader) sees Accept/Decline
-        else if (chatType === 'sell' && isReceiver && sellerReady && !tradeAccepted && !tradeCompleted && mounted) {
+        // 🔥 SKIP when buyer selected new account (cameFromTable): wait for seller to initiate again
+        else if (resolvedChatType === 'sell' && isReceiver && sellerReady && !tradeAccepted && !tradeCompleted && mounted && !cameFromTable) {
           console.log('🎯 SELL TAB: BUYER (User1/RECEIVER) - Seller ready, show Accept/Decline');
 
           const sellerName = sellerReadyMessage?.seller_name || selectedUser?.name || selectedUser?.displayName || 'Seller';
@@ -1730,20 +2103,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           setShowRequestModal(true);
         }
         // 🔥 PRIORITY 4: After buyer accepts - SELLER waits or sees trade timer
-        // 🔥 FIX: NEVER show for completed trades
-        else if (chatType === 'buy' && isReceiver && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted) {
-          // 🔥 FIX: Check if buyer already initiated the trade (buyer_initiated message exists)
+        // 🔥 Only when there is an active transaction (not just invoice) — avoid "Trade timer expired" before trade starts
+        else if (resolvedChatType === 'buy' && isReceiver && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted && hasActiveTransactionFromApi) {
           const buyerInitiatedMsg = [...currentTradeMessages].reverse().find(msg =>
             msg.buyer_initiated === true || msg.transaction_created === true
           );
 
           if (buyerInitiatedMsg) {
-            // Transaction was created - seller should see the trade timer, not "waiting"
             console.log('⏱️ SELLER - buyer already initiated trade, restoring trade timer');
             const txnId = buyerInitiatedMsg.transaction_id;
             const timerDuration = buyerInitiatedMsg.timer_duration || 300;
 
-            // Calculate remaining time from when buyer_initiated was sent
             const initiatedAt = new Date(buyerInitiatedMsg.created_at).getTime();
             const elapsed = Math.floor((Date.now() - initiatedAt) / 1000);
             const remainingTime = Math.max(0, timerDuration - elapsed);
@@ -1785,8 +2155,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           }
         }
         // 🔥 PRIORITY 4S: SELL TAB - Creator (seller) waits after receiver (buyer) accepts
-        else if (chatType === 'sell' && isCreator && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted) {
-          // 🔥 FIX: Check if buyer already initiated the trade (buyer_initiated message exists)
+        // 🔥 Only when there is an active transaction (not just invoice)
+        else if (resolvedChatType === 'sell' && isCreator && tradeAccepted && acceptedBy !== currentUserId && !tradeCompleted && mounted && hasActiveTransactionFromApi) {
           const buyerInitiatedMsg = [...currentTradeMessages].reverse().find(msg =>
             msg.buyer_initiated === true || msg.transaction_created === true
           );
@@ -1837,7 +2207,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         }
         // 🔥 PRIORITY 5: After buyer accepts - BUYER waits OR shows Release Funds
         // 🔥 FIX: NEVER show for completed trades
-        else if (chatType === 'buy' && isCreator && tradeAccepted && acceptedBy === currentUserId && !tradeCompleted && mounted) {
+        else if (resolvedChatType === 'buy' && isCreator && tradeAccepted && acceptedBy === currentUserId && !tradeCompleted && mounted) {
           // 🔥 FIX: Check if transaction was already created (transaction_created or buyer_initiated msg exists)
           const transactionCreatedMsg = [...currentTradeMessages].reverse().find(msg =>
             msg.transaction_created === true || msg.buyer_initiated === true
@@ -1953,72 +2323,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               });
             }
           } else {
-            // 🔥 FIX: No transaction_created msg — accept may have failed (e.g. insufficient funds)
-            // Re-show TradeInitModal so buyer can retry instead of showing "waiting" forever
-            if (tradeInitDataMessage?.trade_init_data) {
-              console.log('🔄 BUYER - trade_accepted but no transaction created yet — re-showing TradeInitModal');
-              try {
-                const parsedTradeData = JSON.parse(tradeInitDataMessage.trade_init_data);
-
-                // Build the same data structure as Priority 2 so TradeInitModal shows correct amounts
-                const sellerMember = channel.state?.members?.[parsedTradeData.seller_id];
-                const sellerMemberUser = sellerMember?.user;
-                const resolvedSellerName = parsedTradeData.seller_name ||
-                  sellerMemberUser?.name || sellerMemberUser?.displayName ||
-                  selectedUser?.name || selectedUser?.displayName || 'Seller';
-                const resolvedSellerImage = sellerMemberUser?.image || sellerMemberUser?.avatar ||
-                  selectedUser?.image || selectedUser?.avatar || selectedUser?.bitmojiUrl;
-
-                const tradeInitDataForBuyer = {
-                  transactionId: parsedTradeData.transaction_id,
-                  sellerId: parsedTradeData.seller_id,
-                  buyerId: parsedTradeData.buyer_id,
-                  accountPrice: parsedTradeData.offer_amount,
-                  paymentMethod: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                  paymentNetwork: parsedTradeData.payment_network,
-                  initiatedAt: parsedTradeData.initiated_at,
-                  sellOrderId: channel.data?.metadata?.sellOrderId || channel.data?.metadata?.accountId,
-                  accountId: channel.data?.metadata?.accountId,
-                  socialAccount: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                  accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                  accountOriginalEmail: parsedTradeData.account_original_email || '',
-                  originalEmailPassword: parsedTradeData.original_email_password || '',
-                  socialAccountPassword: parsedTradeData.social_account_password || '',
-                  seller: {
-                    id: parsedTradeData.seller_id,
-                    name: resolvedSellerName,
-                    image: resolvedSellerImage,
-                    social: getSocialIcon(parsedTradeData.platform || channelMetadata?.platform || 'Unknown'),
-                    ratings: '⭐ 4.5 (New)',
-                    price: parsedTradeData.offer_amount,
-                    currency: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                    platform: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                    accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                    accountId: channel.data?.metadata?.accountId
-                  }
-                };
-
-                const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                tradeInitDataForBuyer.transactionFee = transactionFee;
-                tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-
-                console.log('✅ BUYER RETRY: Constructed tradeInitData:', tradeInitDataForBuyer);
-
-                setTradeInitData(tradeInitDataForBuyer);
-                setShowTradeInitModal(true);
-              } catch (e) {
-                console.error('❌ Failed to parse trade_init_data for retry:', e);
-                setShowAcceptanceNotification(true);
-                setAcceptanceData({
-                  acceptedBy: 'You',
-                  message: 'Trade accepted! Waiting for transaction to be created...',
-                  isWaiting: true,
-                  amount: finalPrice,
-                  currency: selectedUser?.currency || 'BTC'
-                });
-              }
-            } else {
-              console.log('⏳ BUYER - accepted, no transaction_created and no trade_init_data, showing waiting');
+            // No transaction_created — only show "waiting" if invoice still active (backend may mark invoice cancelled when txn cancelled)
+            if (hasActiveInvoiceFromApi) {
+              console.log('⏳ BUYER - trade_accepted, invoice still active — showing waiting (no auto-open modal on refresh)');
               setShowAcceptanceNotification(true);
               setAcceptanceData({
                 acceptedBy: 'You',
@@ -2027,11 +2334,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 amount: finalPrice,
                 currency: selectedUser?.currency || 'BTC'
               });
+            } else {
+              console.log('⏳ BUYER - trade_accepted but no active invoice/transaction (cancelled) — not showing waiting');
             }
           }
         }
         // 🔥 PRIORITY 5S: SELL TAB - Receiver (buyer/uploader) waits OR shows Release Funds
-        else if (chatType === 'sell' && isReceiver && tradeAccepted && acceptedBy === currentUserId && !tradeCompleted && mounted) {
+        else if (resolvedChatType === 'sell' && isReceiver && tradeAccepted && acceptedBy === currentUserId && !tradeCompleted && mounted) {
           const transactionCreatedMsg = [...currentTradeMessages].reverse().find(msg =>
             msg.transaction_created === true || msg.buyer_initiated === true
           );
@@ -2142,71 +2451,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               });
             }
           } else {
-            // 🔥 FIX: No transaction_created msg — accept may have failed (e.g. insufficient funds)
-            // Re-show TradeInitModal so buyer can retry
-            if (tradeInitDataMessage?.trade_init_data) {
-              console.log('🔄 SELL TAB: BUYER - trade_accepted but no transaction created — re-showing TradeInitModal');
-              try {
-                const parsedTradeData = JSON.parse(tradeInitDataMessage.trade_init_data);
-
-                const sellerMember = channel.state?.members?.[parsedTradeData.seller_id];
-                const sellerMemberUser = sellerMember?.user;
-                const resolvedSellerName = parsedTradeData.seller_name ||
-                  sellerMemberUser?.name || sellerMemberUser?.displayName ||
-                  selectedUser?.name || selectedUser?.displayName || 'Seller';
-                const resolvedSellerImage = sellerMemberUser?.image || sellerMemberUser?.avatar ||
-                  selectedUser?.image || selectedUser?.avatar || selectedUser?.bitmojiUrl;
-
-                const tradeInitDataForBuyer = {
-                  transactionId: parsedTradeData.transaction_id,
-                  sellerId: parsedTradeData.seller_id,
-                  buyerId: parsedTradeData.buyer_id,
-                  accountPrice: parsedTradeData.offer_amount,
-                  paymentMethod: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                  paymentNetwork: parsedTradeData.payment_network,
-                  initiatedAt: parsedTradeData.initiated_at,
-                  sellOrderId: channel.data?.metadata?.sellOrderId || channel.data?.metadata?.accountId,
-                  accountId: channel.data?.metadata?.accountId,
-                  socialAccount: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                  accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                  accountOriginalEmail: parsedTradeData.account_original_email || '',
-                  originalEmailPassword: parsedTradeData.original_email_password || '',
-                  socialAccountPassword: parsedTradeData.social_account_password || '',
-                  seller: {
-                    id: parsedTradeData.seller_id,
-                    name: resolvedSellerName,
-                    image: resolvedSellerImage,
-                    social: getSocialIcon(parsedTradeData.platform || channelMetadata?.platform || 'Unknown'),
-                    ratings: '⭐ 4.5 (New)',
-                    price: parsedTradeData.offer_amount,
-                    currency: parsedTradeData.payment_method?.toUpperCase() || 'BTC',
-                    platform: parsedTradeData.platform || channelMetadata?.platform || 'Unknown',
-                    accountUsername: parsedTradeData.account_username || channelMetadata?.accountUsername || 'N/A',
-                    accountId: channel.data?.metadata?.accountId
-                  }
-                };
-
-                const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                tradeInitDataForBuyer.transactionFee = transactionFee;
-                tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-
-                console.log('✅ SELL TAB: BUYER RETRY: Constructed tradeInitData:', tradeInitDataForBuyer);
-
-                setTradeInitData(tradeInitDataForBuyer);
-                setShowTradeInitModal(true);
-              } catch (e) {
-                console.error('❌ SELL TAB: Failed to parse trade_init_data for retry:', e);
-                setShowAcceptanceNotification(true);
-                setAcceptanceData({
-                  acceptedBy: 'You',
-                  message: 'Trade accepted! Waiting for transaction to be created...',
-                  isWaiting: true,
-                  amount: finalPrice,
-                  currency: selectedUser?.currency || 'BTC'
-                });
-              }
-            } else {
-              console.log('⏳ SELL TAB: BUYER (RECEIVER) - accepted, no transaction_created and no trade_init_data');
+            // No transaction_created — only show "waiting" if invoice still active (backend may mark invoice cancelled when txn cancelled)
+            if (hasActiveInvoiceFromApi) {
+              console.log('⏳ SELL TAB: BUYER - trade_accepted, invoice still active — showing waiting');
               setShowAcceptanceNotification(true);
               setAcceptanceData({
                 acceptedBy: 'You',
@@ -2215,6 +2462,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 amount: finalPrice,
                 currency: selectedUser?.currency || 'BTC'
               });
+            } else {
+              console.log('⏳ SELL TAB: BUYER - trade_accepted but no active invoice/transaction (cancelled) — not showing waiting');
             }
           }
         }
@@ -2228,11 +2477,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           hasAcceptanceData: !!acceptanceData
         });
 
+        setSelectedChannelBadgeResolved(true); // show Completed badge only after API + resolution
+
         console.log('🔄 Channel load complete');
 
       } catch (error) {
         console.error('❌ loadChannel error:', error);
-        // Set channel error for user feedback
+        setMetadataResolved(true); // Stop loading state even on error
         const errorMessage = error.message?.includes('timeout')
           ? 'Connection timed out. Please check your internet connection.'
           : 'Failed to load chat. Please try again.';
@@ -2262,7 +2513,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUser?.id || selectedUser?._id, isInitialized, userData?._id || userData?.id]);
+  }, [selectedUser?.id || selectedUser?._id, selectedUser?.accountId || selectedUser?.sellOrderId, isInitialized, userData?._id || userData?.id]);
 
 
 
@@ -2418,59 +2669,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
   const handleAcceptRequest = async () => {
     try {
-      console.log('✅ User2 accepting trade request...');
+      console.log('✅ Accept clicked — no API call; showing Initiate Trade dialog. /invoices/accept will be called when user clicks Initiate Trade in the dialog.');
 
-      const { hasActiveTransaction, activeTransaction } = await checkActiveTransactions();
-
-      if (hasActiveTransaction) {
-        // ... existing transaction check code ...
-        const channelAccountId = pendingRequest.user.accountId;
-        const txnSellOrderId = activeTransaction.sellOrderId;
-        const txnAccountId = activeTransaction.accountId || txnSellOrderId;
-        const buyerId = activeTransaction.buyer?.userId || activeTransaction.buyer?._id || activeTransaction.buyerId;
-        const currentUserId = userData?._id || userData?.id;
-
-        const matchesBySellOrder = txnSellOrderId === channelAccountId;
-        const matchesByAccountId = txnAccountId === channelAccountId;
-        const matches = matchesBySellOrder || matchesByAccountId;
-        const isBuyer = buyerId === currentUserId || buyerId === String(currentUserId);
-
-        if (matches && isBuyer) {
-          console.log('💰 Active transaction matches - switching to Release Funds');
-
-          setShowRequestModal(false);
-          setPendingRequest(null);
-
-          setPendingTransaction(activeTransaction);
-          setTradeData({
-            seller: pendingRequest.user,
-            socialAccount: pendingRequest.user.platform || currentChannel?.data?.metadata?.platform || channelMetadata?.platform || 'Unknown',
-            accountUsername: pendingRequest.user.accountUsername || currentChannel?.data?.metadata?.accountUsername || channelMetadata?.accountUsername || 'N/A',
-            paymentMethod: activeTransaction.currency || 'BTC',
-            accountPrice: parseFloat(activeTransaction.amount) || 0,
-            transactionFee: 0,
-            sellOrderId: activeTransaction.sellOrderId,
-            sellerId: activeTransaction.sellerId,
-            transactionId: activeTransaction._id || activeTransaction.id,
-            totalAmount: parseFloat(activeTransaction.amount) || 0
-          });
-
-          return;
-        } else {
-          setErrorModalData({
-            message: `You already have an active transaction for a different account. Please complete or cancel it before starting a new trade.`,
-            details: {
-              transactionId: activeTransaction._id || activeTransaction.id,
-              amount: activeTransaction.amount,
-              currency: activeTransaction.currency,
-              status: activeTransaction.status
-            }
-          });
-          setShowErrorModal(true);
-          setShowRequestModal(false);
-          return;
-        }
-      }
+      // 🔥 No API on Accept — just show the Initiate Trade dialog. /invoices/accept is called when they click Initiate Trade in the modal.
 
       // 🔥 FIXED: Use stored tradeData if available (contains credentials from seller)
       // Preserve the seller object if it already exists in tradeData
@@ -2495,15 +2696,21 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         trade.totalAmount = (trade.accountPrice || 0) + (trade.transactionFee || 0);
       }
 
-      // 🔥 FIXED: Send acceptance message as regular message with custom data
-      if (currentChannel) {
+      // So Initiate Trade dialog can call /invoices/accept with the correct id
+      if (pendingRequest.invoiceId != null || pendingRequest.tradeData?.invoiceId != null) {
+        trade.invoiceId = pendingRequest.invoiceId ?? pendingRequest.tradeData?.invoiceId;
+      }
+
+      // 🔥 FIXED: Send acceptance message — use pendingRequest.channel when modal came from global listener
+      const channelToUse = pendingRequest?.channel || currentChannel;
+      if (channelToUse) {
         try {
           const currentUserId = userData?._id || userData?.id;
           const acceptorName = userData?.displayName || userData?.name || 'User';
 
           console.log('📝 Sending acceptance custom message');
 
-          await currentChannel.sendMessage({
+          await channelToUse.sendMessage({
             text: `✅ Trade accepted! Waiting for transaction to be created...`,
             user_id: currentUserId,
             // 🔥 REMOVED: type: 'system' - this causes the error
@@ -2856,7 +3063,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
       // 🔥 FIX: The stored transactionId is often the INVOICE ID, not the real TRANSACTION ID.
       // Always fetch the real transaction ID from the API first.
-      let transactionId = tradeData.transactionId || pendingTransaction?._id || pendingTransaction?.id;
+      let transactionId = tradeData.transactionId || pendingTransaction?._id || pendingTransaction?.id
+        || accountReviewData?.transaction?._id || accountReviewData?.transaction?.id;
       
       try {
         const activeCheck = await checkActiveTransactions();
@@ -2906,7 +3114,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       setIsTradeTimerActive(false);
       setSellerTradeTimer(300);
 
-      // Close all modals
+      // Close all modals and clear credential data (don't show old account info when initiating new trade)
       setShowReleaseFundsModal(false);
       setShowPinModal(false);
       setAgreeFullAccess(false);
@@ -2916,6 +3124,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       setActiveTransaction(null);
       setShowRequestModal(false);
       setShowSellerTradePrompt(false);
+      setCredentialData(null);
+      setShowCredentialModal(false);
+      const credChId = currentChannelRef.current?.id || currentChannelRef.current?.cid?.split(':')[1] || '';
+      if (credChId) localStorage.removeItem(`soctra_cred_${credChId}`);
 
       // 🔥 NEW: Show full-screen transaction success modal for buyer
       const releasedAmount = pendingTransaction?.amountUSD || tradeData?.accountPrice || tradeData?.totalAmount || pendingTransaction?.amount || 0;
@@ -2983,38 +3195,46 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
 
   const handleRejectRequest = async () => {
-    // 🔥 FIX: Cancel the backend transaction so the sell order resets to 'active'
-    // Without this, the seller gets "Sell order is not active" when trying to re-initiate
-    const txnId = pendingRequest?.tradeData?.transactionId || tradeInitData?.transactionId;
-    if (txnId) {
+    // transactionId in trade_init_data is the invoice ID (before buyer accepts); _id from data response
+    const invoiceId = pendingRequest?.invoiceId || pendingRequest?.tradeData?.invoiceId || tradeInitData?.invoiceId ||
+      pendingRequest?.tradeData?.transactionId || tradeInitData?.transactionId ||
+      pendingRequest?.tradeData?._id || tradeInitData?._id;
+
+    if (invoiceId) {
       try {
-        console.log('❌ Cancelling transaction on decline:', txnId);
-        await transactionService.cancelTransaction(txnId, 'Buyer declined the trade request');
-        console.log('✅ Transaction cancelled, sell order should be active again');
-        
-        // Clear TradeStateManager as well
-        TradeStateManager.clear();
-      } catch (cancelError) {
-        // Non-critical: still clear UI even if cancel fails
-        console.warn('⚠️ Failed to cancel transaction on decline (non-critical):', cancelError.message);
+        await apiService.post('/invoices/decline', { invoiceId });
+        console.log('✅ Invoice declined:', invoiceId);
+
+        // Notify seller in chat
+        const channelToUse = pendingRequest?.channel || currentChannelRef.current;
+        if (channelToUse) {
+          const currentUserId = userData?._id || userData?.id;
+          const buyerName = userData?.displayName || userData?.name || 'Buyer';
+          await channelToUse.sendMessage({
+            text: `${buyerName} declined the trade.`,
+            user_id: currentUserId,
+            invoice_declined: true,
+            invoice_id: invoiceId,
+            declined_by: currentUserId,
+            declined_at: new Date().toISOString(),
+            silent: true
+          });
+        }
+      } catch (error) {
+        console.error('❌ Failed to decline invoice:', error);
+        setErrorModalData({ message: error.message || 'Failed to decline. Please try again.' });
+        setShowErrorModal(true);
+        return;
       }
     }
 
     setShowRequestModal(false);
     setPendingRequest(null);
     setTradeInitData(null);
-    // 🔥 Clear credential data on trade cancel/decline (per-channel)
     setShowCredentialModal(false);
     setCredentialData(null);
     const cancelChId = currentChannelRef.current?.id || currentChannelRef.current?.cid?.split(':')[1] || '';
-    if (cancelChId) {
-      localStorage.removeItem(`soctra_cred_${cancelChId}`);
-    }
-    setCurrentChannel(null);
-    currentChannelRef.current = null;
-    if (onBackToList) {
-      onBackToList();
-    }
+    if (cancelChId) localStorage.removeItem(`soctra_cred_${cancelChId}`);
   };
 
   const handleFileSelect = () => {
@@ -3542,12 +3762,25 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       console.log('Form Data:', tradeData);
 
       // Step 1: Validate all required fields are filled (using passed data)
-      if (!tradeData.accountEmail ||
-        !tradeData.emailPassword ||
-        !tradeData.accountPassword ||
-        !tradeData.paymentMethod ||
-        !tradeData.paymentNetwork ||
-        !tradeData.offerPrice) {
+      // 🔥 Check if original email was provided during upload
+      const hasOriginalEmail = (() => {
+        const filters = selectedUser?.filters || [];
+        const metrics = selectedUser?.metrics || [];
+        const allData = [...filters, ...metrics];
+        const emailFilter = allData.find(f => f.key === 'original_email');
+        if (!emailFilter) return true; // backward compat
+        return emailFilter.value === true || emailFilter.value === 'yes';
+      })();
+
+      const missingFields = [];
+      if (hasOriginalEmail && !tradeData.accountEmail) missingFields.push('accountEmail');
+      if (hasOriginalEmail && !tradeData.emailPassword) missingFields.push('emailPassword');
+      if (!tradeData.accountPassword) missingFields.push('accountPassword');
+      if (!tradeData.paymentMethod) missingFields.push('paymentMethod');
+      if (!tradeData.paymentNetwork) missingFields.push('paymentNetwork');
+      if (!tradeData.offerPrice) missingFields.push('offerPrice');
+
+      if (missingFields.length > 0) {
         setErrorModalData({
           message: 'Please fill in all required fields'
         });
@@ -3581,21 +3814,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       let orderId, buyerId, sellerId;
 
       if (chatType === 'sell') {
-        // SELL ORDER: Current user is buyer, other user is seller
-        orderId = selectedUser?.sellOrderId ||
-          currentChannel?.data?.metadata?.sellOrderId ||
+        // SELL TAB: Current user is SELLER (sends invoice), other user is BUYER
+        orderId = selectedUser?.buyOrderId ||
+          currentChannel?.data?.metadata?.buyOrderId ||
           currentChannel?.data?.metadata?.accountId;
 
-        sellerId = selectedUser?.sellerId ||
+        sellerId = currentUserId; // Current user is the seller
+        buyerId = selectedUser?.buyerId ||
           selectedUser?.id ||
           selectedUser?._id;
-
-        buyerId = currentUserId; // Current user is the buyer
 
         console.log('🔍 Sell Order Context:', { orderId, sellerId, buyerId });
 
         if (!orderId) {
-          throw new Error('Sell order ID not found. Please try reopening the chat.');
+          throw new Error('Buy order ID not found. Please try reopening the chat.');
         }
 
       } else {
@@ -3755,11 +3987,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
       // Remove undefined keys
       Object.keys(invoicePayload).forEach(key => invoicePayload[key] === undefined && delete invoicePayload[key]);
+      if(chatType === 'sell'){
+        console.log('📦 Invoice Payload (/invoices/from-buy-order):', invoicePayload);
+      } else {
+        console.log('📦 Invoice Payload (/invoices/from-sell-order):', invoicePayload);
+      }
 
-      console.log('📦 Invoice Payload (/invoices/from-sell-order):', invoicePayload);
+     
 
       // 🔥 NEW: Use /invoices/from-sell-order endpoint
-      response = await apiService.post('/invoices/from-sell-order', invoicePayload);
+      if(chatType === 'sell'){
+        response = await apiService.post('/invoices/from-buy-order', invoicePayload);
+      } else {
+        response = await apiService.post('/invoices/from-sell-order', invoicePayload);
+      }
 
       console.log('✅ Transaction initiated successfully:', response);
 
@@ -3902,7 +4143,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       setShowSellerInitiateModal(false);
       setShowSellerTradePrompt(false);
       setSellerTradeTimer(300);
-      // 🔥 Trade timer is NOT activated here - it will be activated when buyer clicks "Initiate Trade" in TradeInitModal
+      // 🔥 Trade timer is NOT activated here - it will be activated when buyer accepts and locks funds
 
       // Reset form data
       setSellerTradeData({
@@ -3914,29 +4155,25 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         offerPrice: ''
       });
 
-      // 🔥 NEW: Set active transaction for seller banner
-      const transactionData = response.transaction || response.data;
-      const transactionId = transactionData._id || transactionData.id;
+      const invoiceData = response.transaction || response.data;
+      const invoiceId = invoiceData._id || invoiceData.id;
       
       // 🔥 NEW: Set trade phase to 'seller_submitted' so buyer can see request
       TradeStateManager.setPhase(TradeStateManager.PHASES.SELLER_READY, {
-        transactionId,
+        transactionId: invoiceId,
         tradeData: { ...tradeData },
       });
       
-      setActiveTransaction({
-        id: transactionId,
-        status: 'pending',
-        role: 'seller', // Current user is seller
-        amount: parseFloat(tradeData.offerPrice),
-        currency: tradeData.paymentMethod,
-        createdAt: new Date().toISOString(),
-        buyerId: buyerId,
-        sellerId: sellerId
+      // 🔥 Invoice created — show "Waiting for buyer to accept" (no timer until buyer accepts)
+      setActiveTransaction(null);
+      setShowRequestModal(false);
+      setPendingRequest(null);
+      setShowAcceptanceNotification(true);
+      setAcceptanceData({
+        waitingForInvoiceAccept: true,
+        message: 'Waiting for buyer to accept invoice',
+        isWaiting: true
       });
-
-      // 🔥 REMOVED: Success modal - only banner should show now
-      // The transaction banner will be visible instead
 
     } catch (error) {
       console.error('❌ Transaction initiation failed:', error);
@@ -4020,42 +4257,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               const currentUserIsBuyer = txnBuyerId === currentUserId || String(txnBuyerId) === String(currentUserId);
               
               if (currentUserIsBuyer) {
-                console.log('🔔 Current user is buyer - showing release funds modal');
-                
-                // Prepare trade init data for TradeInitModal
-                const tradeInitDataForBuyer = {
-                  transactionId: activeTxn._id || activeTxn.id || activeTransactionId,
-                  sellerId: txnSellerId,
-                  buyerId: txnBuyerId,
-                  accountPrice: parseFloat(activeTxn.amountUSD || activeTxn.amount || 0),
-                  paymentMethod: (activeTxn.currency || 'BTC').toUpperCase(),
-                  paymentNetwork: activeTxn.network || 'bitcoin',
-                  initiatedAt: activeTxn.createdAt,
-                  sellOrderId: activeTxn.sellOrderId,
-                  accountId: activeTxn.socialAccountId,
-                  socialAccount: activeTxn.platform || 'Unknown',
-                  accountUsername: activeTxn.accountUsername || 'N/A',
-                  seller: {
-                    id: txnSellerId,
-                    name: activeTxn.seller?.displayName || activeTxn.seller?.name || selectedUser?.name || 'Seller',
-                    image: activeTxn.seller?.avatar || activeTxn.seller?.bitmojiUrl || selectedUser?.image || ug1,
-                    ratings: '⭐ 4.5 (New)'
-                  },
-                  isFromActiveCheck: true
-                };
-                
-                // Calculate transaction fee
-                const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                tradeInitDataForBuyer.transactionFee = transactionFee;
-                tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
-                
-                // Close seller initiate modal and show trade init modal
+                console.log('🔔 Current user is buyer - setting active transaction only (Trade Details modal only on Accept click)');
                 setShowSellerInitiateModal(false);
-                setTradeInitData(tradeInitDataForBuyer);
                 setActiveTransaction(activeTxn);
-                setShowTradeInitModal(true);
-                
-                console.log('✅ TradeInitModal opened for buyer to release funds');
                 setIsProcessingTrade(false);
                 return; // Exit early
               }
@@ -4245,13 +4449,22 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       return !shouldExclude;
     });
 
-    return visibleChannels.map((channel) => {
+    const mapped = visibleChannels.map((channel) => {
       const otherMembers = Object.values(channel.state.members).filter(
         (member) => member.user_id !== currentUserId
       );
 
       const otherUser = otherMembers[0]?.user;
-      const lastMessage = channel.state.messages[channel.state.messages.length - 1];
+
+      // 🔥 Same "latest trade" logic as main chat view — when funds released, only messages after that
+      const channelMessages = channel.state.messages || [];
+      const latestTradeMsgCutoffIdx = channelMessages.map((msg, i) =>
+        (msg.funds_released_data || msg.funds_released === true) ? i : -1
+      ).filter(i => i !== -1).pop() ?? -1;
+      const latestTradeMessages = latestTradeMsgCutoffIdx >= 0
+        ? channelMessages.slice(latestTradeMsgCutoffIdx + 1)
+        : channelMessages;
+      const lastMessage = latestTradeMessages[latestTradeMessages.length - 1];
       const unreadCount = chatService.getUnreadCount(channel);
 
       const isOutgoing = lastMessage?.user?.id === currentUserId;
@@ -4341,9 +4554,40 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         chatType: chatType,
         accountId: accountId,
         _channel: channel,
-        _tradeCompleted: channel._tradeCompleted || false,
+        // Only show Completed badge after API call (selectedChannelBadgeResolved); until then hide for selected channel
+        // isSelected: use BOTH currentChannel (set in loadChannel) and selectedUser._channel (set on click) so we hide badge immediately on click (no flash) and stay correct for buyer/seller
+        _tradeCompleted: (() => {
+          const chId = channel?.id || channel?.cid?.split?.(':')?.[1] || '';
+          const curId = currentChannel?.id || currentChannel?.cid?.split?.(':')?.[1] || '';
+          const selChId = selectedUser?._channel?.id || selectedUser?._channel?.cid?.split?.(':')?.[1] || '';
+          const isSelected = (curId && chId === curId) || (selectedUser && selChId && chId === selChId);
+          if (isSelected && !selectedChannelBadgeResolved) return false; // hide until API + resolution
+          const isSelectedAndCanInitiate = selectedChannelCanInitiateAgain && isSelected;
+          return isSelectedAndCanInitiate ? false : ((channel._tradeCompleted && latestTradeMessages.length > 0) || false);
+        })(),
       };
     });
+
+    // 🔥 One chat per (otherUser, chatType): dedupe by (id, chatType), prefer stable channel ID
+    const byKey = {};
+    const stableId = (cid) => {
+      if (!cid) return false;
+      const parts = cid.split('_');
+      return parts.length === 3 && (parts[2] === 'buy' || parts[2] === 'sell');
+    };
+    mapped.forEach((u) => {
+      const key = `${u.id}_${u.chatType}`;
+      const current = byKey[key];
+      const cid = u._channel?.id || '';
+      const stable = stableId(cid);
+      if (!current) {
+        byKey[key] = u;
+        return;
+      }
+      const curStable = stableId(current._channel?.id);
+      if (stable && !curStable) byKey[key] = u;
+    });
+    return Object.values(byKey);
   };
 
 
@@ -4422,80 +4666,27 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     const isInitiator = channelCreatorId === currentUserId ||
       channelCreatorId === String(currentUserId);
 
-    // Get the channel's base chatType from the channel ID or metadata
-    const baseChatType = user.chatType; // This is the stored chatType ('buy' or 'sell')
+    // Get the channel's chatType from the channel ID or metadata
+    const baseChatType = user.chatType; // 'buy' or 'sell'
 
-    // 🔥 ROLE-BASED DISPLAY:
-    // - If user is INITIATOR of a 'buy' channel → show in "Buy" tab
-    // - If user is RECEIVER of a 'buy' channel → show in "Sell" tab
-    // - If user is INITIATOR of a 'sell' channel → show in "Sell" tab
-    // - If user is RECEIVER of a 'sell' channel → show in "Buy" tab
-
-    // 🔥 SIMPLIFIED LOGIC: Always show based on who initiated
-    // - INITIATOR → Always sees it in "Buy" tab (they initiated the trade)
-    // - RECEIVER → Always sees it in "Sell" tab (they received the trade request)
-    // This ensures consistent behavior after chat deletion when roles may swap
-    const shouldShowInBuyTab = isInitiator;
-    const shouldShowInSellTab = !isInitiator;
+    // 🔥 CHANNEL-TYPE-BASED DISPLAY: Same section for both seller and buyer
+    // - chatType 'buy' (sell_order) → always show in "Buy" tab
+    // - chatType 'sell' (buy_order) → always show in "Sell" tab
+    const shouldShowInBuyTab = baseChatType === 'buy';
+    const shouldShowInSellTab = baseChatType === 'sell';
 
     const matchesTab = activeTab === 'Buy' ? shouldShowInBuyTab : shouldShowInSellTab;
 
     return matchesSearch && matchesTab;
   });
 
-  // 🔥 ROLE-BASED: Calculate unread counts
+  // 🔥 CHANNEL-TYPE-BASED: Unread counts by chatType (same as list categorization)
   const buyUnreadCount = chatUsers
-    .filter(user => {
-      const channel = user._channel;
-      const channelMetadata = channel?.data?.metadata || {};
-      let channelCreatorId = channelMetadata.initiator_id;
-
-      if (!channelCreatorId) {
-        try {
-          const channelName = channel?.data?.name || '';
-          const parts = channelName.split('|');
-          if (parts.length > 1) {
-            const parsed = JSON.parse(parts[1]);
-            channelCreatorId = parsed.initiator_id;
-          }
-        } catch (e) {
-          channelCreatorId = channel?.data?.created_by_id;
-        }
-      }
-
-      const isInitiator = channelCreatorId === currentUserId ||
-        channelCreatorId === String(currentUserId);
-
-      // 🔥 SIMPLIFIED: Initiator always Buy tab
-      return isInitiator;
-    })
+    .filter(user => user.chatType === 'buy')
     .reduce((total, user) => total + user.unreadCount, 0);
 
   const sellUnreadCount = chatUsers
-    .filter(user => {
-      const channel = user._channel;
-      const channelMetadata = channel?.data?.metadata || {};
-      let channelCreatorId = channelMetadata.initiator_id;
-
-      if (!channelCreatorId) {
-        try {
-          const channelName = channel?.data?.name || '';
-          const parts = channelName.split('|');
-          if (parts.length > 1) {
-            const parsed = JSON.parse(parts[1]);
-            channelCreatorId = parsed.initiator_id;
-          }
-        } catch (e) {
-          channelCreatorId = channel?.data?.created_by_id;
-        }
-      }
-
-      const isInitiator = channelCreatorId === currentUserId ||
-        channelCreatorId === String(currentUserId);
-
-      // 🔥 SIMPLIFIED: Receiver always Sell tab
-      return !isInitiator;
-    })
+    .filter(user => user.chatType === 'sell')
     .reduce((total, user) => total + user.unreadCount, 0);
 
   // Emit total unread count for navbar badge
@@ -4506,7 +4697,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     }));
   }, [buyUnreadCount, sellUnreadCount]);
 
-  // 🔥 NEW: Transaction Countdown Banner Component with 15-minute timer
+  // 🔥 Seller countdown: only when there is an active transaction (buyer accepted). Time from transaction.createdAt. After expiry: show Cancel + Appeal (no auto-cancel).
+  const TRANSACTION_TIMER_DURATION = 300; // 5 minutes
   const TransactionCountdownBanner = ({ 
     activeTransaction, 
     setActiveTransaction, 
@@ -4520,30 +4712,32 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     showAppealMenu,
     handleReportUser
   }) => {
-    const [timeRemaining, setTimeRemaining] = React.useState(900); // 15 minutes = 900 seconds
+    const duration = activeTransaction?.timerDuration ?? activeTransaction?.timer_duration ?? TRANSACTION_TIMER_DURATION;
+    const [timeRemaining, setTimeRemaining] = React.useState(duration);
     const timerRef = React.useRef(null);
 
-    // Calculate time remaining from createdAt
+    // Calculate time remaining from transaction.createdAt
     React.useEffect(() => {
       if (!activeTransaction?.createdAt) {
-        setTimeRemaining(900); // Default 15 minutes
+        setTimeRemaining(duration);
         return;
       }
 
       const initiatedTime = new Date(activeTransaction.createdAt).getTime();
       const now = Date.now();
       const elapsedSeconds = Math.floor((now - initiatedTime) / 1000);
-      const remainingSeconds = Math.max(0, 900 - elapsedSeconds); // 15 mins = 900 seconds
+      const remainingSeconds = Math.max(0, duration - elapsedSeconds);
       
       setTimeRemaining(remainingSeconds);
 
-      // Start countdown timer
+      if (remainingSeconds <= 0) return;
+
+      // Countdown interval
       timerRef.current = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
-            // Timer expired - auto cancel trade
             clearInterval(timerRef.current);
-            handleAutoCancel();
+            // Do NOT auto-cancel; seller sees Cancel and Appeal buttons
             return 0;
           }
           return prev - 1;
@@ -4555,7 +4749,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           clearInterval(timerRef.current);
         }
       };
-    }, [activeTransaction?.createdAt]);
+    }, [activeTransaction?.createdAt, duration]);
 
     // Auto-cancel function when timer expires
     const handleAutoCancel = async () => {
@@ -4605,13 +4799,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const isExpired = timeRemaining <= 0;
+
     return (
       <div className="flex items-center justify-center w-full">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-white font-extralight text-xs">Trade has been Initiated</h3>
+            {isExpired ? (
+              <h3 className="text-white font-extralight text-xs">Time&apos;s up</h3>
+            ) : (
+              <h3 className="text-white font-extralight text-xs">Trade has been Initiated</h3>
+            )}
           </div>
-          <div className={`flex items-center gap-1 text-white bg-[#222125] text-xs py-2 px-3 rounded-full font-mono ml-2 ${timeRemaining <= 60 ? 'border border-red-500/50' : timeRemaining <= 300 ? 'border border-yellow-500/50' : ''}`}>
+          {!isExpired && (
+            <div className={`flex items-center gap-1 text-white bg-[#222125] text-xs py-2 px-3 rounded-full font-mono ml-2 ${timeRemaining <= 60 ? 'border border-red-500/50' : timeRemaining <= 300 ? 'border border-yellow-500/50' : ''}`}>
             <div className='flex items-center gap-1 text-xs'>
               <Clock className={`w-5 h-5 ${timeRemaining <= 60 ? 'text-red-400 animate-pulse' : timeRemaining <= 300 ? 'text-yellow-400' : 'text-purple-400'}`} />
               <p className='text-xs'>Time Left</p>
@@ -4620,6 +4821,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               {formatTime(timeRemaining)}
             </span>
           </div>
+          )}
 
           <div className="flex items-center gap-3 ml-3">
             <button
@@ -4628,22 +4830,19 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             >
               Cancel Trade
             </button>
-            <div className="relative">
-              <button
-                onClick={() => {
-                  // Open Zendesk chat widget for appeal
-                  if (window.zE) {
-                    window.zE('messenger', 'open');
-                  } else {
-                    window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                  }
-                }}
-                className="flex ml-0 items-end justify-end gap-2 px-4 py-2  hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
-              >
-                Appeal
-                <MoreVertical className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                if (window.zE) {
+                  window.zE('messenger', 'open');
+                } else {
+                  window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
+                }
+              }}
+              className="flex ml-0 items-end justify-end gap-2 px-4 py-2 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
+            >
+              Appeal
+              <MoreVertical className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -5237,8 +5436,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   };
 
   // 🔥 FIXED: Inline Credential Card - Displays IN the chat area (not as modal overlay)
+  // 🔥 Only show when there is an active transaction (buyer has initiated) — never show old creds when no active trade
   const CredentialCard = () => {
-    if (!showCredentialModal || !credentialData) return null;
+    const hasActiveTransaction = !!(pendingTransaction && pendingTransaction.status !== 'cancelled') ||
+      !!(activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled');
+    if (!showCredentialModal || !credentialData || !hasActiveTransaction) return null;
 
     const [copiedField, setCopiedField] = React.useState(null);
 
@@ -5931,7 +6133,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         )}
       </div>
     </div>
-  ), [filteredUsers, activeTab, buyUnreadCount, sellUnreadCount, isLoading, debouncedSearchQuery, selectedUser, channels]);
+  ), [filteredUsers, activeTab, buyUnreadCount, sellUnreadCount, isLoading, debouncedSearchQuery, selectedUser, channels, selectedChannelCanInitiateAgain, selectedChannelBadgeResolved, currentChannel?.id]);
 
   const MainContent = () => {
     // Show channel error modal
@@ -6017,17 +6219,24 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               )}
             </div>
             <div>
-              <h3 className="text-white text-xs md:text-sm font-medium">{selectedUser.name || selectedUser.displayName}</h3>
-              <p className="text-gray-400 hidden md:block text-xs md:text-sm">
-                {selectedUser.status === 'online' ? 'Online' : 'Last seen recently'}
-              </p>
-              {/* 🔥 Channel ID for complaint tracking */}
-              {currentChannel && (
-                <div className="flex items-center gap-1 mt-0.5">
-                  <p className="text-gray-500 text-[10px] font-mono truncate max-w-[80px] md:max-w-[120px]">
-                    Channel ID: {currentChannel.id || currentChannel.cid?.split(':')[1] || 'N/A'}
+              {isLoading ? (
+                <div className="flex items-center gap-2 py-1">
+                  <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0" />
+                  <span className="text-gray-400 text-xs">Loading account details...</span>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-white text-xs md:text-sm font-medium">{selectedUser.name || selectedUser.displayName}</h3>
+                  <p className="text-gray-400 hidden md:block text-xs md:text-sm">
+                    {selectedUser.status === 'online' ? 'Online' : 'Last seen recently'}
                   </p>
-                  <button
+                  {/* 🔥 Channel ID for complaint tracking */}
+                  {currentChannel && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <p className="text-gray-500 text-[10px] font-mono truncate max-w-[80px] md:max-w-[120px]">
+                        Channel ID: {currentChannel.id || currentChannel.cid?.split(':')[1] || 'N/A'}
+                      </p>
+                      <button
                     onClick={(e) => {
                       e.stopPropagation();
                       const channelId = currentChannel.id || currentChannel.cid?.split(':')[1] || '';
@@ -6046,12 +6255,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   </button>
                 </div>
               )}
+                  </>
+              )}
             </div>
           </div>
 
 
- {/* 🔥 FIXED: Transaction Status Banner with 15-minute countdown - ONLY shows after buyer accepts */}
-          {activeTransaction && activeTransaction.role === 'seller' && activeTransaction.status === 'pending' && isTradeTimerActive && (
+ {/* 🔥 Seller timer: ONLY when we have an active transaction (buyer has accepted invoice). Time from transaction.createdAt. */}
+          {activeTransaction && activeTransaction.role === 'seller' && (
             <TransactionCountdownBanner 
               activeTransaction={activeTransaction}
               setActiveTransaction={setActiveTransaction}
@@ -6154,6 +6365,27 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
 
           {/* Priority 1: Trade Timer for SELLER is handled by TransactionCountdownBanner in header */}
+          {(() => {
+            const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+              ? pendingTransaction
+              : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+            const showInitiateTrade = !activeTransaction && showSellerTradePrompt;
+            const showReleaseFunds = !!effectivePendingTxn;
+            if (typeof window !== 'undefined' && (showInitiateTrade || showReleaseFunds || activeTransaction)) {
+              console.log('🔍 [chat footer] UI decision', {
+                showInitiateTrade,
+                showReleaseFunds,
+                hasActiveTransaction: !!activeTransaction,
+                activeTransactionRole: activeTransaction?.role,
+                activeTransactionStatus: activeTransaction?.status,
+                showSellerTradePrompt,
+                hasPendingTransaction: !!pendingTransaction,
+                pendingStatus: pendingTransaction?.status,
+                effectivePendingTxn: !!effectivePendingTxn
+              });
+            }
+            return null;
+          })()}
           {!activeTransaction && showSellerTradePrompt ? (
             // Show "Ready to Initiate Trade" button only if no active transaction
             <div className="flex items-center justify-center z-[60] px-4">
@@ -6171,8 +6403,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </button>
               </div>
             </div>
-          ) : pendingTransaction && pendingTransaction.status !== 'cancelled' ? (
+          ) : (() => {
+            // Priority 2: BUYER only — Release Funds / Locked Transaction. Never show for seller (seller sees timer banner above).
+            const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+              ? pendingTransaction
+              : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+            return effectivePendingTxn && activeTransaction?.role !== 'seller';
+          })() ? (
             // Priority 2: Buyer with active transaction sees Release Funds (only if not cancelled)
+            (() => {
+              const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+                ? pendingTransaction
+                : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+              if (!effectivePendingTxn || activeTransaction?.role === 'seller') return null;
+              return (
             <div className="flex items-center justify-center z-[60] px-4">
               <div className="flex gap-2 items-center w-full">
                 <div className="flex items-center gap-1">
@@ -6180,7 +6424,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   <div className="flex-1 flex items-center gap-1">
                     <p className="text-white text-sm">Locked Transaction:</p>
                     <p className="text-gray-400 text-sm">
-                      ${pendingTransaction.amountUSD || tradeData?.accountPrice || pendingTransaction.amount || '0'} {(pendingTransaction.currency || tradeData?.paymentMethod || 'BTC').toUpperCase()}
+                      ${effectivePendingTxn.amountUSD || tradeData?.accountPrice || effectivePendingTxn.amount || '0'} {(effectivePendingTxn.currency || tradeData?.paymentMethod || 'BTC').toUpperCase()}
                     </p>
                   </div>
                 </div>
@@ -6188,9 +6432,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 <button
                   onClick={async () => {
                     // Fetch real backend transaction to get accurate token amount
-                    let tokenAmount = pendingTransaction?.amount || 0;
-                    let usdPrice = tradeData?.accountPrice || pendingTransaction?.amountUSD || pendingTransaction?.amount || 0;
-                    let currency = pendingTransaction?.currency || 'BTC';
+                    let tokenAmount = effectivePendingTxn?.amount || 0;
+                    let usdPrice = tradeData?.accountPrice || effectivePendingTxn?.amountUSD || effectivePendingTxn?.amount || 0;
+                    let currency = effectivePendingTxn?.currency || 'BTC';
 
                     try {
                       const activeCheck = await checkActiveTransactions();
@@ -6208,7 +6452,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
                     setAccountReviewData({
                       seller: selectedUser,
-                      transaction: pendingTransaction,
+                      transaction: effectivePendingTxn,
                       tradeData: tradeData,
                       accountDetails: {
                         platform: channelMetadata?.platform || tradeData?.socialAccount || selectedUser?.platform || 'Unknown',
@@ -6244,6 +6488,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </button>
               </div>
             </div>
+              );
+            })()
           ) : showRequestModal && pendingRequest ? (
             // Priority 3: BUYER (User1) sees Accept/Decline after SELLER initiates
             <div className="flex items-center justify-center z-[60] px-4">
@@ -6286,7 +6532,25 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           ) : showAcceptanceNotification && acceptanceData ? (
             // Priority 4: Show waiting states
             <div className="flex items-center justify-center z-[60] px-4">
-              {acceptanceData.isWaiting ? (
+              {acceptanceData.waitingForInvoiceAccept ? (
+                <div className="flex gap-2 items-center w-full bg-amber-500/10 rounded-full px-4 py-2 border border-amber-500/30">
+                  <Clock className="w-5 h-5 text-amber-500 flex-shrink-0 animate-pulse" />
+                  <div className="flex-1">
+                    <p className="text-white text-sm font-semibold">
+                      {acceptanceData.message}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAcceptanceNotification(false);
+                      setAcceptanceData(null);
+                    }}
+                    className="p-1 hover:bg-white/5 rounded-full transition-colors"
+                  >
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                </div>
+              ) : acceptanceData.isWaiting ? (
                 <div className="flex gap-2 items-center w-full bg-blue-500/10 rounded-full px-4 py-2 border border-blue-500/30">
                   <Clock className="w-5 h-5 text-blue-500 flex-shrink-0 animate-pulse" />
                   <div className="flex-1">
@@ -6403,57 +6667,97 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
          
 
-          {/* 🔥 PERMANENT: Account Info Banner - Always visible when trading */}
-          {/* 🔥 FIX: Sources data from channel metadata (persisted) so it survives refresh */}
-          {selectedUser && (
+          {/* 🔥 PERMANENT: Account Info Banner - ONLY when there is an active invoice or transaction (hide when Unknown/N/A after refresh) */}
+          {selectedUser && (() => {
+            const otherName = selectedUser.name || selectedUser.displayName || 'User';
+            // Use role from loadChannel (includes cameFromTable fix); fallback to local computation
+            let isBuyer = accountCardIsBuyer;
+            if (isBuyer === null) {
+              const chMeta = currentChannel?.data?.metadata || {};
+              let channelCreatorId = toId(chMeta.initiator_id) ?? toId(currentChannel?.data?.created_by_id);
+              if (!channelCreatorId && currentChannel?.data?.name) {
+                try {
+                  const parts = currentChannel.data.name.split('|');
+                  if (parts.length > 1) channelCreatorId = toId(JSON.parse(parts[1]).initiator_id);
+                } catch (e) {}
+              }
+              const chatType = extractChatTypeFromChannelId(currentChannel?.id) || selectedUser.chatType || 'buy';
+              const creatorIdStr = channelCreatorId ? String(toId(channelCreatorId)) : null;
+              let isCreator = creatorIdStr && creatorIdStr === String(currentUserId);
+              let isReceiver = creatorIdStr && !isCreator;
+              const cameFromTable = !selectedUser?._channel;
+              if (cameFromTable && (chatType === 'buy' || chatType === 'sell')) {
+                isCreator = true;
+                isReceiver = false;
+              }
+              isBuyer = (chatType === 'buy' && isCreator) || (chatType === 'sell' && isReceiver);
+            }
+            return (
             <div className="mb-4 bg-[#1a1a1a]/80 backdrop-blur-sm max-w-[28rem] mx-auto rounded-lg border border-white/5 p-3 shadow-lg">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <h3 className="text-white font-semibold text-sm mb-2">
-                    {selectedUser.name || 'User'} <span className='text-sm font-medium text-gray-400'>has shown interest in purchasing your account </span>
+                    {isBuyer ? (
+                      <>You have shown interest in purchasing <span className="text-primary">{otherName}</span>&apos;s account</>
+                    ) : (
+                      <>{otherName} <span className='text-sm font-medium text-gray-400'>has shown interest in purchasing your account</span></>
+                    )}
                   </h3>
 
                   <div className="">
                     <p className="text-gray-400 text-xs font-medium mb-1.5 uppercase tracking-wider">Account Info:</p>
                     <div className="space-y-1.5">
-                      {(() => {
-                        // 🔥 FIX: Pull from persisted channel metadata first (survives refresh),
-                        // then component state, then selectedUser as fallback
-                        const chMeta = currentChannel?.data?.metadata || {};
-                        const platform = chMeta.platform || channelMetadata.platform || selectedUser?.platform || 'Unknown';
-                        const username = chMeta.accountUsername || channelMetadata.accountUsername || selectedUser?.accountUsername || 'N/A';
-                        const displayPrice = tradeData?.offerPrice || tradeData?.offer_amount ||
-                          chMeta.trade_price || chMeta.offer_amount ||
-                          selectedUser?.price;
-                        return (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-400 text-xs">Platform:</span>
-                              <span className="text-white font-medium text-xs capitalize">
-                                {platform !== 'Unknown' ? platform : 'Unknown'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-400 text-xs">Username:</span>
-                              <span className="text-white font-medium text-xs">
-                                {username !== 'N/A' ? username : 'N/A'}
-                              </span>
-                            </div>
-                            {displayPrice && displayPrice !== 'N/A' && (
-                              <div className="flex items-center gap-2 pt-1 border-t border-white/10">
-                                <span className="text-gray-400 text-xs">Price:</span>
-                                <span className="text-green-400 font-semibold text-xs">${displayPrice}</span>
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
+                      {!metadataResolved || isLoading ? (
+                        <div className="flex items-center gap-2 py-2">
+                          <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0" />
+                          <span className="text-gray-400 text-xs">Loading account details...</span>
+                        </div>
+                      ) : (
+                        (() => {
+                          const chMeta = currentChannel?.data?.metadata || {};
+                          const selectedUsername = selectedUser?.filters?.find(f => f.key === 'username' || f.key === 'channel_username')?.value ||
+                            selectedUser?.accountUsername || selectedUser?.username || selectedUser?.handle;
+                          // Priority: channelMetadata (computed; cameFromTable overrides) → selectedUser → tradeData → chMeta
+                          const platform = channelMetadata?.platform || selectedUser?.platform || tradeData?.socialAccount || chMeta.platform || 'Unknown';
+                          const username = channelMetadata?.accountUsername || selectedUsername || tradeData?.accountUsername || chMeta.accountUsername || 'N/A';
+                          const displayPrice = tradeData?.offerPrice || tradeData?.offer_amount ||
+                            chMeta.trade_price || chMeta.offer_amount ||
+                            selectedUser?.price;
+                          const hasValidPlatform = platform && platform !== 'Unknown';
+                          const hasValidUsername = username && username !== 'N/A';
+                          const hasValidPrice = displayPrice && displayPrice !== 'N/A';
+                          if (!hasValidPlatform && !hasValidUsername && !hasValidPrice) return null;
+                          return (
+                            <>
+                              {hasValidPlatform && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-400 text-xs">Platform:</span>
+                                  <span className="text-white font-medium text-xs capitalize">{platform}</span>
+                                </div>
+                              )}
+                              {hasValidUsername && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-400 text-xs">Username:</span>
+                                  <span className="text-white font-medium text-xs">{username}</span>
+                                </div>
+                              )}
+                              {hasValidPrice && (
+                                <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                                  <span className="text-gray-400 text-xs">Price:</span>
+                                  <span className="text-green-400 font-semibold text-xs">${displayPrice}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* 🔥 INLINE Credential Card - Display IN the chat area */}
           <CredentialCard />
@@ -6948,7 +7252,7 @@ const SellerInitiateModal = React.memo(({
     accountEmail: sellerTradeData?.accountEmail || '',
     emailPassword: sellerTradeData?.emailPassword || '',
     accountPassword: sellerTradeData?.accountPassword || '',
-    paymentMethod: sellerTradeData?.paymentMethod || 'BTC',
+    paymentMethod: sellerTradeData?.paymentMethod || 'USDT',
     paymentNetwork: sellerTradeData?.paymentNetwork || '',
     offerPrice: sellerTradeData?.offerPrice || ''
   }));
@@ -6963,7 +7267,7 @@ const SellerInitiateModal = React.memo(({
         accountEmail: sellerTradeData?.accountEmail || '',
         emailPassword: sellerTradeData?.emailPassword || '',
         accountPassword: sellerTradeData?.accountPassword || '',
-        paymentMethod: sellerTradeData?.paymentMethod || 'BTC',
+        paymentMethod: sellerTradeData?.paymentMethod || 'USDT',
         paymentNetwork: sellerTradeData?.paymentNetwork || '',
         offerPrice: sellerTradeData?.offerPrice || ''
       });
@@ -6975,14 +7279,28 @@ const SellerInitiateModal = React.memo(({
     return null;
   }
 
+  // 🔥 Determine if original email was provided during upload
+  const hasOriginalEmail = (() => {
+    const filters = selectedUser?.filters || [];
+    const metrics = selectedUser?.metrics || [];
+    const allData = [...filters, ...metrics];
+    const emailFilter = allData.find(f => f.key === 'original_email');
+    // Default to true if not found (backward compat for older accounts)
+    if (!emailFilter) return true;
+    return emailFilter.value === true || emailFilter.value === 'yes';
+  })();
+
   // 🔥 FIXED: Pass form data directly to parent handler with validation
   const handleFormSubmit = (e) => {
     e.preventDefault();
 
     // Validate required fields
     const errors = {};
-    if (!localFormData.accountEmail?.trim()) errors.accountEmail = 'Account email is required';
-    if (!localFormData.emailPassword?.trim()) errors.emailPassword = 'Email password is required';
+    // Only validate email fields if original email was available during upload
+    if (hasOriginalEmail) {
+      if (!localFormData.accountEmail?.trim()) errors.accountEmail = 'Account email is required';
+      if (!localFormData.emailPassword?.trim()) errors.emailPassword = 'Email password is required';
+    }
     if (!localFormData.accountPassword?.trim()) errors.accountPassword = 'Account password is required';
     if (!localFormData.paymentNetwork?.trim()) errors.paymentNetwork = 'Payment network is required';
     if (!localFormData.offerPrice || parseFloat(localFormData.offerPrice) <= 0) errors.offerPrice = 'Offer amount is required';
@@ -7056,38 +7374,42 @@ const SellerInitiateModal = React.memo(({
             </div>
 
             <div className="space-y-3">
-              {/* 🔥 FIXED: Use local state instead of parent state */}
-              <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
-                <label className="text-gray-400 text-sm">Account Original Email</label>
-                <input
-                  type="email"
-                  placeholder="Enter Account Email"
-                  value={localFormData.accountEmail}
-                  onChange={(e) => {
-                    setLocalFormData(prev => ({ ...prev, accountEmail: e.target.value }));
-                    if (fieldErrors.accountEmail) setFieldErrors(prev => ({ ...prev, accountEmail: '' }));
-                  }}
-                  className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.accountEmail ? 'border-red-500' : 'border-white/10'}`}
-                  autoComplete="off"
-                />
-                {fieldErrors.accountEmail && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.accountEmail}</p>}
-              </div>
+              {/* 🔥 FIXED: Only show email fields if original_email was 'yes' during upload */}
+              {hasOriginalEmail && (
+                <>
+                  <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
+                    <label className="text-gray-400 text-sm">Account Original Email</label>
+                    <input
+                      type="email"
+                      placeholder="Enter Account Email"
+                      value={localFormData.accountEmail}
+                      onChange={(e) => {
+                        setLocalFormData(prev => ({ ...prev, accountEmail: e.target.value }));
+                        if (fieldErrors.accountEmail) setFieldErrors(prev => ({ ...prev, accountEmail: '' }));
+                      }}
+                      className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.accountEmail ? 'border-red-500' : 'border-white/10'}`}
+                      autoComplete="off"
+                    />
+                    {fieldErrors.accountEmail && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.accountEmail}</p>}
+                  </div>
 
-              <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
-                <label className="text-gray-400 text-sm">Original Email Password</label>
-                <input
-                  type="password"
-                  placeholder="Enter Password"
-                  value={localFormData.emailPassword}
-                  onChange={(e) => {
-                    setLocalFormData(prev => ({ ...prev, emailPassword: e.target.value }));
-                    if (fieldErrors.emailPassword) setFieldErrors(prev => ({ ...prev, emailPassword: '' }));
-                  }}
-                  className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.emailPassword ? 'border-red-500' : 'border-white/10'}`}
-                  autoComplete="off"
-                />
-                {fieldErrors.emailPassword && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.emailPassword}</p>}
-              </div>
+                  <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
+                    <label className="text-gray-400 text-sm">Original Email Password</label>
+                    <input
+                      type="password"
+                      placeholder="Enter Password"
+                      value={localFormData.emailPassword}
+                      onChange={(e) => {
+                        setLocalFormData(prev => ({ ...prev, emailPassword: e.target.value }));
+                        if (fieldErrors.emailPassword) setFieldErrors(prev => ({ ...prev, emailPassword: '' }));
+                      }}
+                      className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.emailPassword ? 'border-red-500' : 'border-white/10'}`}
+                      autoComplete="off"
+                    />
+                    {fieldErrors.emailPassword && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.emailPassword}</p>}
+                  </div>
+                </>
+              )}
 
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
                 <label className="text-gray-400 text-sm">Social Account Password</label>
@@ -7116,7 +7438,7 @@ const SellerInitiateModal = React.memo(({
                     
                     // Image mapping for tokens
                     const imageMap = {
-                      btc: btc, eth: eth, usdt: usdt, usdc: usdt,
+                      btc: btc, eth: eth, usdt: usdt, usdc: usdc,
                       sol: solana, bnb: bnb, trx: tron,
                       bitcoin: btc, ethereum: eth, tether: usdt,
                       solana: solana, binance: bnb, tron: tron
@@ -7272,7 +7594,10 @@ const SellerInitiateModal = React.memo(({
                           { value: 'Base', label: 'Base' }
                         );
                       } else if (localFormData.paymentMethod === 'USDT') {
-                        networkOptions.push({ value: 'Tron (TRC20)', label: 'Tron (TRC20)' });
+                        networkOptions.push(
+                          { value: 'Base', label: 'Base' },
+                          { value: 'Ethereum (ERC20)', label: 'Ethereum (ERC20)' }
+                        );
                       } else if (localFormData.paymentMethod === 'USDC') {
                         networkOptions.push(
                           { value: 'Ethereum (ERC20)', label: 'Ethereum (ERC20)' },

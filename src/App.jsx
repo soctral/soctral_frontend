@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { UserProvider } from "./context/userContext";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Onboarding from "./components/Onboarding";
-import SignInMobile from "./layouts/SignInMobile";
-import SignUpMobile from "./layouts/SignUpMobile";
-import SignUpDesktop from "./layouts/SignUpDesktop";
-import SignInDesktop from "./layouts/SignInDesktop";
-import MobileHomepage from "./layouts/mobilehomepage"
 import DesktopOnboardingSteps from "./components/StepOneDesktop";
 import MobileOnboardingSteps from "./components/StepOneMobile";
+import { UserProvider } from "./context/userContext";
 import Homepage from "./layouts/Homepage";
+import SignInDesktop from "./layouts/SignInDesktop";
+import SignInMobile from "./layouts/SignInMobile";
+import SignUpDesktop from "./layouts/SignUpDesktop";
+import SignUpMobile from "./layouts/SignUpMobile";
+import MobileHomepage from "./layouts/mobilehomepage";
 import './services/tradeStateMigration';
+
+
 
 // Enhanced responsive detection that accounts for user agent and viewport
 const useResponsive = () => {
@@ -140,6 +142,7 @@ function App() {
     <UserProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
+         
           <Route 
             path="/" 
             element={
@@ -179,6 +182,7 @@ function App() {
               />
             } 
           />
+          <Route path="*" element={<Navigate to="/homepage" replace />} />
         </Routes>
       </BrowserRouter>
     </UserProvider>
