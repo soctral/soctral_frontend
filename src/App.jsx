@@ -9,9 +9,7 @@ import SignInDesktop from "./layouts/SignInDesktop";
 import SignInMobile from "./layouts/SignInMobile";
 import SignUpDesktop from "./layouts/SignUpDesktop";
 import SignUpMobile from "./layouts/SignUpMobile";
-import Legal from "./layouts/legal";
 import MobileHomepage from "./layouts/mobilehomepage";
-import Privacy from "./layouts/privacy";
 import './services/tradeStateMigration';
 
 
@@ -184,8 +182,6 @@ function App() {
               />
             } 
           />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route path="/legal" element={<Legal />} />
           <Route path="*" element={<Navigate to="/homepage" replace />} />
         </Routes>
       </BrowserRouter>
