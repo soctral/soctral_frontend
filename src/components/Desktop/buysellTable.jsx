@@ -98,6 +98,7 @@ const PLATFORM_ICONS = {
   steam: steam,
   rumble: rumble,
   qoura: qoura,
+  quora: qoura,
   twitch: twitch,
   tumblr: tumblr,
 };
@@ -189,8 +190,6 @@ const BuySellTable = ({
 
 
   const handleViewAccountMetrics = (account) => {
-    // console.log('👁️ BuySellTable: View Account Metrics clicked for:', account);
-
     const accountData = {
       platform: account.platform,
       metrics: account.metrics,
@@ -198,11 +197,32 @@ const BuySellTable = ({
       accountId: account.id
     };
 
-    // console.log('📦 BuySellTable: Prepared account data:', accountData);
+    // For sell tab (buy orders), include all extra details
+    if (activeTab === 'sell') {
+      accountData.buyer = account.buyer;
+      accountData.maxPrice = account.maxPrice;
+      accountData.currency = account.currency;
+      accountData.description = account.description;
+      accountData.isUrgent = account.isUrgent;
+      accountData.requirements = account.requirements;
+      accountData.followers = account.followers;
+      accountData.rating = account.rating;
+      accountData.accountUsername = account.accountUsername;
+      accountData.isBuyOrder = true;
+    } else {
+      // For buy tab (sell orders), include seller details
+      accountData.seller = account.seller;
+      accountData.price = account.price;
+      accountData.currency = account.currency;
+      accountData.description = account.description;
+      accountData.followers = account.followers;
+      accountData.rating = account.rating;
+      accountData.accountUsername = account.accountUsername;
+      accountData.accountType = account.accountType;
+      accountData.isBuyOrder = false;
+    }
 
-    // Primary method: Use callback if provided
     if (onViewAccountMetrics) {
-      // console.log('✅ BuySellTable: Calling onViewAccountMetrics callback');
       onViewAccountMetrics(accountData);
     } else {
       console.warn('⚠️ onViewAccountMetrics callback not available');
@@ -1104,15 +1124,13 @@ const BuySellTable = ({
                                     </span>
                                   ) : 'Initiate Trade'}
                                 </button>
-                                {activeTab === 'buy' && (
-                                  <button
+                                <button
                                     className="py-[12px] px-[30px] font-medium bg-[#2c2a2f] hover:bg-[#3c3a3f] text-white rounded-full text-xs transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105"
                                     onClick={() => handleViewAccountMetrics(row)}
                                     aria-label="View metrics"
                                   >
                                     View Metrics
                                   </button>
-                                )}
                               </div>
                             </td>
                           </tr>
@@ -1209,24 +1227,13 @@ const BuySellTable = ({
                       </div>
 
                       <div className="flex flex-col pt-[6px] justify-between items-end ml-2">
-                        {activeTab === 'buy' && (
-                          <button
+                        <button
                             onClick={() => handleViewAccountMetrics(row)}
                             className="w-full py-2 px-3 font-medium bg-[#2c2a2f] hover:bg-[#3c3a3f] text-white rounded-full text-[10px] transition-all duration-200 mb-2 whitespace-nowrap"
                             aria-label="View metrics"
                           >
                             View Metrics
                           </button>
-                        )}
-
-                        {/* {activeTab === 'sell' && (
-            <button
-              className="w-full py-2 px-3 font-medium bg-[#2c2a2f] hover:bg-[#3c3a3f] text-white rounded-full text-[10px] transition-all duration-200 mb-2 whitespace-nowrap"
-              aria-label="View details"
-            >
-              View Details
-            </button>
-          )} */}
 
                         <button
                           onClick={() => handleInitiateTrade(activeTab === 'buy' ? row.seller : row.buyer, row)}

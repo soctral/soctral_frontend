@@ -14,6 +14,7 @@ import ug2 from "../../assets/ug2.png";
 import ug3 from "../../assets/ug3.png";
 import ug4 from "../../assets/ug4.jpg";
 import usdt from "../../assets/usdt.svg";
+import usdc from "../../assets/usdc.svg";
 import { useUser } from '../../context/userContext';
 import apiService from '../../services/api.js';
 import { createChannelMetadata, getChannelMetadata, setChannelMetadata as persistChannelMetadata } from '../../services/channelMetadataService';
@@ -156,7 +157,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     accountEmail: '',
     emailPassword: '',
     accountPassword: '',
-    paymentMethod: 'BTC',
+    paymentMethod: 'USDT',
     paymentNetwork: '',
     offerPrice: ''
   });
@@ -3761,12 +3762,25 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       console.log('Form Data:', tradeData);
 
       // Step 1: Validate all required fields are filled (using passed data)
-      if (!tradeData.accountEmail ||
-        !tradeData.emailPassword ||
-        !tradeData.accountPassword ||
-        !tradeData.paymentMethod ||
-        !tradeData.paymentNetwork ||
-        !tradeData.offerPrice) {
+      // 🔥 Check if original email was provided during upload
+      const hasOriginalEmail = (() => {
+        const filters = selectedUser?.filters || [];
+        const metrics = selectedUser?.metrics || [];
+        const allData = [...filters, ...metrics];
+        const emailFilter = allData.find(f => f.key === 'original_email');
+        if (!emailFilter) return true; // backward compat
+        return emailFilter.value === true || emailFilter.value === 'yes';
+      })();
+
+      const missingFields = [];
+      if (hasOriginalEmail && !tradeData.accountEmail) missingFields.push('accountEmail');
+      if (hasOriginalEmail && !tradeData.emailPassword) missingFields.push('emailPassword');
+      if (!tradeData.accountPassword) missingFields.push('accountPassword');
+      if (!tradeData.paymentMethod) missingFields.push('paymentMethod');
+      if (!tradeData.paymentNetwork) missingFields.push('paymentNetwork');
+      if (!tradeData.offerPrice) missingFields.push('offerPrice');
+
+      if (missingFields.length > 0) {
         setErrorModalData({
           message: 'Please fill in all required fields'
         });
@@ -7238,7 +7252,7 @@ const SellerInitiateModal = React.memo(({
     accountEmail: sellerTradeData?.accountEmail || '',
     emailPassword: sellerTradeData?.emailPassword || '',
     accountPassword: sellerTradeData?.accountPassword || '',
-    paymentMethod: sellerTradeData?.paymentMethod || 'BTC',
+    paymentMethod: sellerTradeData?.paymentMethod || 'USDT',
     paymentNetwork: sellerTradeData?.paymentNetwork || '',
     offerPrice: sellerTradeData?.offerPrice || ''
   }));
@@ -7253,7 +7267,7 @@ const SellerInitiateModal = React.memo(({
         accountEmail: sellerTradeData?.accountEmail || '',
         emailPassword: sellerTradeData?.emailPassword || '',
         accountPassword: sellerTradeData?.accountPassword || '',
-        paymentMethod: sellerTradeData?.paymentMethod || 'BTC',
+        paymentMethod: sellerTradeData?.paymentMethod || 'USDT',
         paymentNetwork: sellerTradeData?.paymentNetwork || '',
         offerPrice: sellerTradeData?.offerPrice || ''
       });
@@ -7265,14 +7279,28 @@ const SellerInitiateModal = React.memo(({
     return null;
   }
 
+  // 🔥 Determine if original email was provided during upload
+  const hasOriginalEmail = (() => {
+    const filters = selectedUser?.filters || [];
+    const metrics = selectedUser?.metrics || [];
+    const allData = [...filters, ...metrics];
+    const emailFilter = allData.find(f => f.key === 'original_email');
+    // Default to true if not found (backward compat for older accounts)
+    if (!emailFilter) return true;
+    return emailFilter.value === true || emailFilter.value === 'yes';
+  })();
+
   // 🔥 FIXED: Pass form data directly to parent handler with validation
   const handleFormSubmit = (e) => {
     e.preventDefault();
 
     // Validate required fields
     const errors = {};
-    if (!localFormData.accountEmail?.trim()) errors.accountEmail = 'Account email is required';
-    if (!localFormData.emailPassword?.trim()) errors.emailPassword = 'Email password is required';
+    // Only validate email fields if original email was available during upload
+    if (hasOriginalEmail) {
+      if (!localFormData.accountEmail?.trim()) errors.accountEmail = 'Account email is required';
+      if (!localFormData.emailPassword?.trim()) errors.emailPassword = 'Email password is required';
+    }
     if (!localFormData.accountPassword?.trim()) errors.accountPassword = 'Account password is required';
     if (!localFormData.paymentNetwork?.trim()) errors.paymentNetwork = 'Payment network is required';
     if (!localFormData.offerPrice || parseFloat(localFormData.offerPrice) <= 0) errors.offerPrice = 'Offer amount is required';
@@ -7346,38 +7374,42 @@ const SellerInitiateModal = React.memo(({
             </div>
 
             <div className="space-y-3">
-              {/* 🔥 FIXED: Use local state instead of parent state */}
-              <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
-                <label className="text-gray-400 text-sm">Account Original Email</label>
-                <input
-                  type="email"
-                  placeholder="Enter Account Email"
-                  value={localFormData.accountEmail}
-                  onChange={(e) => {
-                    setLocalFormData(prev => ({ ...prev, accountEmail: e.target.value }));
-                    if (fieldErrors.accountEmail) setFieldErrors(prev => ({ ...prev, accountEmail: '' }));
-                  }}
-                  className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.accountEmail ? 'border-red-500' : 'border-white/10'}`}
-                  autoComplete="off"
-                />
-                {fieldErrors.accountEmail && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.accountEmail}</p>}
-              </div>
+              {/* 🔥 FIXED: Only show email fields if original_email was 'yes' during upload */}
+              {hasOriginalEmail && (
+                <>
+                  <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
+                    <label className="text-gray-400 text-sm">Account Original Email</label>
+                    <input
+                      type="email"
+                      placeholder="Enter Account Email"
+                      value={localFormData.accountEmail}
+                      onChange={(e) => {
+                        setLocalFormData(prev => ({ ...prev, accountEmail: e.target.value }));
+                        if (fieldErrors.accountEmail) setFieldErrors(prev => ({ ...prev, accountEmail: '' }));
+                      }}
+                      className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.accountEmail ? 'border-red-500' : 'border-white/10'}`}
+                      autoComplete="off"
+                    />
+                    {fieldErrors.accountEmail && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.accountEmail}</p>}
+                  </div>
 
-              <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
-                <label className="text-gray-400 text-sm">Original Email Password</label>
-                <input
-                  type="password"
-                  placeholder="Enter Password"
-                  value={localFormData.emailPassword}
-                  onChange={(e) => {
-                    setLocalFormData(prev => ({ ...prev, emailPassword: e.target.value }));
-                    if (fieldErrors.emailPassword) setFieldErrors(prev => ({ ...prev, emailPassword: '' }));
-                  }}
-                  className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.emailPassword ? 'border-red-500' : 'border-white/10'}`}
-                  autoComplete="off"
-                />
-                {fieldErrors.emailPassword && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.emailPassword}</p>}
-              </div>
+                  <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
+                    <label className="text-gray-400 text-sm">Original Email Password</label>
+                    <input
+                      type="password"
+                      placeholder="Enter Password"
+                      value={localFormData.emailPassword}
+                      onChange={(e) => {
+                        setLocalFormData(prev => ({ ...prev, emailPassword: e.target.value }));
+                        if (fieldErrors.emailPassword) setFieldErrors(prev => ({ ...prev, emailPassword: '' }));
+                      }}
+                      className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.emailPassword ? 'border-red-500' : 'border-white/10'}`}
+                      autoComplete="off"
+                    />
+                    {fieldErrors.emailPassword && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.emailPassword}</p>}
+                  </div>
+                </>
+              )}
 
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
                 <label className="text-gray-400 text-sm">Social Account Password</label>
@@ -7406,7 +7438,7 @@ const SellerInitiateModal = React.memo(({
                     
                     // Image mapping for tokens
                     const imageMap = {
-                      btc: btc, eth: eth, usdt: usdt, usdc: usdt,
+                      btc: btc, eth: eth, usdt: usdt, usdc: usdc,
                       sol: solana, bnb: bnb, trx: tron,
                       bitcoin: btc, ethereum: eth, tether: usdt,
                       solana: solana, binance: bnb, tron: tron
@@ -7562,7 +7594,10 @@ const SellerInitiateModal = React.memo(({
                           { value: 'Base', label: 'Base' }
                         );
                       } else if (localFormData.paymentMethod === 'USDT') {
-                        networkOptions.push({ value: 'Tron (TRC20)', label: 'Tron (TRC20)' });
+                        networkOptions.push(
+                          { value: 'Base', label: 'Base' },
+                          { value: 'Ethereum (ERC20)', label: 'Ethereum (ERC20)' }
+                        );
                       } else if (localFormData.paymentMethod === 'USDC') {
                         networkOptions.push(
                           { value: 'Ethereum (ERC20)', label: 'Ethereum (ERC20)' },
