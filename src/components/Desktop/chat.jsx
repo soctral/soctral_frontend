@@ -561,10 +561,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         isFromCancelRequest: true
                       };
                       
-                      // Calculate transaction fee
-                      const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                      tradeInitDataForBuyer.transactionFee = transactionFee;
-                      tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
+                      // Use fee from backend or fallback to client calc
+                      const feeUSD = tradeInitDataForBuyer.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
+                      tradeInitDataForBuyer.transactionFee = feeUSD;
+                      tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + feeUSD;
                       
                       console.log('✅ BUYER: Active transaction from cancel request - setting state only (no auto-open modal)');
                       setTradeInitData(tradeInitDataForBuyer);
@@ -668,10 +668,12 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         }
                       };
                       
-                      // Calculate transaction fee (2.5% of account price)
-                      const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-                      tradeInitDataForBuyer.transactionFee = transactionFee;
-                      tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
+                      // Use fee from backend (trade_init_data) or fallback to client calc
+                      const feeUSD = tradeData.fee_usd ?? tradeData.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
+                      const totalAmount = tradeData.total_amount_usd ?? tradeData.totalAmount ?? (tradeInitDataForBuyer.accountPrice + feeUSD);
+                      tradeInitDataForBuyer.transactionFee = feeUSD;
+                      tradeInitDataForBuyer.feeUSD = feeUSD;
+                      tradeInitDataForBuyer.totalAmount = totalAmount;
                       
                       console.log('✅ BUYER: Showing Accept/Decline with data:', tradeInitDataForBuyer);
                       
@@ -1779,6 +1781,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           if (shouldShowAcceptDecline && hasActiveInvoiceMatchingChannel && (!cameFromTable || invMatchesSelectedAccount)) {
             const price = inv.amountUSD ?? inv.amount ?? inv.price ?? selectedUser?.price;
             const priceForDisplay = (price != null && price !== '' && Number(price) >= 0) ? String(Number(price)) : 'N/A';
+            const feeUSD = inv.companyFeeUSD ?? inv.feeUSD ?? 0;
+            const totalAmount = inv.totalAmountUSD ?? (Number(price) || 0) + feeUSD;
             setPendingRequest({
               user: {
                 ...selectedUser,
@@ -1792,7 +1796,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               channel: channel,
               isNewAccount: false,
               wasDeleted: false,
-              invoiceId: inv._id || inv.id
+              invoiceId: inv._id || inv.id,
+              tradeData: {
+                accountPrice: Number(price) || 0,
+                feeUSD,
+                totalAmount,
+                invoiceId: inv._id || inv.id,
+                paymentMethod: inv.paymentMethod ?? selectedUser?.currency,
+                paymentNetwork: inv.paymentNetwork,
+                platform: inv.platform ?? selectedUser?.platform,
+                accountUsername: inv.accountUsername ?? selectedUser?.accountUsername,
+                seller: { name: selectedUser?.name || selectedUser?.displayName || 'Seller', ...selectedUser }
+              }
             });
             setShowRequestModal(true);
           }
@@ -2020,9 +2035,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               }
             };
 
-            const transactionFee = tradeInitDataForBuyer.accountPrice * 0.025;
-            tradeInitDataForBuyer.transactionFee = transactionFee;
-            tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + transactionFee;
+            const feeUSD = parsedTradeData.fee_usd ?? parsedTradeData.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
+            const totalAmount = parsedTradeData.total_amount_usd ?? parsedTradeData.totalAmount ?? (tradeInitDataForBuyer.accountPrice + feeUSD);
+            tradeInitDataForBuyer.transactionFee = feeUSD;
+            tradeInitDataForBuyer.feeUSD = feeUSD;
+            tradeInitDataForBuyer.totalAmount = totalAmount;
 
             console.log('✅ BUYER: Showing Accept/Decline from channel history:', tradeInitDataForBuyer);
 
@@ -2685,13 +2702,15 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         accountUsername: pendingRequest.user.accountUsername || currentChannel?.data?.metadata?.accountUsername || channelMetadata?.accountUsername || 'N/A',
         paymentMethod: pendingRequest.user.currency || 'BTC',
         accountPrice: parseFloat(pendingRequest.user.price) || 0,
-        transactionFee: (parseFloat(pendingRequest.user.price) || 0) * 0.025,
+        transactionFee: pendingRequest.tradeData?.feeUSD ?? (parseFloat(pendingRequest.user.price) || 0) * 0.025,
+        feeUSD: pendingRequest.tradeData?.feeUSD,
+        totalAmount: pendingRequest.tradeData?.totalAmount,
         sellOrderId: pendingRequest.user.accountId || currentChannel?.data?.metadata?.sellOrderId || currentChannel?.data?.metadata?.accountId,
         sellerId: pendingRequest.user.id || pendingRequest.user._id,
         platform: pendingRequest.user.platform || currentChannel?.data?.metadata?.platform || channelMetadata?.platform || 'Unknown',
       };
 
-      // Ensure totalAmount is calculated
+      // Ensure totalAmount is calculated (use backend value when available)
       if (!trade.totalAmount) {
         trade.totalAmount = (trade.accountPrice || 0) + (trade.transactionFee || 0);
       }
@@ -4057,13 +4076,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           console.log('🔑 Seller ID:', sellerId);
           console.log('🔑 Buyer ID:', buyerId);
           
+          // 🔥 Fee and total from invoice response (backend-calculated)
+          const inv = response.transaction || response.data || {};
+          const feeUSD = inv.companyFeeUSD ?? inv.feeUSD ?? 0;
+          const totalAmountUSD = inv.totalAmountUSD ?? (parseFloat(tradeData.offerPrice) || 0) + feeUSD;
+
           // 🔥 CRITICAL: Use custom field to store trade data (Stream Chat preserves this)
           const tradeInitData = {
             trade_initiated: true,
-            transaction_id: response.transaction?._id || response.data?._id,
+            transaction_id: inv._id || inv.id,
             seller_id: sellerId,
             buyer_id: buyerId,
             offer_amount: parseFloat(tradeData.offerPrice),
+            fee_usd: feeUSD,
+            total_amount_usd: totalAmountUSD,
             payment_method: currency,
             payment_network: paymentNetwork,
             initiated_at: new Date().toISOString(),
