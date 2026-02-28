@@ -6,6 +6,42 @@ import Warning from "../assets/warning.png";
 import GoogleIcon from "../assets/google.png";
 import AppleIcon from "../assets/apple.png";
 
+// Defined outside to avoid new component identity on every render (fixes input lag)
+const PasswordStrengthIndicator = ({ password, passwordStrength }) => {
+  if (!password) return null;
+  const requirements = [
+    { met: password.length >= 8, text: "Minimum Of 8 Characters" },
+    { met: /[A-Z]/.test(password), text: "At least One Uppercase" },
+    { met: /[a-z]/.test(password), text: "At least One Lowercase" },
+    { met: /[!@#$%^&*(),.?":{}|<>]/.test(password), text: "At least One Special Character" },
+    { met: /[0-9]/.test(password), text: "At least One Number" }
+  ];
+  const percentage = (passwordStrength / 5) * 100;
+  return (
+    <div className="mt-2">
+      <div className="w-full bg-black rounded-full h-2 mb-2 border-2 border-purple-600">
+        <div
+          className={`h-1 rounded-full transition-all duration-300 ${
+            passwordStrength < 2 ? "bg-red-500" :
+            passwordStrength < 4 ? "bg-yellow-500" : "bg-green-500"
+          }`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <div className="space-y-1">
+        {requirements.map((req, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${req.met ? 'bg-green-500' : 'bg-gray-500'}`} />
+            <p className={`text-xs ${req.met ? 'text-green-400' : 'text-gray-400'}`}>
+              {req.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const SignUp = () => {
   const navigate = useNavigate();
   const {
@@ -29,6 +65,9 @@ const SignUp = () => {
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [countdown, setCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  // Local state for step 4 only — avoids context dispatch on every keystroke (fixes lag)
+  const [localPassword, setLocalPassword] = useState("");
+  const [localConfirmPassword, setLocalConfirmPassword] = useState("");
 
   // Countdown timer for OTP
   useEffect(() => {
@@ -51,16 +90,33 @@ const SignUp = () => {
     }
   }, [signupStep]);
 
+  // Sync local password state when entering step 4
+  useEffect(() => {
+    if (signupStep === 4) {
+      setLocalPassword(signupData.password);
+      setLocalConfirmPassword(signupData.confirmPassword);
+      evaluatePasswordStrength(signupData.password);
+    }
+  }, [signupStep]);
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
-    
+    // Step 4: keep password/confirmPassword in local state only to avoid context lag
+    if (signupStep === 4 && (name === "password" || name === "confirmPassword")) {
+      if (name === "password") {
+        setLocalPassword(value);
+        evaluatePasswordStrength(value);
+      } else {
+        setLocalConfirmPassword(value);
+      }
+      if (error) clearError();
+      return;
+    }
     updateSignupData({ [name]: newValue });
-    
     if (name === "password") {
       evaluatePasswordStrength(value);
     }
-    
     if (error) {
       clearError();
     }
@@ -112,10 +168,9 @@ const SignUp = () => {
   };
 
   const isStep4Valid = () => {
-    return signupData.password.length >= 8 && 
-           signupData.confirmPassword.length >= 8 && 
-           signupData.password === signupData.confirmPassword &&
-           passwordStrength >= 5;
+    const pwd = signupStep === 4 ? localPassword : signupData.password;
+    const conf = signupStep === 4 ? localConfirmPassword : signupData.confirmPassword;
+    return pwd.length >= 8 && conf.length >= 8 && pwd === conf && passwordStrength >= 5;
   };
 
   const isStep5Valid = () => {
@@ -152,45 +207,6 @@ const SignUp = () => {
       setSignupStep(newStep);
       setIsTransitioning(false);
     }, 200);
-  };
-
-  // Password strength indicator component
-  const PasswordStrengthIndicator = () => {
-    const requirements = [
-      { met: signupData.password.length >= 8, text: "Minimum Of 8 Characters" },
-      { met: /[A-Z]/.test(signupData.password), text: "At least One Uppercase" },
-      { met: /[a-z]/.test(signupData.password), text: "At least One Lowercase" },
-      { met: /[!@#$%^&*(),.?":{}|<>]/.test(signupData.password), text: "At least One Special Character" },
-      { met: /[0-9]/.test(signupData.password), text: "At least One Number" }
-    ];
-
-    if (!signupData.password) return null;
-
-    const percentage = (passwordStrength / 5) * 100;
-
-    return (
-      <div className="mt-2">
-        <div className="w-full bg-black rounded-full h-2 mb-2 border-2 border-purple-600">
-          <div 
-            className={`h-1 rounded-full transition-all duration-300 ${
-              passwordStrength < 2 ? "bg-red-500" : 
-              passwordStrength < 4 ? "bg-yellow-500" : "bg-green-500"
-            }`}
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-        <div className="space-y-1">
-          {requirements.map((req, index) => (
-            <div key={index} className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full ${req.met ? 'bg-green-500' : 'bg-gray-500'}`} />
-              <p className={`text-xs ${req.met ? 'text-green-400' : 'text-gray-400'}`}>
-                {req.text}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
   };
 
   const handleSubmitStep1 = async (e) => {
@@ -252,8 +268,7 @@ const handleSubmitStep2 = async (e) => {
   const handleSubmitStep4 = async (e) => {
     e.preventDefault();
     if (!isStep4Valid()) return;
-    
-    // Move to next step - password will be used in final signup
+    updateSignupData({ password: localPassword, confirmPassword: localConfirmPassword });
     transitionToStep(5);
   };
 
@@ -643,7 +658,7 @@ const handleSubmitStep2 = async (e) => {
                       <input
                         type={showPassword ? "text" : "password"}
                         name="password"
-                        value={signupData.password}
+                        value={localPassword}
                         onChange={handleInputChange}
                         placeholder="Create a password"
                         className="w-full py-4 rounded-full pl-4 pr-10 border border-gray-400 bg-black text-white placeholder-gray-400 outline-none focus:border-white text-sm transition-colors"
@@ -660,7 +675,7 @@ const handleSubmitStep2 = async (e) => {
                         }
                       </button>
                     </div>
-                    <PasswordStrengthIndicator />
+                    <PasswordStrengthIndicator password={localPassword} passwordStrength={passwordStrength} />
                   </div>
 
                   <div>
@@ -671,7 +686,7 @@ const handleSubmitStep2 = async (e) => {
                       <input
                         type={showConfirmPassword ? "text" : "password"}
                         name="confirmPassword"
-                        value={signupData.confirmPassword}
+                        value={localConfirmPassword}
                         onChange={handleInputChange}
                         placeholder="Confirm your password"
                         className="w-full py-4 rounded-full pl-4 pr-10 border border-gray-400 bg-black text-white placeholder-gray-400 outline-none focus:border-white text-sm transition-colors"
@@ -688,10 +703,10 @@ const handleSubmitStep2 = async (e) => {
                         }
                       </button>
                     </div>
-                    {signupData.confirmPassword && signupData.password !== signupData.confirmPassword && (
+                    {localConfirmPassword && localPassword !== localConfirmPassword && (
                       <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
                     )}
-                    {signupData.confirmPassword && signupData.password === signupData.confirmPassword && signupData.password && (
+                    {localConfirmPassword && localPassword === localConfirmPassword && localPassword && (
                       <p className="text-green-400 text-xs mt-1">Passwords match</p>
                     )}
                   </div>
