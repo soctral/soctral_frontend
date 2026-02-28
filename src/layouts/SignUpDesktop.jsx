@@ -110,7 +110,8 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
       clearError();
       setLocalError(null);
     };
-  }, [clearError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -130,8 +131,13 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     if (name === "password") {
       evaluatePasswordStrength(value);
     }
+    
+    // Clear errors when user starts typing — only if there's an error to clear
+    if (contextError) clearError();
+    if (localError) setLocalError(null);
     clearError();
     setLocalError(null);
+
   };
 
   const evaluatePasswordStrength = (password) => {
