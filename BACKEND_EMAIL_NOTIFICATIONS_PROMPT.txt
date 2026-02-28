@@ -1,0 +1,70 @@
+BACKEND: TRADE EMAIL NOTIFICATIONS PROMPT
+==========================================
+
+Implement email notifications for the trade flow. Send emails from your existing API handlers (no new "notify email" endpoints). Each email must include the username of the person who performed the action and be sent to the correct recipient email(s).
+
+DATA TO INCLUDE:
+- Actor username: The display name or username of the user who performed the action.
+- Recipient email(s): Resolve from your user records using the recipient user ID(s) for each event.
+
+EMAIL COPY STYLE:
+Use the pattern: "{actor_username} has {action description}. {next step or status}."
+Example: "Alex has sent you an invoice for $50. Waiting for you to accept the invoice."
+
+
+EVENTS TO IMPLEMENT:
+--------------------
+
+1. TRADE INITIATED (from homepage)
+   When: Channel is created or metadata is first set with a new trade initiation (initiator_id + chatType).
+   - Buyer initiated (e.g. chatType = buy): Send to SELLER's email.
+     Copy: "{buyer_username} has initiated a trade with you. Check your chat to respond."
+   - Seller initiated (e.g. chatType = sell): Send to BUYER's email.
+     Copy: "{seller_username} has initiated a trade with you. Check your chat to respond."
+   Use initiator_id and chatType (and participantIds) to determine who is buyer/seller; resolve actor username and recipient email.
+
+2. SELLER SENT INVOICE
+   When: Invoice is successfully created (e.g. in the handler for your create-invoice endpoint).
+   Send to: BUYER's email.
+   Copy: "{seller_username} has sent you an invoice for {amount} {currency}. Waiting for you to accept the invoice."
+   Include invoice amount and currency; resolve seller username and buyer email from invoice/user data.
+
+3. BUYER ACCEPTED INVOICE
+   When: Invoice is accepted (e.g. in the handler for your accept-invoice endpoint).
+   Send to: SELLER's email.
+   Copy: "{buyer_username} has accepted your invoice. Complete the trade and release funds when ready."
+   Resolve buyer username and seller email.
+
+4. BUYER RELEASED FUNDS (trade completed)
+   When: Funds are recorded as released (e.g. in the handler for your release-funds endpoint).
+   Send to: BOTH buyer and seller emails.
+   Copy: "Trade completed. {buyer_username} has released the funds. The trade is complete."
+   Resolve both users' emails and include buyer_username in the copy.
+
+5. TRADE CANCELLED
+   When: A trade/transaction is cancelled (e.g. in the handler for your cancel-trade or cancel-transaction endpoint).
+   Send to: The other party (or both).
+   Copy: "{actor_username} has cancelled the trade."
+   Resolve actor username and recipient email(s).
+
+6. INVOICE REJECTED (declined)
+   When: Invoice is declined (e.g. in the handler for your decline-invoice endpoint).
+   Send to: SELLER's email.
+   Copy: "{buyer_username} has declined your invoice."
+   Resolve buyer username and seller email.
+
+
+SUMMARY TABLE:
+--------------
+| Event              | Recipient(s)   | Copy pattern |
+|--------------------|----------------|--------------|
+| Buyer initiates    | Seller         | {buyer_username} has initiated a trade. Check your chat to respond. |
+| Seller initiates   | Buyer          | {seller_username} has initiated a trade. Check your chat to respond. |
+| Seller sent invoice| Buyer          | {seller_username} has sent you an invoice. Waiting for you to accept. |
+| Buyer accepted     | Seller         | {buyer_username} has accepted your invoice. Complete the trade when ready. |
+| Funds released     | Buyer + Seller | Trade completed. {buyer_username} has released the funds. |
+| Trade cancelled    | Other / both   | {actor_username} has cancelled the trade. |
+| Invoice rejected   | Seller         | {buyer_username} has declined your invoice. |
+
+
+Implement by sending (or queuing) emails inside the existing handlers for: channel/metadata create or update (initiation), create invoice, accept invoice, release funds, cancel trade, and decline invoice. Resolve username (for the actor in the copy) and email (for the recipient) from your user store for each notification.
