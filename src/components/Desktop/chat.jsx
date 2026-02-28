@@ -561,10 +561,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         isFromCancelRequest: true
                       };
                       
-                      // Use fee from backend or fallback to client calc
-                      const feeUSD = tradeInitDataForBuyer.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
-                      tradeInitDataForBuyer.transactionFee = feeUSD;
-                      tradeInitDataForBuyer.totalAmount = tradeInitDataForBuyer.accountPrice + feeUSD;
+                      // Use transaction fee from backend (gas + company) or fallback
+                      const transactionFee = activeTxn.transactionFeeUSD ?? activeTxn.company?.feeUSD ?? tradeInitDataForBuyer.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
+                      tradeInitDataForBuyer.transactionFee = transactionFee;
+                      tradeInitDataForBuyer.feeUSD = transactionFee;
+                      tradeInitDataForBuyer.totalAmount = (activeTxn.amountUSD || tradeInitDataForBuyer.accountPrice) + transactionFee;
                       
                       console.log('✅ BUYER: Active transaction from cancel request - setting state only (no auto-open modal)');
                       setTradeInitData(tradeInitDataForBuyer);
@@ -668,11 +669,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         }
                       };
                       
-                      // Use fee from backend (trade_init_data) or fallback to client calc
-                      const feeUSD = tradeData.fee_usd ?? tradeData.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
-                      const totalAmount = tradeData.total_amount_usd ?? tradeData.totalAmount ?? (tradeInitDataForBuyer.accountPrice + feeUSD);
-                      tradeInitDataForBuyer.transactionFee = feeUSD;
-                      tradeInitDataForBuyer.feeUSD = feeUSD;
+                      // Use transaction fee from backend (gas + company) and total including fees
+                      const transactionFee = tradeData.transaction_fee_usd ?? tradeData.fee_usd ?? tradeData.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
+                      const totalAmount = tradeData.total_amount_usd ?? tradeData.totalAmount ?? (tradeInitDataForBuyer.accountPrice + transactionFee);
+                      tradeInitDataForBuyer.transactionFee = transactionFee;
+                      tradeInitDataForBuyer.feeUSD = transactionFee;
                       tradeInitDataForBuyer.totalAmount = totalAmount;
                       
                       console.log('✅ BUYER: Showing Accept/Decline with data:', tradeInitDataForBuyer);
@@ -1781,8 +1782,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           if (shouldShowAcceptDecline && hasActiveInvoiceMatchingChannel && (!cameFromTable || invMatchesSelectedAccount)) {
             const price = inv.amountUSD ?? inv.amount ?? inv.price ?? selectedUser?.price;
             const priceForDisplay = (price != null && price !== '' && Number(price) >= 0) ? String(Number(price)) : 'N/A';
-            const feeUSD = inv.companyFeeUSD ?? inv.feeUSD ?? 0;
-            const totalAmount = inv.totalAmountUSD ?? (Number(price) || 0) + feeUSD;
+            const transactionFeeUSD = inv.transactionFeeUSD ?? inv.companyFeeUSD ?? inv.feeUSD ?? 0;
+            const totalAmount = inv.totalAmountUSD ?? (Number(price) || 0) + transactionFeeUSD;
             setPendingRequest({
               user: {
                 ...selectedUser,
@@ -1799,7 +1800,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               invoiceId: inv._id || inv.id,
               tradeData: {
                 accountPrice: Number(price) || 0,
-                feeUSD,
+                feeUSD: transactionFeeUSD,
+                transactionFee: transactionFeeUSD,
                 totalAmount,
                 invoiceId: inv._id || inv.id,
                 paymentMethod: inv.paymentMethod ?? selectedUser?.currency,
@@ -2035,10 +2037,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               }
             };
 
-            const feeUSD = parsedTradeData.fee_usd ?? parsedTradeData.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
-            const totalAmount = parsedTradeData.total_amount_usd ?? parsedTradeData.totalAmount ?? (tradeInitDataForBuyer.accountPrice + feeUSD);
-            tradeInitDataForBuyer.transactionFee = feeUSD;
-            tradeInitDataForBuyer.feeUSD = feeUSD;
+            const transactionFee = parsedTradeData.transaction_fee_usd ?? parsedTradeData.fee_usd ?? parsedTradeData.feeUSD ?? (tradeInitDataForBuyer.accountPrice * 0.025);
+            const totalAmount = parsedTradeData.total_amount_usd ?? parsedTradeData.totalAmount ?? (tradeInitDataForBuyer.accountPrice + transactionFee);
+            tradeInitDataForBuyer.transactionFee = transactionFee;
+            tradeInitDataForBuyer.feeUSD = transactionFee;
             tradeInitDataForBuyer.totalAmount = totalAmount;
 
             console.log('✅ BUYER: Showing Accept/Decline from channel history:', tradeInitDataForBuyer);
@@ -4076,10 +4078,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           console.log('🔑 Seller ID:', sellerId);
           console.log('🔑 Buyer ID:', buyerId);
           
-          // 🔥 Fee and total from invoice response (backend-calculated)
+          // 🔥 Fee and total from invoice response (backend: transactionFeeUSD = gas + company, totalAmountUSD = amount + transactionFee)
           const inv = response.transaction || response.data || {};
-          const feeUSD = inv.companyFeeUSD ?? inv.feeUSD ?? 0;
-          const totalAmountUSD = inv.totalAmountUSD ?? (parseFloat(tradeData.offerPrice) || 0) + feeUSD;
+          const transactionFeeUSD = inv.transactionFeeUSD ?? inv.companyFeeUSD ?? inv.feeUSD ?? 0;
+          const totalAmountUSD = inv.totalAmountUSD ?? (parseFloat(tradeData.offerPrice) || 0) + transactionFeeUSD;
 
           // 🔥 CRITICAL: Use custom field to store trade data (Stream Chat preserves this)
           const tradeInitData = {
@@ -4088,7 +4090,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             seller_id: sellerId,
             buyer_id: buyerId,
             offer_amount: parseFloat(tradeData.offerPrice),
-            fee_usd: feeUSD,
+            fee_usd: transactionFeeUSD,
+            transaction_fee_usd: transactionFeeUSD,
             total_amount_usd: totalAmountUSD,
             payment_method: currency,
             payment_network: paymentNetwork,
