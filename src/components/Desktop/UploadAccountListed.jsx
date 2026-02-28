@@ -536,6 +536,16 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
             {viewMode ? 'Account Platform' : 'Select Social Account'}
           </p>
 
+          {viewMode && selectedButton && (() => {
+            const platformBtn = PLATFORM_BUTTONS.find(p => p.id === selectedButton?.toLowerCase());
+            return platformBtn ? (
+              <div className="flex items-center gap-3  p-3 rounded-lg">
+                <img src={platformBtn.icon} alt={selectedButton} className="w-8 h-8 object-contain" />
+                <span className="text-white text-sm font-semibold capitalize">{selectedButton}</span>
+              </div>
+            ) : null;
+          })()}
+
           <div className="rounded-lg p-2">
             <div>
               {selectedButton && (
@@ -711,7 +721,13 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                         {/* Platform */}
                         <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
                           <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Platform</p>
-                          <p className="text-white text-sm font-medium capitalize">{viewAccountData.platform}</p>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const platformBtn = PLATFORM_BUTTONS.find(p => p.id === viewAccountData.platform?.toLowerCase());
+                              return platformBtn ? <img src={platformBtn.icon} alt={viewAccountData.platform} className="w-5 h-5 object-contain" /> : null;
+                            })()}
+                            <p className="text-white text-sm font-medium capitalize">{viewAccountData.platform}</p>
+                          </div>
                         </div>
 
                         {/* Urgency */}
