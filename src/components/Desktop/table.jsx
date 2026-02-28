@@ -432,7 +432,9 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       platform: account.platform,
       metrics: account.metrics,
       filters: account.filters,
-      accountId: account.id
+      accountId: account.id,
+      price: account.price,
+      currency: account.currency
     };
 
 
@@ -792,6 +794,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
         const username = accountData?.filters?.find(f => f.key === 'username')?.value ||
           accountData?.accountUsername || accountData?.username || accountData?.handle || 'N/A';
         const price = accountData?.price || seller?.price;
+        const currency = accountData?.currency || '';
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setInitiateConfirmPayload(null)}>
             <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
@@ -802,7 +805,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
               <div className="bg-black/30 rounded-lg p-3 mb-5 text-sm">
                 <p className="text-gray-400"><span className="text-gray-500">Platform:</span> <span className="text-white capitalize">{platform}</span></p>
                 <p className="text-gray-400 mt-1"><span className="text-gray-500">Username:</span> <span className="text-white">{username}</span></p>
-                {price != null && price !== '' && <p className="text-gray-400 mt-1"><span className="text-gray-500">Price:</span> <span className="text-green-400">${price}</span></p>}
+                {price != null && price !== '' && <p className="text-gray-400 mt-1"><span className="text-gray-500">Price:</span> <span className="text-green-400">${price}{currency ? ` ${currency}` : ''}</span></p>}
               </div>
               <div className="flex gap-3 justify-end">
                 <button type="button" onClick={() => setInitiateConfirmPayload(null)} className="px-4 py-2 rounded-lg text-gray-400 hover:bg-white/10 transition-colors">Cancel</button>

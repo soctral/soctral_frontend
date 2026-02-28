@@ -687,11 +687,16 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                               {viewAccountData.isBuyOrder ? 'Max Budget' : 'Price'}
                             </p>
                             <p className="text-white text-sm font-semibold">
-                              {viewAccountData.isBuyOrder
-                                ? `${viewAccountData.maxPrice} ${viewAccountData.currency || 'USD'}`
-                                : `${viewAccountData.price} ${viewAccountData.currency || 'USD'}`
-                              }
+                              ${viewAccountData.isBuyOrder ? viewAccountData.maxPrice : viewAccountData.price}
                             </p>
+                          </div>
+                        )}
+
+                        {/* Token */}
+                        {viewAccountData.currency && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Token</p>
+                            <p className="text-white text-sm font-semibold">{viewAccountData.currency.toUpperCase()}</p>
                           </div>
                         )}
 
