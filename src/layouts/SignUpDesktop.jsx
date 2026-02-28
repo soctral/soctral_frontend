@@ -131,15 +131,13 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     if (name === "password") {
       evaluatePasswordStrength(value);
     }
-<<<<<<< HEAD
     
     // Clear errors when user starts typing — only if there's an error to clear
     if (contextError) clearError();
     if (localError) setLocalError(null);
-=======
     clearError();
     setLocalError(null);
->>>>>>> 9dcdd09d981198d8e89b7069ea5d60c4616363e0
+
   };
 
   const evaluatePasswordStrength = (password) => {
