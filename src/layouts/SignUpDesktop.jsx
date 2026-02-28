@@ -7,6 +7,42 @@ import Warning from "../assets/warning.png";
 import GoogleIcon from "../assets/google.png";
 import AppleIcon from "../assets/apple.png";
 
+// Defined outside to avoid new component identity on every render (fixes input lag)
+const PasswordStrengthIndicator = ({ password, passwordStrength }) => {
+  if (!password) return null;
+  const requirements = [
+    { met: password.length >= 8, text: "Minimum Of 8 Characters" },
+    { met: /[A-Z]/.test(password), text: "At least One Uppercase" },
+    { met: /[a-z]/.test(password), text: "At least One Lowercase" },
+    { met: /[!@#$%^&*(),.?":{}|<>]/.test(password), text: "At least One Special Character" },
+    { met: /[0-9]/.test(password), text: "At least One Number" }
+  ];
+  const percentage = (passwordStrength / 5) * 100;
+  return (
+    <div className="mt-2">
+      <div className="w-full bg-black rounded-full h-2 mb-2 border-2 border-purple-600">
+        <div
+          className={`h-1 rounded-full transition-all duration-300 ${
+            passwordStrength < 2 ? "bg-red-500" :
+            passwordStrength < 4 ? "bg-yellow-500" : "bg-green-500"
+          }`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <div className="space-y-1">
+        {requirements.map((req, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${req.met ? 'bg-green-500' : 'bg-gray-500'}`} />
+            <p className={`text-xs ${req.met ? 'text-green-400' : 'text-gray-400'}`}>
+              {req.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const SignUp = ({ apiUrl, onClose, onShowSignIn }) => { 
   const navigate = useNavigate();
   const {
@@ -31,6 +67,9 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
   const [countdown, setCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [localError, setLocalError] = useState(null);
+  // Local state for step 4 only — avoids context dispatch on every keystroke (fixes lag)
+  const [localPassword, setLocalPassword] = useState("");
+  const [localConfirmPassword, setLocalConfirmPassword] = useState("");
 
   // Get the current error (either from context or local)
   const error = contextError || localError;
@@ -56,6 +95,15 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     }
   }, [signupStep]);
 
+  // Sync local password state when entering step 4
+  useEffect(() => {
+    if (signupStep === 4) {
+      setLocalPassword(signupData.password);
+      setLocalConfirmPassword(signupData.confirmPassword);
+      evaluatePasswordStrength(signupData.password);
+    }
+  }, [signupStep]); // Intentionally only when step changes; signupData read once on enter
+
   // Clear errors when component unmounts
   useEffect(() => {
     return () => {
@@ -66,13 +114,22 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    // Step 4: keep password/confirmPassword in local state only to avoid context lag
+    if (signupStep === 4 && (name === "password" || name === "confirmPassword")) {
+      if (name === "password") {
+        setLocalPassword(value);
+        evaluatePasswordStrength(value);
+      } else {
+        setLocalConfirmPassword(value);
+      }
+      clearError();
+      setLocalError(null);
+      return;
+    }
     updateSignupData({ [name]: value });
-    
     if (name === "password") {
       evaluatePasswordStrength(value);
     }
-    
-    // Clear errors when user starts typing
     clearError();
     setLocalError(null);
   };
@@ -123,10 +180,9 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
   };
 
   const isStep4Valid = () => {
-    return signupData.password.length >= 8 &&
-           signupData.confirmPassword.length >= 8 &&
-           signupData.password === signupData.confirmPassword &&
-           passwordStrength >= 5;
+    const pwd = signupStep === 4 ? localPassword : signupData.password;
+    const conf = signupStep === 4 ? localConfirmPassword : signupData.confirmPassword;
+    return pwd.length >= 8 && conf.length >= 8 && pwd === conf && passwordStrength >= 5;
   };
 
   const isStep5Valid = () => {
@@ -154,45 +210,6 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
       const prevInput = document.querySelector(`input[data-index="${index - 1}"]`);
       if (prevInput) prevInput.focus();
     }
-  };
-
-  // Password strength indicator component
-  const PasswordStrengthIndicator = () => {
-    const requirements = [
-      { met: signupData.password.length >= 8, text: "Minimum Of 8 Characters" },
-      { met: /[A-Z]/.test(signupData.password), text: "At least One Uppercase" },
-      { met: /[a-z]/.test(signupData.password), text: "At least One Lowercase" },
-      { met: /[!@#$%^&*(),.?":{}|<>]/.test(signupData.password), text: "At least One Special Character" },
-      { met: /[0-9]/.test(signupData.password), text: "At least One Number" }
-    ];
-
-    if (!signupData.password) return null;
-
-    const percentage = (passwordStrength / 5) * 100;
-
-    return (
-      <div className="mt-2">
-        <div className="w-full bg-black rounded-full h-2 mb-2 border-2 border-purple-600">     
-          <div
-            className={`h-1 rounded-full transition-all duration-300 ${
-              passwordStrength < 2 ? "bg-red-500" :
-              passwordStrength < 4 ? "bg-yellow-500" : "bg-green-500"
-            }`}
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-        <div className="space-y-1">
-          {requirements.map((req, index) => (
-            <div key={index} className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full ${req.met ? 'bg-green-500' : 'bg-gray-500'}`} />
-              <p className={`text-xs ${req.met ? 'text-green-400' : 'text-gray-400'}`}>        
-                {req.text}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
   };
 
   // Step handlers with actual API calls
@@ -247,7 +264,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
   const handleSubmitStep4 = async (e) => {
     e.preventDefault();
     if (!isStep4Valid()) {
-      if (signupData.password !== signupData.confirmPassword) {
+      if (localPassword !== localConfirmPassword) {
         setLocalError("Passwords do not match");
       } else if (passwordStrength < 5) {
         setLocalError("Please meet all password requirements");
@@ -256,7 +273,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
       }
       return;
     }
-    
+    updateSignupData({ password: localPassword, confirmPassword: localConfirmPassword });
     setSignupStep(5);
   };
 
@@ -635,7 +652,7 @@ const handleSignIn = () => {
                 <input
                   type={showPassword ? "text" : "password"}
                   name="password"
-                  value={signupData.password}
+                  value={localPassword}
                   onChange={handleInputChange}
                   placeholder="Create a password"
                   className="w-full py-3 rounded-full pl-4 pr-10 border border-gray-400 bg-black text-white placeholder-gray-400 outline-none focus:border-white transition-colors"
@@ -651,7 +668,7 @@ const handleSignIn = () => {
                   }
                 </button>
               </div>
-              <PasswordStrengthIndicator />
+              <PasswordStrengthIndicator password={localPassword} passwordStrength={passwordStrength} />
             </div>
 
             <div>
@@ -660,7 +677,7 @@ const handleSignIn = () => {
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   name="confirmPassword"
-                  value={signupData.confirmPassword}
+                  value={localConfirmPassword}
                   onChange={handleInputChange}
                   placeholder="Confirm your password"
                   className="w-full py-3 rounded-full pl-4 pr-10 border border-gray-400 bg-black text-white placeholder-gray-400 outline-none focus:border-white transition-colors"
@@ -676,10 +693,10 @@ const handleSignIn = () => {
                   }
                 </button>
               </div>
-              {signupData.confirmPassword && signupData.password !== signupData.confirmPassword && (
+              {localConfirmPassword && localPassword !== localConfirmPassword && (
                 <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
               )}
-              {signupData.confirmPassword && signupData.password === signupData.confirmPassword && signupData.password && (
+              {localConfirmPassword && localPassword === localConfirmPassword && localPassword && (
                 <p className="text-green-400 text-xs mt-1">Passwords match</p>
               )}
             </div>
