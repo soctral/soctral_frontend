@@ -55,7 +55,7 @@ class MarketplaceService {
         console.warn(`❌ Attempt ${i + 1} failed:`, error.message);
 
         // Don't retry on authentication errors
-        if (error.message.includes('401') || error.message.includes('403')) {
+        if (error.message.includes('401') || error.message.includes('403') || error.message.includes('Unauthorized') || error.message.includes('Forbidden')) {
           throw error;
         }
       }
@@ -372,6 +372,10 @@ class MarketplaceService {
   // Get all sell orders
   async getAllSellOrders(filters = {}) {
     try {
+      // Skip API call if not authenticated - avoids 401 spam during signup
+      if (!this.isAuthenticated() && !localStorage.getItem('token')) {
+        return { status: true, data: [] };
+      }
 
       const queryParams = new URLSearchParams();
 
@@ -687,6 +691,10 @@ class MarketplaceService {
   // Get all buy orders
   async getAllBuyOrders(filters = {}) {
     try {
+      // Skip API call if not authenticated - avoids 401 spam during signup
+      if (!this.isAuthenticated() && !localStorage.getItem('token')) {
+        return { status: true, data: [] };
+      }
 
       const queryParams = new URLSearchParams();
 

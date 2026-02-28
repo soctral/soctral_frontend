@@ -106,7 +106,7 @@ const UserContext = createContext();
 export const UserProvider = ({ children }) => {
   const [state, dispatch] = useReducer(userReducer, initialState);
   const initializeRef = useRef(false);
-  const updateCountRef = useRef(0);
+
 
   // Initialize user from storage on app start - ONLY ONCE
   useEffect(() => {
@@ -397,7 +397,7 @@ export const UserProvider = ({ children }) => {
     }
   };
 
-  // Signup flow functions with anti-loop protection
+  // Signup flow functions
   const setSignupStep = (step) => {
     if (state.signupStep !== step) {
       dispatch({ type: USER_ACTIONS.SET_SIGNUP_STEP, payload: step });
@@ -405,38 +405,17 @@ export const UserProvider = ({ children }) => {
   };
 
   const updateSignupData = (data) => {
-    updateCountRef.current += 1;
-
-    if (updateCountRef.current > 50) {
-      console.error('INFINITE LOOP DETECTED in updateSignupData!');
-      console.trace('Stack trace:');
-      return;
-    }
-
     if (!data || typeof data !== 'object') {
       console.warn('updateSignupData called with invalid data:', data);
       return;
     }
 
-    const hasActualChanges = Object.keys(data).some(key => {
-      const currentValue = state.signupData[key];
-      const newValue = data[key];
-
-      if (typeof currentValue === 'object' && typeof newValue === 'object') {
-        return JSON.stringify(currentValue) !== JSON.stringify(newValue);
-      }
-      return currentValue !== newValue;
-    });
-
-    if (hasActualChanges) {
-      dispatch({ type: USER_ACTIONS.UPDATE_SIGNUP_DATA, payload: data });
-    } else {
-    }
+    // Simply dispatch the update — the reducer handles the merge
+    dispatch({ type: USER_ACTIONS.UPDATE_SIGNUP_DATA, payload: data });
   };
 
   const clearSignupData = () => {
     console.log('UserContext: Clearing signup data');
-    updateCountRef.current = 0;
     dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
   };
 

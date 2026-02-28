@@ -137,12 +137,13 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
   const [initiateConfirmPayload, setInitiateConfirmPayload] = useState(null); // { seller, accountData } for confirm dialog
   const [showOwnSellOrderDialog, setShowOwnSellOrderDialog] = useState(false);
   // React Query handles fetching, caching, retry, and polling
+  const isAuthenticated = !!localStorage.getItem('token');
   const {
     data: ordersResponse,
     isLoading: isInitialLoad,
     error: queryError,
     isError
-  } = useAllSellOrders();
+  } = useAllSellOrders({ enabled: isAuthenticated });
 
   // Derive error message for display
   const error = isError ? (queryError?.message || 'Failed to load sell orders') : null;
