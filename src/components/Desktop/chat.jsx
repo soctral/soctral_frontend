@@ -1170,18 +1170,24 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           setHasActiveInvoice(false);
         }
 
-        // 🔥 Only treat invoice as "for this channel" when order matches: sell channel = buy_order, buy channel = sell_order
+        // 🔥 Only treat invoice as "for this channel" when it was sent in this channel (channelId match). Legacy: fallback to order match.
         let hasActiveInvoiceMatchingChannel = false;
         if (activeType === 'invoice' && activeData) {
           const inv = activeData;
-          const streamMetaForMatch = channel.data?.metadata || {};
-          const resolvedCt = selectedUser?.chatType ?? streamMetaForMatch.chatType ?? chatType;
-          const invOrderId = toId(inv.orderId ?? inv.order_id ?? inv.accountId);
-          const channelBuyOrderId = toId(streamMetaForMatch.buyOrderId ?? streamMetaForMatch.accountId);
-          const channelSellOrderId = toId(streamMetaForMatch.sellOrderId ?? streamMetaForMatch.accountId);
-          hasActiveInvoiceMatchingChannel =
-            (resolvedCt === 'sell' && (inv.orderType === 'buy_order' || invOrderId === channelBuyOrderId)) ||
-            (resolvedCt === 'buy' && (inv.orderType === 'sell_order' || invOrderId === channelSellOrderId));
+          const currentChannelIdForMatch = channel.id || channel.cid?.split(':')[1] || '';
+          const invChannelId = inv.channelId || inv.channel_id;
+          if (invChannelId && currentChannelIdForMatch) {
+            hasActiveInvoiceMatchingChannel = invChannelId === currentChannelIdForMatch;
+          } else {
+            const streamMetaForMatch = channel.data?.metadata || {};
+            const resolvedCt = selectedUser?.chatType ?? streamMetaForMatch.chatType ?? chatType;
+            const invOrderId = toId(inv.orderId ?? inv.order_id ?? inv.accountId);
+            const channelBuyOrderId = toId(streamMetaForMatch.buyOrderId ?? streamMetaForMatch.accountId);
+            const channelSellOrderId = toId(streamMetaForMatch.sellOrderId ?? streamMetaForMatch.accountId);
+            hasActiveInvoiceMatchingChannel =
+              (resolvedCt === 'sell' && (inv.orderType === 'buy_order' || invOrderId === channelBuyOrderId)) ||
+              (resolvedCt === 'buy' && (inv.orderType === 'sell_order' || invOrderId === channelSellOrderId));
+          }
         }
 
         const channelMessages = channel.state.messages || [];
@@ -3990,6 +3996,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         }
       }
 
+      const channelIdForInvoice = currentChannel?.id || currentChannel?.cid?.split(':')[1];
       const invoicePayload = {
         sellOrderId: chatType === 'buy' ? invoiceOrderId : undefined,
         buyOrderId: chatType === 'sell' ? invoiceOrderId : undefined,
@@ -4003,7 +4010,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         offerAmount: parseFloat(tradeData.offerPrice),
         amountUSD: parseFloat(tradeData.offerPrice),
         paymentMethod: currency,
-        paymentNetwork: paymentNetwork
+        paymentNetwork: paymentNetwork,
+        ...(channelIdForInvoice && { channelId: channelIdForInvoice })
       };
 
       // Remove undefined keys
@@ -4726,6 +4734,19 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     }));
   }, [buyUnreadCount, sellUnreadCount]);
 
+  // 🔥 Only show transaction UI (Release Funds, seller timer) when the active transaction belongs to THIS channel.
+  const currentChannelId = currentChannel?.id || currentChannel?.cid?.split(':')[1] || '';
+  const activeTransactionBelongsToCurrentChannel = (() => {
+    if (!activeTransaction || !currentChannelId) return false;
+    if (activeTransaction.channelId === currentChannelId) return true;
+    // Legacy: transaction has no channelId — match by counterparty (other user in this channel is buyer or seller of txn)
+    const otherUserId = String(selectedUser?._id || selectedUser?.id || '');
+    if (!otherUserId || otherUserId === 'undefined') return false;
+    const sellerId = String(activeTransaction.seller?.userId || activeTransaction.seller?._id || '');
+    const buyerId = String(activeTransaction.buyer?.userId || activeTransaction.buyer?._id || '');
+    return otherUserId === sellerId || otherUserId === buyerId;
+  })();
+
   // 🔥 Seller countdown: only when there is an active transaction (buyer accepted). Time from transaction.createdAt. After expiry: show Cancel + Appeal (no auto-cancel).
   const TRANSACTION_TIMER_DURATION = 300; // 5 minutes
   const TransactionCountdownBanner = ({ 
@@ -5098,8 +5119,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   if (invoiceId) {
                     try {
                       setIsProcessingTrade(true);
-                      console.log('📡 Accepting invoice:', invoiceId);
-                      const acceptResponse = await apiService.post('/invoices/accept', { invoiceId });
+                      const channelId = currentChannel?.id || currentChannel?.cid?.split(':')[1] || '';
+                      console.log('📡 Accepting invoice:', invoiceId, 'channelId:', channelId);
+                      const acceptResponse = await apiService.post('/invoices/accept', { invoiceId, ...(channelId && { channelId }) });
                       console.log('✅ Invoice accepted:', acceptResponse);
 
                       // 🔥 FIX: Capture real transactionId from accept response (NOT the invoiceId)
@@ -6290,8 +6312,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           </div>
 
 
- {/* 🔥 Seller timer: ONLY when we have an active transaction (buyer has accepted invoice). Time from transaction.createdAt. */}
-          {activeTransaction && activeTransaction.role === 'seller' && (
+ {/* 🔥 Seller timer: ONLY when we have an active transaction (buyer has accepted invoice) AND it belongs to this channel. */}
+          {activeTransaction && activeTransaction.role === 'seller' && activeTransactionBelongsToCurrentChannel && (
             <TransactionCountdownBanner 
               activeTransaction={activeTransaction}
               setActiveTransaction={setActiveTransaction}
@@ -6433,18 +6455,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               </div>
             </div>
           ) : (() => {
-            // Priority 2: BUYER only — Release Funds / Locked Transaction. Never show for seller (seller sees timer banner above).
+            // Priority 2: BUYER only — Release Funds / Locked Transaction. Only in the channel that has this transaction.
             const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
               ? pendingTransaction
               : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
-            return effectivePendingTxn && activeTransaction?.role !== 'seller';
+            return effectivePendingTxn && activeTransaction?.role !== 'seller' && activeTransactionBelongsToCurrentChannel;
           })() ? (
-            // Priority 2: Buyer with active transaction sees Release Funds (only if not cancelled)
+            // Priority 2: Buyer with active transaction sees Release Funds (only if not cancelled and this channel)
             (() => {
               const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
                 ? pendingTransaction
                 : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
-              if (!effectivePendingTxn || activeTransaction?.role === 'seller') return null;
+              if (!effectivePendingTxn || activeTransaction?.role === 'seller' || !activeTransactionBelongsToCurrentChannel) return null;
               return (
             <div className="flex items-center justify-center z-[60] px-4">
               <div className="flex gap-2 items-center w-full">
