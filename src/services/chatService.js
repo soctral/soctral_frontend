@@ -476,6 +476,25 @@ class ChatService {
     }
   }
 
+  /**
+   * Subscribe to real-time new message events (for unread badge etc.).
+   * Call after initializeChat(). Returns unsubscribe function.
+   */
+  subscribeToNewMessages(callback) {
+    if (!this.client) return () => {};
+    const handler = () => {
+      if (typeof callback === 'function') callback();
+    };
+    this.client.on('message.new', handler);
+    return () => {
+      try {
+        this.client.off('message.new', handler);
+      } catch (e) {
+        // no-op if client disconnected
+      }
+    };
+  }
+
   async searchUsers(searchTerm) {
     try {
       if (!this.client) {

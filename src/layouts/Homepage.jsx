@@ -431,7 +431,7 @@ const HomePage = () => {
     };
   }, []);
 
-  // Listen for chat unread count updates from Chat component
+  // Listen for chat unread count updates from Chat component (when Chat is mounted)
   useEffect(() => {
     const handleChatUnreadUpdate = (event) => {
       const { totalUnread } = event.detail || {};
@@ -446,6 +446,42 @@ const HomePage = () => {
       window.removeEventListener('chatUnreadCountUpdate', handleChatUnreadUpdate);
     };
   }, []);
+
+  // Real-time chat unread count: init once, then update on every new message (no polling)
+  useEffect(() => {
+    if (!isAuthenticated || !userData?._id) {
+      setChatUnreadCount(0);
+      return;
+    }
+
+    const fetchChatUnreadCount = async () => {
+      try {
+        await chatService.initializeChat(
+          userData._id || userData.id,
+          userData.displayName || userData.name || 'User',
+          userData.avatarUrl || userData.avatar
+        );
+        const channels = await chatService.getUserChannels();
+        const total = channels.reduce((sum, ch) => sum + (chatService.getUnreadCount(ch) || 0), 0);
+        setChatUnreadCount(total);
+      } catch (err) {
+        console.warn('Could not fetch chat unread count:', err?.message);
+      }
+    };
+
+    let unsubscribeNewMessages = () => {};
+
+    const setup = async () => {
+      await fetchChatUnreadCount();
+      unsubscribeNewMessages = chatService.subscribeToNewMessages(fetchChatUnreadCount);
+    };
+
+    setup();
+
+    return () => {
+      unsubscribeNewMessages();
+    };
+  }, [isAuthenticated, userData?._id, userData?.id, userData?.displayName, userData?.name]);
 
   // Enhanced crypto image mapping with fallbacks
   const getCryptoImage = (currencyKey, currencyName) => {

@@ -566,6 +566,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       tradeInitDataForBuyer.transactionFee = transactionFee;
                       tradeInitDataForBuyer.feeUSD = transactionFee;
                       tradeInitDataForBuyer.totalAmount = (activeTxn.amountUSD || tradeInitDataForBuyer.accountPrice) + transactionFee;
+                      tradeInitDataForBuyer.companyFeeUSD = activeTxn.companyFeeUSD ?? 0;
+                      tradeInitDataForBuyer.gasFeeUSD = activeTxn.gasFeeUSD ?? 0;
                       
                       console.log('✅ BUYER: Active transaction from cancel request - setting state only (no auto-open modal)');
                       setTradeInitData(tradeInitDataForBuyer);
@@ -675,6 +677,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       tradeInitDataForBuyer.transactionFee = transactionFee;
                       tradeInitDataForBuyer.feeUSD = transactionFee;
                       tradeInitDataForBuyer.totalAmount = totalAmount;
+                      tradeInitDataForBuyer.companyFeeUSD = tradeData.company_fee_usd ?? tradeData.companyFeeUSD ?? 0;
+                      tradeInitDataForBuyer.gasFeeUSD = tradeData.gas_fee_usd ?? tradeData.gasFeeUSD ?? 0;
                       
                       console.log('✅ BUYER: Showing Accept/Decline with data:', tradeInitDataForBuyer);
                       
@@ -833,10 +837,36 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               }
             }
 
-            // 🔥 Handle invoice_declined — clear "Waiting for buyer" banner when buyer declines
+            // 🔥 Handle invoice_declined — clear "Waiting for buyer" banner, notify seller, show Initiate trade
             if (message.invoice_declined === true && message.user?.id !== currentUserId) {
               setShowAcceptanceNotification(false);
               setAcceptanceData(null);
+              setHasActiveInvoice(false);
+              // Seller received decline: refetch active state and show Initiate trade if channel has metadata
+              const isForCurrentChannel = !event?.cid || event?.cid === currentChannelRef.current?.cid;
+              if (isForCurrentChannel && currentChannelRef.current) {
+                const ch = currentChannelRef.current;
+                const memberIds = Object.keys(ch.state?.members || {});
+                const otherUserId = memberIds.find(id => id !== currentUserId);
+                if (otherUserId) {
+                  transactionService.getActiveBetweenUsers(currentUserId, otherUserId)
+                    .then((activeBetween) => {
+                      const activeType = activeBetween?.type;
+                      if (activeType !== 'invoice') {
+                        const chMeta = ch.data?.metadata || {};
+                        const hasOrderId = !!(chMeta.accountId || chMeta.sellOrderId || chMeta.buyOrderId);
+                        const hasValidPlatform = !!(chMeta.platform && chMeta.platform !== 'Unknown');
+                        const hasValidUsername = !!(chMeta.accountUsername && chMeta.accountUsername !== 'N/A');
+                        if (hasOrderId && hasValidPlatform && hasValidUsername) {
+                          setShowSellerTradePrompt(true);
+                          setSelectedChannelCanInitiateAgain(true);
+                          console.log('✅ SELLER: Invoice declined — showing Initiate trade button');
+                        }
+                      }
+                    })
+                    .catch((e) => console.warn('invoice_declined refetch:', e?.message));
+                }
+              }
             }
 
             // 🔥 NEW: Handle trade_cancelled message to clear buyer's state
@@ -1554,10 +1584,30 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             console.log('💬 Channel: Skipping cancel_request_data - handled by global listener');
           }
 
-          // 🔥 React to invoice_declined — clear "Waiting for buyer" when buyer declines
+          // 🔥 React to invoice_declined — clear "Waiting for buyer", show Initiate trade when buyer declines
           if (newMessage.invoice_declined === true && newMessage.user?.id !== currentUserId) {
             setShowAcceptanceNotification(false);
             setAcceptanceData(null);
+            setHasActiveInvoice(false);
+            const memberIds = Object.keys(channel.state?.members || {});
+            const otherUserId = memberIds.find(id => id !== currentUserId);
+            if (otherUserId) {
+              transactionService.getActiveBetweenUsers(currentUserId, otherUserId)
+                .then((activeBetween) => {
+                  if (activeBetween?.type !== 'invoice') {
+                    const chMeta = channel.data?.metadata || {};
+                    const hasOrderId = !!(chMeta.accountId || chMeta.sellOrderId || chMeta.buyOrderId);
+                    const hasValidPlatform = !!(chMeta.platform && chMeta.platform !== 'Unknown');
+                    const hasValidUsername = !!(chMeta.accountUsername && chMeta.accountUsername !== 'N/A');
+                    if (hasOrderId && hasValidPlatform && hasValidUsername) {
+                      setShowSellerTradePrompt(true);
+                      setSelectedChannelCanInitiateAgain(true);
+                      console.log('✅ SELLER: Invoice declined — showing Initiate trade button');
+                    }
+                  }
+                })
+                .catch((e) => console.warn('invoice_declined refetch:', e?.message));
+            }
           }
 
           // 🔥 React to buyer_initiated — clear "Waiting for buyer" when buyer accepts (global listener also sets timer)
@@ -1790,6 +1840,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             const priceForDisplay = (price != null && price !== '' && Number(price) >= 0) ? String(Number(price)) : 'N/A';
             const transactionFeeUSD = inv.transactionFeeUSD ?? inv.companyFeeUSD ?? inv.feeUSD ?? 0;
             const totalAmount = inv.totalAmountUSD ?? (Number(price) || 0) + transactionFeeUSD;
+            const companyFeeUSD = inv.companyFeeUSD ?? 0;
+            const gasFeeUSD = inv.gasFeeUSD ?? 0;
             setPendingRequest({
               user: {
                 ...selectedUser,
@@ -1809,6 +1861,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 feeUSD: transactionFeeUSD,
                 transactionFee: transactionFeeUSD,
                 totalAmount,
+                companyFeeUSD,
+                gasFeeUSD,
                 invoiceId: inv._id || inv.id,
                 paymentMethod: inv.paymentMethod ?? selectedUser?.currency,
                 paymentNetwork: inv.paymentNetwork,
@@ -2048,6 +2102,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             tradeInitDataForBuyer.transactionFee = transactionFee;
             tradeInitDataForBuyer.feeUSD = transactionFee;
             tradeInitDataForBuyer.totalAmount = totalAmount;
+            tradeInitDataForBuyer.companyFeeUSD = parsedTradeData.company_fee_usd ?? parsedTradeData.companyFeeUSD ?? 0;
+            tradeInitDataForBuyer.gasFeeUSD = parsedTradeData.gas_fee_usd ?? parsedTradeData.gasFeeUSD ?? 0;
 
             console.log('✅ BUYER: Showing Accept/Decline from channel history:', tradeInitDataForBuyer);
 
@@ -3232,20 +3288,27 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         await apiService.post('/invoices/decline', { invoiceId });
         console.log('✅ Invoice declined:', invoiceId);
 
-        // Notify seller in chat
-        const channelToUse = pendingRequest?.channel || currentChannelRef.current;
+        // Notify seller in chat — use a channel that has sendMessage (pendingRequest.channel can be stale/wrong shape)
+        let channelToUse = pendingRequest?.channel || currentChannelRef.current;
+        if (channelToUse && typeof channelToUse.sendMessage !== 'function') {
+          channelToUse = currentChannelRef.current || null;
+        }
         if (channelToUse) {
-          const currentUserId = userData?._id || userData?.id;
-          const buyerName = userData?.displayName || userData?.name || 'Buyer';
-          await channelToUse.sendMessage({
-            text: `${buyerName} declined the trade.`,
-            user_id: currentUserId,
-            invoice_declined: true,
-            invoice_id: invoiceId,
-            declined_by: currentUserId,
-            declined_at: new Date().toISOString(),
-            silent: true
-          });
+          try {
+            const currentUserId = userData?._id || userData?.id;
+            const buyerName = userData?.displayName || userData?.name || 'Buyer';
+            await channelToUse.sendMessage({
+              text: `${buyerName} declined the trade.`,
+              user_id: currentUserId,
+              invoice_declined: true,
+              invoice_id: invoiceId,
+              declined_by: currentUserId,
+              declined_at: new Date().toISOString(),
+              silent: true
+            });
+          } catch (msgErr) {
+            console.warn('⚠️ Could not send decline message to chat:', msgErr);
+          }
         }
       } catch (error) {
         console.error('❌ Failed to decline invoice:', error);
@@ -4090,6 +4153,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           const inv = response.transaction || response.data || {};
           const transactionFeeUSD = inv.transactionFeeUSD ?? inv.companyFeeUSD ?? inv.feeUSD ?? 0;
           const totalAmountUSD = inv.totalAmountUSD ?? (parseFloat(tradeData.offerPrice) || 0) + transactionFeeUSD;
+          const companyFeeUSD = inv.companyFeeUSD ?? 0;
+          const gasFeeUSD = inv.gasFeeUSD ?? 0;
 
           // 🔥 CRITICAL: Use custom field to store trade data (Stream Chat preserves this)
           const tradeInitData = {
@@ -4100,6 +4165,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             offer_amount: parseFloat(tradeData.offerPrice),
             fee_usd: transactionFeeUSD,
             transaction_fee_usd: transactionFeeUSD,
+            company_fee_usd: companyFeeUSD,
+            gas_fee_usd: gasFeeUSD,
             total_amount_usd: totalAmountUSD,
             payment_method: currency,
             payment_network: paymentNetwork,
@@ -4985,6 +5052,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
     // 🔥 FIX: Get fee from feeUSD field (primary) or transactionFee (fallback)
     const feeUSD = tradeInitData.feeUSD || tradeInitData.company?.feeUSD || tradeInitData.transactionFee || 0;
+    const companyFeeUSD = tradeInitData.companyFeeUSD ?? 0;
+    const gasFeeUSD = tradeInitData.gasFeeUSD ?? 0;
     const currencyImage = getCurrencyImage(tradeInitData.paymentMethod);
     
     // 🔥 FIX: Get platform/social account info - use channelMetadata as fallback
@@ -5050,25 +5119,39 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </div>
               </div>
 
-              <div className='flex border-t items-center border-b border-white/10'>
-
-                <div className="flex items-center py-2 gap-2 pr-[1.5rem] border-r border-white/10">
-                  <span className="text-gray-400 text-sm">Account Price</span>
-                  <span className="text-white font-medium text-sm">${formatAmount(tradeInitData.accountPrice)}</span>
+              <div className="border-t border-b border-white/10 py-4">
+                <div className="flex gap-6">
+                  {/* Seller Receives */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Seller receives</p>
+                    <p className="text-white font-semibold text-base">${formatAmount(tradeInitData.accountPrice - companyFeeUSD)}</p>
+                  </div>
+                  <div className="w-px bg-white/10 flex-shrink-0" aria-hidden />
+                  {/* Transaction fees */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <p className="text-gray-400 text-xs uppercase tracking-wider">Transaction fees</p>
+                      <span className="text-white font-semibold text-base tabular-nums">${formatAmount(feeUSD)}</span>
+                    </div>
+                    {(companyFeeUSD > 0 || gasFeeUSD > 0) && (
+                      <div className="flex flex-col gap-1 mt-2 pl-0">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-500">Escrow fee</span>
+                          <span className="text-white/90 tabular-nums">${formatAmount(companyFeeUSD)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-500">Gas fees</span>
+                          <span className="text-white/90 tabular-nums">${formatAmount(gasFeeUSD)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-
-
-                <div className="flex items-center py-2 gap-2 py-6 pl-[1.5rem]">
-                  <span className="text-gray-400 text-sm">Transaction Fee</span>
-                  <span className="text-white font-medium text-sm">${formatAmount(feeUSD)}</span>
-                </div>
-
               </div>
 
-              <div className="flex flex-col items-center py-3 rounded-lg px-4">
-                <span className="text-gray-400 font-semibold text-sm">Total Amount</span>
-                <span className="text-white font-bold text-sm">${formatAmount(tradeInitData.totalAmount)}</span>
+              <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/5 mt-1">
+                <span className="text-gray-400 font-semibold text-sm">Total amount</span>
+                <span className="text-white font-bold text-base tabular-nums">${formatAmount(tradeInitData.totalAmount)}</span>
               </div>
 
             </div>
@@ -5305,50 +5388,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 {isProcessingTrade ? 'Processing...' : 'Initiate Trade'}
               </button>
               <button
-                onClick={async () => {
-                  // Cancel trade using PUT /transaction/{id}/cancel
-                  // 🔥 FIX: Always fetch the real transaction _id from /transaction/current
-                  // The stored transactionId may be the invoice ID, not the real transaction ID
-                  let transactionId = tradeInitData.transactionId || tradeInitData._id;
-                  try {
-                    const activeCheck = await checkActiveTransactions();
-                    if (activeCheck?.hasActiveTransaction && activeCheck?.activeTransaction) {
-                      const realTxnId = activeCheck.activeTransaction._id || activeCheck.activeTransaction.id;
-                      if (realTxnId) {
-                        if (realTxnId !== transactionId) {
-                          console.log('🔑 Cancel: Replacing stored ID (invoice) with REAL transactionId from API:', realTxnId, '(was:', transactionId, ')');
-                        }
-                        transactionId = realTxnId;
-                      }
-                    }
-                  } catch (apiErr) {
-                    console.warn('⚠️ Could not verify transaction ID from API for cancel, using stored ID:', apiErr.message);
-                  }
-                  if (transactionId) {
-                    try {
-                      setIsProcessingTrade(true);
-                      const response = await apiService.put(`/transaction/${transactionId}/cancel`);
-                      if (response.status) {
-                        setSuccessModalData({
-                          title: 'Trade Cancelled',
-                          message: 'Transaction has been cancelled successfully.'
-                        });
-                        setShowSuccessModal(true);
-                        setActiveTransaction(null);
-                        setPendingTransaction(null);
-                      }
-                    } catch (error) {
-                      console.error('Error cancelling trade:', error);
-                      setErrorModalData({
-                        title: 'Cancel Failed',
-                        message: error.message || 'Failed to cancel trade'
-                      });
-                      setShowErrorModal(true);
-                    } finally {
-                      setIsProcessingTrade(false);
-                    }
-                  }
+                onClick={() => {
                   setShowTradeInitModal(false);
+                  setShowRequestModal(true);
                   setAgreeVerified(false);
                   setAgreeLocked(false);
                 }}
