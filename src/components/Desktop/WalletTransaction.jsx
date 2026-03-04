@@ -404,6 +404,24 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
     }
   };
 
+  // Company/service fees per asset (percentage-based with min/max caps)
+  const companyFees = {
+    Bitcoin: { percentage: 1, min: 0.00005, max: 0.01 },
+    Ethereum: { percentage: 1, min: 0.0005, max: 0.05 },
+    Tether: { percentage: 1, min: 1, max: 50 },
+    Solana: { percentage: 1, min: 0.01, max: 5 },
+    USDCoin: { percentage: 1, min: 1, max: 50 },
+    "Binance Coin": { percentage: 1, min: 0.001, max: 0.5 },
+    Tron: { percentage: 1, min: 1, max: 50 }
+  };
+
+  const getCompanyFee = (amount, assetName) => {
+    const feeConfig = companyFees[assetName];
+    if (!feeConfig || !amount || parseFloat(amount) <= 0) return 0;
+    const rawFee = (parseFloat(amount) * feeConfig.percentage) / 100;
+    return Math.min(Math.max(rawFee, feeConfig.min), feeConfig.max);
+  };
+
   // 🔥 REMOVED: Hardcoded exchange rates - now using live priceUSD from wallet data
   // const exchangeRates = { ... }
 
@@ -1309,14 +1327,10 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
                 </div>
               </div>
 
-              <div className="rounded-lg p-4 space-y-3">
+                              <div className="rounded-lg p-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Network Fee:</span>
                   <span className="text-white">{networkFee} {selectedAsset?.abbreviation}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Amount Received:</span>
-                  <span className="text-white">{amountReceived} {selectedAsset?.abbreviation}</span>
                 </div>
               </div>
 
@@ -1336,6 +1350,13 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
 
   // Withdraw Step 2 Modal
   if (currentModal === 'withdrawStep2') {
+    const networkFee = networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || "0.0";
+    const companyFee = getCompanyFee(withdrawAmount, selectedAsset?.name);
+    const totalFees = parseFloat(networkFee) + companyFee;
+    const amountReceived = withdrawAmount ? Math.max(0, parseFloat(withdrawAmount) - totalFees).toFixed(8) : "0.00";
+    const companyFeeUsd = (companyFee * parseFloat(selectedAsset?.priceUSD || 0)).toFixed(2);
+    const networkFeeUsd = (parseFloat(networkFee) * parseFloat(selectedAsset?.priceUSD || 0)).toFixed(2);
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center overflow-y-auto z-50">
         <div className="bg-[rgba(0,0,0,0.7)] lg:rounded-xl p-6 w-full max-w-xl h-screen lg:h-[40rem] lg:mx-4 pt-10 lg:pt-0">
@@ -1417,6 +1438,25 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
                     : `≈ ${withdrawAmount} ${selectedAsset?.abbreviation}`
                   }
                 </p>
+              </div>
+
+                            <div className="rounded-lg p-4 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Company Fee (1%):</span>
+                  <span className="text-white">{companyFee.toFixed(8)} {selectedAsset?.abbreviation} <span className="text-gray-500">(≈ ${companyFeeUsd})</span></span>
+                </div>
+                {/* <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Network Fee:</span>
+                  <span className="text-white">{networkFee} {selectedAsset?.abbreviation} <span className="text-gray-500">(≈ ${networkFeeUsd})</span></span>
+                </div> */}
+                <div className="border-t border-white/10 pt-2 flex justify-between text-sm">
+                  <span className="text-gray-400 font-medium">Total Fees:</span>
+                  <span className="text-white font-medium">{totalFees.toFixed(8)} {selectedAsset?.abbreviation}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400 font-medium">Amount Received:</span>
+                  <span className="text-green-400 font-medium">{amountReceived} {selectedAsset?.abbreviation}</span>
+                </div>
               </div>
 
               <button

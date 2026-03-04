@@ -15,6 +15,27 @@ import ug3 from "../../assets/ug3.png";
 import ug4 from "../../assets/ug4.jpg";
 import usdc from "../../assets/usdc.svg";
 import usdt from "../../assets/usdt.svg";
+import base from "../../assets/base-logo.png";
+import face from "../../assets/face.svg";
+import twitter from "../../assets/twitter.svg";
+import ig from "../../assets/ig2.svg";
+import tiktok from "../../assets/tiktok.svg";
+import linkedin from "../../assets/linkedin2.svg";
+import snap from "../../assets/snapchat.svg";
+import youtube from "../../assets/youtube.svg";
+import telegram from "../../assets/telegram.svg";
+import discord from "../../assets/discord.svg";
+import pinterest from "../../assets/pinterest.svg";
+import reddit from "../../assets/reddit.svg";
+import wechat from "../../assets/wechat.svg";
+import onlyfans from "../../assets/onlyfans.svg";
+import flickr from "../../assets/flickr.svg";
+import vimeo from "../../assets/vimeo.svg";
+import qoura from "../../assets/qoura.svg";
+import twitch from "../../assets/twitch.svg";
+import tumblr from "../../assets/tumblr.svg";
+import rumble from "../../assets/rumble.png";
+import steam from "../../assets/steam.png";
 import { useUser } from '../../context/userContext';
 import apiService from '../../services/api.js';
 import { createChannelMetadata, getChannelMetadata, setChannelMetadata as persistChannelMetadata } from '../../services/channelMetadataService';
@@ -266,6 +287,35 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       'whatsapp': '💬'
     };
     return iconMap[platformLower] || '📱';
+  };
+
+  const getSocialImage = (platform) => {
+    const platformLower = (platform || '').toLowerCase();
+    const imageMap = {
+      'facebook': face,
+      'twitter': twitter,
+      'x': twitter,
+      'instagram': ig,
+      'tiktok': tiktok,
+      'linkedin': linkedin,
+      'snapchat': snap,
+      'youtube': youtube,
+      'telegram': telegram,
+      'discord': discord,
+      'pinterest': pinterest,
+      'reddit': reddit,
+      'wechat': wechat,
+      'onlyfans': onlyfans,
+      'flickr': flickr,
+      'vimeo': vimeo,
+      'quora': qoura,
+      'qoura': qoura,
+      'twitch': twitch,
+      'tumblr': tumblr,
+      'rumble': rumble,
+      'steam': steam,
+    };
+    return imageMap[platformLower] || null;
   };
 
   useEffect(() => {
@@ -5025,15 +5075,19 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         'BTC': btc,
         'ETH': eth,
         'USDT': usdt,
+        'USDC': usdc,
         'SOL': solana,
         'BNB': bnb,
         'TRX': tron,
+        'BASE': base,
         'btc': btc,
         'eth': eth,
         'usdt': usdt,
+        'usdc': usdc,
         'sol': solana,
         'bnb': bnb,
-        'trx': tron
+        'trx': tron,
+        'base': base
       };
       return imageMap[currency] || btc;
     };
@@ -5094,7 +5148,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
               <div className="flex items-center py-2 gap-2">
                 <span className="text-gray-400 text-sm">Social Account</span>
-                <img src={currencyImage} alt={tradeInitData.paymentMethod} className="w-6 h-6" />
+                {getSocialImage(platformName) ? (
+                  <img src={getSocialImage(platformName)} alt={platformName} className="w-6 h-6" />
+                ) : (
+                  <span className="text-lg">{platformIcon}</span>
+                )}
                 <span className="text-white font-medium text-sm capitalize">
                   {platformName !== 'Unknown' ? platformName : (tradeInitData.paymentNetwork || tradeInitData.paymentMethod || 'N/A')}
                 </span>
@@ -6288,7 +6346,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
     return (
       <div className="w-full h-full lg:flex-1 z-30 flex flex-col overflow-hidden lg:relative">
-        <div className="fixed lg:absolute top-0 left-0 right-0 lg:bg-[#181818] bg-[#0a0a0a] z-30 flex items-center justify-between lg:p-4 p-4 border-b border-white/10">
+        <div className="fixed lg:absolute top-0 left-0 right-0 lg:bg-[#181818] bg-[#0a0a0a] z-30 flex flex-wrap items-center justify-between lg:p-4 p-3 border-b border-white/10">
           <div className="flex items-center gap-3">
             <button
               onClick={handleBackToList}
@@ -6356,19 +6414,21 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
  {/* 🔥 Seller timer: ONLY when we have an active transaction (buyer has accepted invoice) AND it belongs to this channel. */}
           {activeTransaction && activeTransaction.role === 'seller' && activeTransactionBelongsToCurrentChannel && (
-            <TransactionCountdownBanner 
-              activeTransaction={activeTransaction}
-              setActiveTransaction={setActiveTransaction}
-              setPendingTransaction={setPendingTransaction}
-              setSuccessModalData={setSuccessModalData}
-              setShowSuccessModal={setShowSuccessModal}
-              setErrorModalData={setErrorModalData}
-              setShowErrorModal={setShowErrorModal}
-              setShowCancelTradeModal={setShowCancelTradeModal}
-              setShowAppealMenu={setShowAppealMenu}
-              showAppealMenu={showAppealMenu}
-              handleReportUser={handleReportUser}
-            />
+            <div className="hidden lg:block">
+              <TransactionCountdownBanner 
+                activeTransaction={activeTransaction}
+                setActiveTransaction={setActiveTransaction}
+                setPendingTransaction={setPendingTransaction}
+                setSuccessModalData={setSuccessModalData}
+                setShowSuccessModal={setShowSuccessModal}
+                setErrorModalData={setErrorModalData}
+                setShowErrorModal={setShowErrorModal}
+                setShowCancelTradeModal={setShowCancelTradeModal}
+                setShowAppealMenu={setShowAppealMenu}
+                showAppealMenu={showAppealMenu}
+                handleReportUser={handleReportUser}
+              />
+            </div>
           )}
 {/* 
           {activeTransaction && activeTransaction.role === 'buyer' && activeTransaction.status === 'locked' && (
@@ -6481,7 +6541,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           })()}
           {!activeTransaction && showSellerTradePrompt ? (
             // Show "Ready to Initiate Trade" button only if no active transaction
-            <div className="flex items-center justify-center z-[60] px-4">
+            <div className="hidden lg:flex items-center justify-center z-[60] px-4">
               <div className="flex gap-3 items-center w-full">
                 <p className="text-white md:font-medium text-xs md:text-sm">Ready to initiate Trade</p>
                 <button
@@ -6510,7 +6570,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
               if (!effectivePendingTxn || activeTransaction?.role === 'seller' || !activeTransactionBelongsToCurrentChannel) return null;
               return (
-            <div className="flex items-center justify-center z-[60] px-4">
+            <div className="hidden lg:flex items-center justify-center z-[60] px-4">
               <div className="flex gap-2 items-center w-full">
                 <div className="flex items-center gap-1">
                   <Lock className="w-4 h-4 text-yellow-500" />
@@ -6585,7 +6645,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             })()
           ) : showRequestModal && pendingRequest ? (
             // Priority 3: BUYER (User1) sees Accept/Decline after SELLER initiates
-            <div className="flex items-center justify-center z-[60] px-4">
+            <div className="hidden lg:flex items-center justify-center z-[60] px-4">
               <div className="flex gap-2 items-center w-full">
                 <div className="flex items-center gap-1">
                   <div className="flex-1 flex items-center gap-1">
@@ -6624,7 +6684,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             </div>
           ) : showAcceptanceNotification && acceptanceData ? (
             // Priority 4: Show waiting states
-            <div className="flex items-center justify-center z-[60] px-4">
+            <div className="hidden lg:flex items-center justify-center z-[60] px-4">
               {acceptanceData.waitingForInvoiceAccept ? (
                 <div className="flex gap-2 items-center w-full bg-amber-500/10 rounded-full px-4 py-2 border border-amber-500/30">
                   <Clock className="w-5 h-5 text-amber-500 flex-shrink-0 animate-pulse" />
@@ -6737,6 +6797,187 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               )}
             </div>
           </div>
+
+          {/* 🔥 MOBILE-ONLY: Trade action bars rendered as full-width second row */}
+          {activeTransaction && activeTransaction.role === 'seller' && activeTransactionBelongsToCurrentChannel && (
+            <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
+              <TransactionCountdownBanner 
+                activeTransaction={activeTransaction}
+                setActiveTransaction={setActiveTransaction}
+                setPendingTransaction={setPendingTransaction}
+                setSuccessModalData={setSuccessModalData}
+                setShowSuccessModal={setShowSuccessModal}
+                setErrorModalData={setErrorModalData}
+                setShowErrorModal={setShowErrorModal}
+                setShowCancelTradeModal={setShowCancelTradeModal}
+                setShowAppealMenu={setShowAppealMenu}
+                showAppealMenu={showAppealMenu}
+                handleReportUser={handleReportUser}
+              />
+            </div>
+          )}
+
+          {!activeTransaction && showSellerTradePrompt ? (
+            <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
+              <div className="flex gap-2 items-center justify-between w-full px-1">
+                <p className="text-white font-medium text-xs">Ready to initiate Trade</p>
+                <button
+                  onClick={() => {
+                    setShowSellerTradePrompt(false);
+                    setShowSellerInitiateModal(true);
+                  }}
+                  disabled={isProcessingTrade}
+                  className="px-3 py-1.5 bg-primary text-white rounded-full hover:bg-purple-700 transition-colors text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+                >
+                  Initiate Trade
+                </button>
+              </div>
+            </div>
+          ) : (() => {
+            const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+              ? pendingTransaction
+              : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+            return effectivePendingTxn && activeTransaction?.role !== 'seller' && activeTransactionBelongsToCurrentChannel;
+          })() ? (
+            (() => {
+              const effectivePendingTxn = (pendingTransaction && pendingTransaction.status !== 'cancelled')
+                ? pendingTransaction
+                : (activeTransaction?.role === 'buyer' && activeTransaction?.status !== 'cancelled' ? activeTransaction : null);
+              if (!effectivePendingTxn || activeTransaction?.role === 'seller' || !activeTransactionBelongsToCurrentChannel) return null;
+              return (
+                <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
+                  <div className="flex flex-col gap-2 w-full px-1">
+                    <div className="flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
+                      <p className="text-white text-xs">Locked:</p>
+                      <p className="text-gray-400 text-xs">
+                        ${effectivePendingTxn.amountUSD || tradeData?.accountPrice || effectivePendingTxn.amount || '0'} {(effectivePendingTxn.currency || tradeData?.paymentMethod || 'BTC').toUpperCase()}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          let tokenAmount = effectivePendingTxn?.amount || 0;
+                          let usdPrice = tradeData?.accountPrice || effectivePendingTxn?.amountUSD || effectivePendingTxn?.amount || 0;
+                          let currency = effectivePendingTxn?.currency || 'BTC';
+                          try {
+                            const activeCheck = await checkActiveTransactions();
+                            if (activeCheck?.hasActiveTransaction && activeCheck?.activeTransaction) {
+                              const backendTxn = activeCheck.activeTransaction;
+                              tokenAmount = backendTxn.amount || tokenAmount;
+                              usdPrice = backendTxn.amountUSD || usdPrice;
+                              currency = backendTxn.currency || currency;
+                            }
+                          } catch (err) {
+                            console.warn('⚠️ Could not fetch backend transaction:', err.message);
+                          }
+                          setAccountReviewData({
+                            seller: selectedUser,
+                            transaction: effectivePendingTxn,
+                            tradeData: tradeData,
+                            accountDetails: {
+                              platform: channelMetadata?.platform || tradeData?.socialAccount || selectedUser?.platform || 'Unknown',
+                              username: channelMetadata?.accountUsername || tradeData?.accountUsername || selectedUser?.accountUsername || 'N/A',
+                              followers: selectedUser?.followers || 'N/A',
+                              price: usdPrice,
+                              amount: tokenAmount,
+                              currency: currency
+                            }
+                          });
+                          setShowAccountReviewModal(true);
+                        }}
+                        disabled={isProcessingTrade}
+                        className="flex-1 px-3 py-1.5 bg-primary text-white rounded-full hover:bg-primary/20 text-xs transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-1"
+                      >
+                        <Unlock className="w-3.5 h-3.5" />
+                        Release Funds
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.zE) {
+                            window.zE('messenger', 'open');
+                          } else {
+                            window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
+                          }
+                        }}
+                        className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
+                      >
+                        Appeal
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          ) : showRequestModal && pendingRequest ? (
+            <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
+              <div className="flex flex-col gap-2 w-full px-1">
+                <div className="flex items-center gap-1">
+                  <p className="text-white text-xs">
+                    {pendingRequest.user.name || pendingRequest.user.displayName}
+                  </p>
+                  <p className="text-gray-400 text-xs">Initiated a Trade:</p>
+                  <p className="text-white font-bold text-xs ml-auto">
+                    {pendingRequest.user.price && pendingRequest.user.price !== 'N/A'
+                      ? `$${pendingRequest.user.price}`
+                      : 'Price not set'
+                    }
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAcceptRequest}
+                    disabled={isProcessingTrade}
+                    className="flex-1 px-3 py-1.5 bg-primary text-white rounded-full hover:bg-purple-700 text-xs transition-colors font-medium disabled:opacity-50"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={handleRejectRequest}
+                    disabled={isProcessingTrade}
+                    className="flex-1 px-3 py-1.5 bg-red-700/20 text-red-600 rounded-full text-xs hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : showAcceptanceNotification && acceptanceData ? (
+            <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
+              {acceptanceData.waitingForInvoiceAccept ? (
+                <div className="flex gap-2 items-center w-full bg-amber-500/10 rounded-lg px-3 py-2 border border-amber-500/30">
+                  <Clock className="w-4 h-4 text-amber-500 flex-shrink-0 animate-pulse" />
+                  <p className="text-white text-xs font-semibold flex-1">{acceptanceData.message}</p>
+                  <button onClick={() => { setShowAcceptanceNotification(false); setAcceptanceData(null); }} className="p-0.5 hover:bg-white/5 rounded-full">
+                    <X className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </div>
+              ) : acceptanceData.isWaiting ? (
+                <div className="flex gap-2 items-center w-full bg-blue-500/10 rounded-lg px-3 py-2 border border-blue-500/30">
+                  <Clock className="w-4 h-4 text-blue-500 flex-shrink-0 animate-pulse" />
+                  <div className="flex-1">
+                    <p className="text-white text-xs font-semibold">Trade Accepted</p>
+                    <p className="text-gray-400 text-[10px]">{acceptanceData.message}</p>
+                  </div>
+                  <button onClick={() => { setShowAcceptanceNotification(false); setAcceptanceData(null); }} className="p-0.5 hover:bg-white/5 rounded-full">
+                    <X className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2 items-center w-full bg-green-500/10 rounded-lg px-3 py-2 border border-green-500/30">
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-white text-xs"><span className="font-semibold">{acceptanceData.acceptedBy}</span> accepted trade</p>
+                    <p className="text-gray-400 text-[10px]">Amount: ${acceptanceData.amount} {acceptanceData.currency}</p>
+                  </div>
+                  <button onClick={() => { setShowAcceptanceNotification(false); setAcceptanceData(null); }} className="p-0.5 hover:bg-white/5 rounded-full">
+                    <X className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <div
@@ -6752,7 +6993,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             WebkitOverflowScrolling: 'touch'
           }}
         >
-          <div className="flex items-center justify-center text-center mx-auto w-fit bg-[rgba(96,60,208,0.1)] rounded-lg p-3 mb-4">
+          <div className="flex items-center justify-center text-center mx-4 md:mx-auto w-fit bg-[rgba(96,60,208,0.1)] rounded-lg p-3 mt-9 md:mt-5 mb-4">
             <p className="flex items-center justify-center gap-2 text-white text-xs text-center">
               {dangerIcon} For the safety of your assets, never trade outside the Soctral app.
             </p>
@@ -6786,7 +7027,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               isBuyer = (chatType === 'buy' && isCreator) || (chatType === 'sell' && isReceiver);
             }
             return (
-            <div className="mb-4 bg-[#1a1a1a]/80 backdrop-blur-sm max-w-[28rem] mx-auto rounded-lg border border-white/5 p-3 shadow-lg">
+            <div className="mb-4 mx-3 bg-[#1a1a1a]/80 backdrop-blur-sm max-w-[28rem] md:mx-auto rounded-lg border border-white/5 p-3 shadow-lg">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <h3 className="text-white font-semibold text-sm mb-2">
@@ -7271,7 +7512,22 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
 // 🔥 NEW: Cancel Trade Modal Component
 const CancelTradeModal = ({ show, onClose, onConfirm, isProcessing }) => {
+  const [isCancelling, setIsCancelling] = React.useState(false);
+  
   if (!show) return null;
+
+  const loading = isProcessing || isCancelling;
+
+  const handleConfirm = async () => {
+    setIsCancelling(true);
+    try {
+      await onConfirm();
+    } catch (err) {
+      console.error('Cancel trade error:', err);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
@@ -7289,15 +7545,16 @@ const CancelTradeModal = ({ show, onClose, onConfirm, isProcessing }) => {
 
           <div className="flex flex-col gap-3">
             <button
-              onClick={onConfirm}
-              disabled={isProcessing}
-              className="flex-1 px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleConfirm}
+              disabled={loading}
+              className="flex-1 px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {isProcessing ? 'Cancelling...' : 'Yes, Cancel Trade'}
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading ? 'Cancelling Trade...' : 'Yes, Cancel Trade'}
             </button>
             <button
               onClick={onClose}
-              disabled={isProcessing}
+              disabled={loading}
               className="flex-1 px-6 py-3 border border-white/20 text-white rounded-full hover:bg-white/10 transition-colors font-medium disabled:opacity-50"
             >
               Go Back
