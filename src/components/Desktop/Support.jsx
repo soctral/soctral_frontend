@@ -1,6 +1,7 @@
 import { X, Star, Info, LogOut, HelpCircle } from "lucide-react";
 import chat from "../../assets/chat.svg";
 import email from "../../assets/email.svg";
+import { openZendeskChat } from "../../services/zendesk";
 
 const SupportModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
@@ -33,12 +34,7 @@ const SupportModal = ({ isOpen, onClose }) => {
               <div 
                 className="flex items-center gap-2 pt-3 cursor-pointer hover:bg-white/5 rounded-lg p-2 transition-colors"
                 onClick={() => {
-                  // Open Zendesk chat widget
-                  if (window.zE) {
-                    window.zE('messenger', 'open');
-                  } else {
-                    window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                  }
+                  openZendeskChat();
                   onClose();
                 }}
               >
