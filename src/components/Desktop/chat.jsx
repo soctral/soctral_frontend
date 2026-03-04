@@ -43,6 +43,7 @@ import chatService from '../../services/chatService';
 import TradeStateManager from '../../services/tradeStateManager';
 import transactionService from '../../services/transactionService';
 import walletService from '../../services/walletService';
+import { openZendeskChat } from '../../services/zendesk';
 
 
 // Add this function in chat.jsx after the imports
@@ -94,9 +95,6 @@ const extractChatTypeFromChannelId = (channelId) => {
   // Legacy channels without chatType in ID, default to 'buy'
   return 'buy';
 };
-
-
-
 
 const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToList, showChat, walletData }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -4998,13 +4996,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               Cancel Trade
             </button>
             <button
-              onClick={() => {
-                if (window.zE) {
-                  window.zE('messenger', 'open');
-                } else {
-                  window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                }
-              }}
+              onClick={openZendeskChat}
               className="flex ml-0 items-end justify-end gap-2 px-4 py-2 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
             >
               Appeal
@@ -6061,13 +6053,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 <span><img src={arrow1} /></span>
               </button>
               <button
-                onClick={() => {
-                  if (window.zE) {
-                    window.zE('messenger', 'open');
-                  } else {
-                    window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                  }
-                }}
+                onClick={openZendeskChat}
                 className="w-full px-6 py-4 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-colors"
               >
                 Appeal
@@ -6627,13 +6613,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
                 {/* 🔥 Appeal button for buyer - matches seller's appeal functionality */}
                 <button
-                  onClick={() => {
-                    if (window.zE) {
-                      window.zE('messenger', 'open');
-                    } else {
-                      window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                    }
-                  }}
+                  onClick={openZendeskChat}
                   className="flex items-center gap-1 px-3 py-2 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
                 >
                   Appeal
