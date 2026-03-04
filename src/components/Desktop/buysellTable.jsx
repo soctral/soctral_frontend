@@ -24,6 +24,8 @@ import flickr from "../../assets/flickr.svg";
 import vimeo from "../../assets/vimeo.svg";
 import steam from "../../assets/steam.png";
 import qoura from "../../assets/qoura.svg";
+import usdc from "../../assets/usdc.svg";
+
 import twitch from "../../assets/twitch.svg";
 import tumblr from "../../assets/tumblr.svg";
 import btc from "../../assets/btc.svg";
@@ -109,6 +111,7 @@ const CURRENCY_ICONS = {
   BITCOIN: btcs,
   USDT: usdt,
   TETHER: usdt,
+  USDC: usdc,
   ETH: eth,
   ETHEREUM: eth,
   BASE: base,
