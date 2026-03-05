@@ -4146,22 +4146,44 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       // Step 7: Call invoice endpoint - /invoices/from-sell-order
       let response;
 
-      // 🔥 Get the order ID based on chat type (use buyOrderId/sellOrderId first so backend finds the right document)
+      // 🔥 Prefer backend channel metadata (source of truth) so buyOrderId/sellOrderId match DB
+      const channelIdForMeta = currentChannel?.id || (currentChannel?.cid && currentChannel.cid.includes(':') ? currentChannel.cid.split(':')[1] : currentChannel?.cid);
+      let backendMeta = null;
+      if (channelIdForMeta) {
+        try {
+          backendMeta = await getChannelMetadata(channelIdForMeta);
+        } catch (e) {
+          console.warn('⚠️ getChannelMetadata before invoice:', e?.message);
+        }
+      }
+
+      const toOrderId = (v) => {
+        if (v == null) return v;
+        if (typeof v === 'object' && (v.$oid != null || v.oid != null)) return v.$oid ?? v.oid ?? null;
+        return typeof v === 'string' ? v : String(v);
+      };
+
+      // 🔥 Get the order ID based on chat type (backend metadata first, then Stream, then fallbacks)
       let invoiceOrderId;
       if (chatType === 'sell') {
-        const raw = currentChannel?.data?.metadata?.buyOrderId ||
+        const raw = toOrderId(backendMeta?.buyOrderId) ||
+          currentChannel?.data?.metadata?.buyOrderId ||
           currentChannel?.data?.metadata?.accountId ||
           selectedUser?.buyOrderId ||
           orderId;
-        invoiceOrderId = typeof raw === 'object' && raw?.$oid ? raw.$oid : raw;
+        invoiceOrderId = toOrderId(raw) ?? raw;
         console.log('🔍 BuyOrderId for invoice:', invoiceOrderId);
+        if (!invoiceOrderId || invoiceOrderId === 'undefined') {
+          throw new Error('Buy order ID not found. Please ensure this channel has a valid buy order.');
+        }
       } else {
-        const raw = currentChannel?.data?.metadata?.sellOrderId ||
+        const raw = toOrderId(backendMeta?.sellOrderId) ||
+          currentChannel?.data?.metadata?.sellOrderId ||
           currentChannel?.data?.metadata?.accountId ||
           selectedUser?.sellOrderId ||
           selectedUser?._id ||
           orderId;
-        invoiceOrderId = typeof raw === 'object' && raw?.$oid ? raw.$oid : raw;
+        invoiceOrderId = toOrderId(raw) ?? raw;
         console.log('🔍 SellOrderId for invoice:', invoiceOrderId);
 
         if (!invoiceOrderId || invoiceOrderId === 'undefined') {
