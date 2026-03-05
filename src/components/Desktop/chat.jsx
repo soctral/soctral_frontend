@@ -43,7 +43,6 @@ import chatService from '../../services/chatService';
 import TradeStateManager from '../../services/tradeStateManager';
 import transactionService from '../../services/transactionService';
 import walletService from '../../services/walletService';
-import { openZendeskChat } from '../../services/zendesk';
 import SupportChatModal from './SupportChatModal';
 
 
@@ -4147,20 +4146,22 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       // Step 7: Call invoice endpoint - /invoices/from-sell-order
       let response;
 
-      // 🔥 Get the order ID based on chat type
+      // 🔥 Get the order ID based on chat type (use buyOrderId/sellOrderId first so backend finds the right document)
       let invoiceOrderId;
       if (chatType === 'sell') {
-        invoiceOrderId = currentChannel?.data?.metadata?.accountId ||
-          currentChannel?.data?.metadata?.buyOrderId ||
+        const raw = currentChannel?.data?.metadata?.buyOrderId ||
+          currentChannel?.data?.metadata?.accountId ||
           selectedUser?.buyOrderId ||
           orderId;
+        invoiceOrderId = typeof raw === 'object' && raw?.$oid ? raw.$oid : raw;
         console.log('🔍 BuyOrderId for invoice:', invoiceOrderId);
       } else {
-        invoiceOrderId = currentChannel?.data?.metadata?.accountId ||
-          currentChannel?.data?.metadata?.sellOrderId ||
+        const raw = currentChannel?.data?.metadata?.sellOrderId ||
+          currentChannel?.data?.metadata?.accountId ||
           selectedUser?.sellOrderId ||
           selectedUser?._id ||
           orderId;
+        invoiceOrderId = typeof raw === 'object' && raw?.$oid ? raw.$oid : raw;
         console.log('🔍 SellOrderId for invoice:', invoiceOrderId);
 
         if (!invoiceOrderId || invoiceOrderId === 'undefined') {
