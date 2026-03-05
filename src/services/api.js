@@ -2,13 +2,12 @@
 // services/api.js - FIXED: Removed encryption for trade initiation
 // ========================================
 
+import { API_BASE_URL } from "../config.js";
 import encryptionService from "./encryption.service.js";
 
 class ApiService {
   constructor() {
-    this.baseURL =
-      // "http://localhost:3022";
-      "https://soctra-api-6bcecb2e8189.herokuapp.com";
+    this.baseURL = API_BASE_URL;
     this.defaultHeaders = {
       "Content-Type": "application/json",
       Accept: "application/json",
@@ -42,6 +41,8 @@ class ApiService {
       "/invoices/",
       "/channels", // Channel metadata/lifecycle - no encryption
       "/channels/",
+      "/support", // Support/appeal chat channel - no encryption
+      "/support/",
     ];
   }
 

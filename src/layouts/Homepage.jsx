@@ -61,6 +61,7 @@ import walletService from '../services/walletService';
 import chatService from '../services/chatService';
 import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from '../config.js';
 
 
 
@@ -135,7 +136,7 @@ const HomePage = () => {
     if (!token) return;
 
     // Initialize socket connection
-    socketRef.current = io('https://soctra-api-6bcecb2e8189.herokuapp.com', {
+    socketRef.current = io(API_BASE_URL, {
       auth: { token },
       transports: ['websocket'],
       reconnection: true,

@@ -44,6 +44,7 @@ import TradeStateManager from '../../services/tradeStateManager';
 import transactionService from '../../services/transactionService';
 import walletService from '../../services/walletService';
 import { openZendeskChat } from '../../services/zendesk';
+import SupportChatModal from './SupportChatModal';
 
 
 // Add this function in chat.jsx after the imports
@@ -153,6 +154,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const [showAppealMenu, setShowAppealMenu] = useState(false);
   const [copiedChannelId, setCopiedChannelId] = useState(false);
   const [isReleasingFunds, setIsReleasingFunds] = useState(false);
+  const [showSupportChatModal, setShowSupportChatModal] = useState(false);
+  const [supportChannelId, setSupportChannelId] = useState(null);
+  const [supportChannelType, setSupportChannelType] = useState('support');
+  const [isOpeningSupport, setIsOpeningSupport] = useState(false);
   
   // 🔥 NEW: Full-screen transaction success modal
   const [showTransactionSuccessModal, setShowTransactionSuccessModal] = useState(false);
@@ -2658,8 +2663,50 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser?.id || selectedUser?._id, selectedUser?.accountId || selectedUser?.sellOrderId, isInitialized, userData?._id || userData?.id]);
 
-
-
+  const openSupportChat = async () => {
+    // Prefer actual transaction _id (from API) over trade init data which may contain invoice id
+    const transactionId =
+      activeTransaction?._id ||
+      activeTransaction?.id ||
+      pendingTransaction?._id ||
+      pendingTransaction?.id ||
+      tradeData?.transactionId ||
+      tradeInitData?.transactionId ||
+      tradeInitData?._id;
+    if (!transactionId) {
+      setErrorModalData({
+        title: 'Appeal',
+        message: 'No active transaction. Start or open a trade first, then use Appeal.',
+        canRetry: false,
+      });
+      setShowErrorModal(true);
+      return;
+    }
+    setIsOpeningSupport(true);
+    try {
+      const res = await apiService.post('/support/channel', { transactionId });
+      const data = res?.data || res;
+      const cid = data?.channelId;
+      const ctype = data?.channelType || 'support';
+      if (cid) {
+        setSupportChannelId(cid);
+        setSupportChannelType(ctype);
+        setShowSupportChatModal(true);
+      } else {
+        setErrorModalData({ title: 'Appeal', message: 'Could not open support chat.', canRetry: true });
+        setShowErrorModal(true);
+      }
+    } catch (err) {
+      setErrorModalData({
+        title: 'Appeal',
+        message: err?.response?.data?.message || err?.message || 'Failed to open support chat.',
+        canRetry: true,
+      });
+      setShowErrorModal(true);
+    } finally {
+      setIsOpeningSupport(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -4593,9 +4640,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const getChatUsersFromChannels = () => {
     const currentUserId = userData?._id || userData?.id;
 
-    // 🔥 FIXED: Only filter channels that THIS user specifically deleted
+    // 🔥 FIXED: Only filter channels that THIS user specifically deleted; never show support/appeal channels in main list
     const visibleChannels = channels.filter(channel => {
       const channelId = channel.id || (channel.cid ? channel.cid.split(':')[1] : null);
+
+      // Support (appeal) channels are opened via Appeal button in a modal — do not show in chat list
+      if (channelId && String(channelId).startsWith('support_')) {
+        return false;
+      }
 
       // Extract base channel ID for deletion marker lookup
       const idParts = channelId?.split('_') || [];
@@ -5011,7 +5063,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             </button>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
+              onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
               className="flex ml-0 items-end justify-end gap-2 px-4 py-2 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
             >
               Appeal
@@ -6078,7 +6130,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               </button>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
+                onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
                 className="w-full px-6 py-4 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-colors"
               >
                 Appeal
@@ -6506,7 +6558,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowAppealMenu(false);
-                          openZendeskChat();
+                          openSupportChat();
                         }}
                         className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors"
                       >
@@ -6650,7 +6702,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 {/* 🔥 Appeal button for buyer - open in-page support chat (same as bottom-right launcher) */}
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
+                  onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
                   className="flex items-center gap-1 px-3 py-2 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
                 >
                   Appeal
@@ -6911,7 +6963,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       </button>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
+                        onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
                         className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
                       >
                         Appeal
@@ -7513,6 +7565,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             }
           }}
           isProcessing={false}
+        />
+
+        {/* Support / Appeal chat modal */}
+        <SupportChatModal
+          isOpen={showSupportChatModal}
+          onClose={() => {
+            setShowSupportChatModal(false);
+            setSupportChannelId(null);
+            setSupportChannelType('support');
+          }}
+          channelType={supportChannelType}
+          channelId={supportChannelId}
         />
 
       </>

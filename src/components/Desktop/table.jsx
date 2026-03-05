@@ -1,59 +1,44 @@
-import { useState, useMemo, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import {
-  Plus,
-  Eye,
-  EyeOff,
   ChevronLeft,
-  Star,
-  ArrowLeft,
-  X,
   ChevronRight,
-  ChevronDown,
-  Gift,
-  Bell,
+  Star
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Slider from "react-slick";
-import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
-import withdraw from "../../assets/withdrawal.svg";
-import btc from "../../assets/btc.svg";
-import usdt from "../../assets/usdt.svg";
-import eth from "../../assets/eth.svg";
+import "slick-carousel/slick/slick.css";
+import discord from "../../assets/discord.svg";
+import face from "../../assets/face.svg";
+import flickr from "../../assets/flickr.svg";
 import frame0 from "../../assets/frame1.svg";
 import frame00 from "../../assets/frame2.svg";
 import frame000 from "../../assets/frame3.svg";
-import badge from "../../assets/verifiedstar.svg";
 import ig from "../../assets/ig2.svg";
-import linkedin from "../../assets/linkedin.svg";
-import tik from "../../assets/tik.svg";
-import ig2 from "../../assets/socialicon.svg";
-import face from "../../assets/face.svg";
-import twitter from "../../assets/twitter.svg";
-import tiktok from "../../assets/tiktok.svg";
 import linkedin2 from "../../assets/linkedin2.svg";
-import snap from "../../assets/snapchat.svg";
-import youtube from "../../assets/youtube.svg";
-import telegram from "../../assets/telegram.svg";
-import discord from "../../assets/discord.svg";
-import pinterest from "../../assets/pinterest.svg";
-import reddit from "../../assets/reddit.svg";
-import wechat from "../../assets/wechat.svg";
 import onlyfans from "../../assets/onlyfans.svg";
-import flickr from "../../assets/flickr.svg";
-import vimeo from "../../assets/vimeo.svg";
-import steam from "../../assets/steam.png";
+import pinterest from "../../assets/pinterest.svg";
 import qoura from "../../assets/qoura.svg";
-import twitch from "../../assets/twitch.svg";
-import tumblr from "../../assets/tumblr.svg";
+import reddit from "../../assets/reddit.svg";
 import rumble from "../../assets/rumble.png";
-import ug1 from "../../assets/ug1.png";
-import { useAllSellOrders } from "../../hooks/useOrders";
-import { queryKeys } from "../../hooks/queryKeys";
-import { useUser } from "../../context/userContext";
+import snap from "../../assets/snapchat.svg";
+import ig2 from "../../assets/socialicon.svg";
 import logo from "../../assets/SoctralbgLogo.png";
-import apiService from "../../services/api"
+import steam from "../../assets/steam.png";
+import telegram from "../../assets/telegram.svg";
+import tiktok from "../../assets/tiktok.svg";
+import tumblr from "../../assets/tumblr.svg";
+import twitch from "../../assets/twitch.svg";
+import twitter from "../../assets/twitter.svg";
+import badge from "../../assets/verifiedstar.svg";
+import vimeo from "../../assets/vimeo.svg";
+import wechat from "../../assets/wechat.svg";
+import youtube from "../../assets/youtube.svg";
+import { API_BASE_URL } from "../../config.js";
+import { useUser } from "../../context/userContext";
+import { queryKeys } from "../../hooks/queryKeys";
+import { useAllSellOrders } from "../../hooks/useOrders";
+import apiService from "../../services/api";
 
 
 
@@ -194,7 +179,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
         return null;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
