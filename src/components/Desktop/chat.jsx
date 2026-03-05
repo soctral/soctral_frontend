@@ -1,41 +1,41 @@
 import { AlertCircle, ArrowLeft, Ban, Check, CheckCheck, CheckCircle, Clock, Copy, Download, Eye, EyeOff, FileText, Flag, Loader2, Lock, MessageSquare, MoreVertical, Paperclip, Search, Send, Trash2, Unlock, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import base from "../../assets/base-logo.png";
 import bnb from "../../assets/bnb.svg";
 import btc from "../../assets/btc.svg";
+import discord from "../../assets/discord.svg";
 import eth from "../../assets/eth.svg";
+import face from "../../assets/face.svg";
+import flickr from "../../assets/flickr.svg";
 import successcard from "../../assets/fram.svg";
+import ig from "../../assets/ig2.svg";
+import linkedin from "../../assets/linkedin2.svg";
 import arrow1 from "../../assets/marrow.png";
+import onlyfans from "../../assets/onlyfans.svg";
+import pinterest from "../../assets/pinterest.svg";
+import qoura from "../../assets/qoura.svg";
+import reddit from "../../assets/reddit.svg";
+import rumble from "../../assets/rumble.png";
+import snap from "../../assets/snapchat.svg";
 import solana from "../../assets/sol.svg";
+import steam from "../../assets/steam.png";
 import success from "../../assets/suc.png";
+import telegram from "../../assets/telegram.svg";
+import tiktok from "../../assets/tiktok.svg";
 import warning from "../../assets/triangle.svg";
 import tron from "../../assets/trx.svg";
+import tumblr from "../../assets/tumblr.svg";
+import twitch from "../../assets/twitch.svg";
+import twitter from "../../assets/twitter.svg";
 import ug1 from "../../assets/ug1.png";
 import ug2 from "../../assets/ug2.png";
 import ug3 from "../../assets/ug3.png";
 import ug4 from "../../assets/ug4.jpg";
 import usdc from "../../assets/usdc.svg";
 import usdt from "../../assets/usdt.svg";
-import base from "../../assets/base-logo.png";
-import face from "../../assets/face.svg";
-import twitter from "../../assets/twitter.svg";
-import ig from "../../assets/ig2.svg";
-import tiktok from "../../assets/tiktok.svg";
-import linkedin from "../../assets/linkedin2.svg";
-import snap from "../../assets/snapchat.svg";
-import youtube from "../../assets/youtube.svg";
-import telegram from "../../assets/telegram.svg";
-import discord from "../../assets/discord.svg";
-import pinterest from "../../assets/pinterest.svg";
-import reddit from "../../assets/reddit.svg";
-import wechat from "../../assets/wechat.svg";
-import onlyfans from "../../assets/onlyfans.svg";
-import flickr from "../../assets/flickr.svg";
 import vimeo from "../../assets/vimeo.svg";
-import qoura from "../../assets/qoura.svg";
-import twitch from "../../assets/twitch.svg";
-import tumblr from "../../assets/tumblr.svg";
-import rumble from "../../assets/rumble.png";
-import steam from "../../assets/steam.png";
+import wechat from "../../assets/wechat.svg";
+import youtube from "../../assets/youtube.svg";
 import { useUser } from '../../context/userContext';
 import apiService from '../../services/api.js';
 import { createChannelMetadata, getChannelMetadata, setChannelMetadata as persistChannelMetadata } from '../../services/channelMetadataService';
@@ -806,19 +806,29 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             // 🔥 NEW: Handle buyer_initiated message to start seller's timer
             if (message.buyer_initiated === true) {
               const sellerId = message.seller_id;
-              const isForCurrentChannel = !event.cid || event.cid === currentChannelRef.current?.cid;
+              const curCid = currentChannelRef.current?.cid;
+              const curChannelId = currentChannelRef.current?.id || (curCid && curCid.includes(':') ? curCid.split(':')[1] : curCid);
+              const eventCid = event?.cid;
+              const eventChannelId = event?.channel_id ?? event?.channel?.id ?? (eventCid && eventCid.includes(':') ? eventCid.split(':')[1] : eventCid);
+              const isForCurrentChannel = !curChannelId || !eventChannelId || eventCid === curCid || eventChannelId === curChannelId;
               console.log('📦 Received buyer_initiated message:', {
                 sellerId,
                 currentUserId,
                 isForMe: sellerId === currentUserId,
                 transactionId: message.transaction_id,
-                isForCurrentChannel
+                isForCurrentChannel,
+                eventCid,
+                eventChannelId,
+                curCid,
+                curChannelId
               });
               
               // If current user is the seller and this message is for the channel they're viewing, set activeTransaction so countdown banner shows
               if (sellerId === currentUserId && isForCurrentChannel) {
                 const timerDuration = message.timer_duration || 300;
                 const initiatedAt = message.initiated_at || message.created_at || new Date().toISOString();
+                const buyerIdFromMsg = message.user?.id || message.user_id || event?.user?.id;
+                const sellerChId = currentChannelRef.current?.id || (currentChannelRef.current?.cid && currentChannelRef.current.cid.includes(':') ? currentChannelRef.current.cid.split(':')[1] : currentChannelRef.current?.cid);
                 console.log('🔥 SELLER: Buyer has initiated trade! Setting activeTransaction and starting timer...');
                 setShowAcceptanceNotification(false);
                 setAcceptanceData(null);
@@ -828,6 +838,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   role: 'seller',
                   status: 'pending',
                   sellerId: currentUserId,
+                  seller: { userId: currentUserId, _id: currentUserId },
+                  buyer: buyerIdFromMsg ? { userId: buyerIdFromMsg, _id: buyerIdFromMsg } : undefined,
+                  buyerId: buyerIdFromMsg,
+                  channelId: sellerChId,
                   createdAt: initiatedAt,
                   timerDuration
                 });
@@ -4996,7 +5010,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               Cancel Trade
             </button>
             <button
-              onClick={openZendeskChat}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
               className="flex ml-0 items-end justify-end gap-2 px-4 py-2 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
             >
               Appeal
@@ -5329,13 +5344,22 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       ...tradeInitData,
                       transactionId: transactionId
                     });
+                    const buyerUserId = userData?._id || userData?.id;
+                    const sellerUserId = tradeInitData.sellerId || tradeInitData.seller?.id || tradeInitData.seller?._id;
+                    const chId = currentChannel?.id || currentChannel?.cid?.split(':')[1] || '';
                     setActiveTransaction({
                       id: transactionId,
+                      _id: transactionId,
                       status: 'locked',
                       role: 'buyer',
                       amount: tradeInitData.accountPrice || tradeInitData.amount || 0,
                       currency: (tradeInitData.paymentMethod || 'SOL').toUpperCase(),
-                      createdAt: new Date().toISOString()
+                      createdAt: new Date().toISOString(),
+                      channelId: chId,
+                      seller: sellerUserId ? { userId: sellerUserId, _id: sellerUserId } : undefined,
+                      sellerId: sellerUserId,
+                      buyer: buyerUserId ? { userId: buyerUserId, _id: buyerUserId } : undefined,
+                      buyerId: buyerUserId
                     });
                     
                     // 🔥 NEW: Persist to TradeStateManager for reload persistence
@@ -6053,7 +6077,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 <span><img src={arrow1} /></span>
               </button>
               <button
-                onClick={openZendeskChat}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
                 className="w-full px-6 py-4 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-colors"
               >
                 Appeal
@@ -6477,8 +6502,19 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   {showAppealMenu && (
                     <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl z-30 overflow-hidden">
                       <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowAppealMenu(false);
+                          openZendeskChat();
+                        }}
+                        className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors"
+                      >
+                        Contact support
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => {
-                          // Navigate to seller profile
                           setShowAppealMenu(false);
                         }}
                         className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors"
@@ -6486,8 +6522,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         View Seller Profile
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
-                          // Report seller
                           setShowAppealMenu(false);
                           handleReportUser();
                         }}
@@ -6611,9 +6647,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   Release Funds
                 </button>
 
-                {/* 🔥 Appeal button for buyer - matches seller's appeal functionality */}
+                {/* 🔥 Appeal button for buyer - open in-page support chat (same as bottom-right launcher) */}
                 <button
-                  onClick={openZendeskChat}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
                   className="flex items-center gap-1 px-3 py-2 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
                 >
                   Appeal
@@ -6873,13 +6910,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         Release Funds
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.zE) {
-                            window.zE('messenger', 'open');
-                          } else {
-                            window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                          }
-                        }}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openZendeskChat(); }}
                         className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
                       >
                         Appeal
