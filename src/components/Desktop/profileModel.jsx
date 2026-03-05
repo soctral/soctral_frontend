@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Eye, EyeOff } from 'lucide-react';
-import { useUser } from '../../context/userContext'; 
+import { useUser } from '../../context/userContext';
+import { API_BASE_URL } from '../../config.js'; 
 
 const ProfileUpdateModal = ({ 
   isOpen, 
@@ -344,7 +345,7 @@ const ProfileUpdateModal = ({
           newDisplayName: formData.newValue
         };
 
-        updateResponse = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/user/update-display-name', {
+        updateResponse = await fetch(`${API_BASE_URL}/user/update-display-name`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -361,7 +362,7 @@ const ProfileUpdateModal = ({
           newPassword: formData.newValue
         };
 
-        updateResponse = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/user/change-password', {
+        updateResponse = await fetch(`${API_BASE_URL}/user/change-password`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -378,7 +379,7 @@ const ProfileUpdateModal = ({
           newPhoneNumber: formData.newValue
         };
 
-        updateResponse = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/user/update-phone-number', {
+        updateResponse = await fetch(`${API_BASE_URL}/user/update-phone-number`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -582,7 +583,7 @@ const ProfileUpdateModal = ({
         purpose: purpose
       };
 
-      const response = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/otp/send', {
+      const response = await fetch(`${API_BASE_URL}/otp/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

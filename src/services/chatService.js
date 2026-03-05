@@ -325,8 +325,22 @@ class ChatService {
     }
   }
 
-
-
+  /**
+   * Watch and return a support (appeal) channel. Call after backend created it via POST /support/channel.
+   */
+  async watchSupportChannel(channelType, channelId) {
+    try {
+      if (!this.client || !this.currentUser) {
+        throw new Error('Chat client not initialized');
+      }
+      const channel = this.client.channel(channelType, channelId);
+      await channel.watch();
+      return channel;
+    } catch (error) {
+      console.error('❌ watchSupportChannel error:', error.message);
+      throw error;
+    }
+  }
 
   async getUserChannels() {
     try {

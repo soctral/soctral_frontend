@@ -1,10 +1,16 @@
 import { X, Star, Info, LogOut, HelpCircle } from "lucide-react";
 import chat from "../../assets/chat.svg";
 import email from "../../assets/email.svg";
-import { openZendeskChat } from "../../services/zendesk";
 
-const SupportModal = ({ isOpen, onClose }) => {
+const SupportModal = ({ isOpen, onClose, onOpenLiveChat }) => {
   if (!isOpen) return null;
+
+  const handleLiveWebChat = () => {
+    if (typeof onOpenLiveChat === 'function') {
+      onOpenLiveChat();
+      onClose();
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black/80 z-[9999] rounded-md flex items-center justify-center p-4">
@@ -33,10 +39,7 @@ const SupportModal = ({ isOpen, onClose }) => {
 
               <div 
                 className="flex items-center gap-2 pt-3 cursor-pointer hover:bg-white/5 rounded-lg p-2 transition-colors"
-                onClick={() => {
-                  openZendeskChat();
-                  onClose();
-                }}
+                onClick={handleLiveWebChat}
               >
                 <img src={chat} alt="" />
                 <div className="text-sm ">
