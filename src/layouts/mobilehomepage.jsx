@@ -39,6 +39,7 @@ import ig from "../assets/ig2.svg";
 import UploadAccountListed from '../components/Desktop/UploadAccountListed';
 import walletService from '../services/walletService';
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from '../config.js';
 
 import tiktok from "../assets/tiktok.svg";
 import linkedin2 from "../assets/linkedin2.svg";
@@ -316,7 +317,7 @@ const MobileHomePage = () => {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
-    const socketUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://soctralapi-production.up.railway.app'}`;
+    const socketUrl = API_BASE_URL;
 
     if (!socketRef.current) {
       socketRef.current = io(socketUrl, {

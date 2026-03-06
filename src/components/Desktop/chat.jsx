@@ -1,41 +1,41 @@
 import { AlertCircle, ArrowLeft, Ban, Check, CheckCheck, CheckCircle, Clock, Copy, Download, Eye, EyeOff, FileText, Flag, Loader2, Lock, MessageSquare, MoreVertical, Paperclip, Search, Send, Trash2, Unlock, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import base from "../../assets/base-logo.png";
 import bnb from "../../assets/bnb.svg";
 import btc from "../../assets/btc.svg";
+import discord from "../../assets/discord.svg";
 import eth from "../../assets/eth.svg";
+import face from "../../assets/face.svg";
+import flickr from "../../assets/flickr.svg";
 import successcard from "../../assets/fram.svg";
+import ig from "../../assets/ig2.svg";
+import linkedin from "../../assets/linkedin2.svg";
 import arrow1 from "../../assets/marrow.png";
+import onlyfans from "../../assets/onlyfans.svg";
+import pinterest from "../../assets/pinterest.svg";
+import qoura from "../../assets/qoura.svg";
+import reddit from "../../assets/reddit.svg";
+import rumble from "../../assets/rumble.png";
+import snap from "../../assets/snapchat.svg";
 import solana from "../../assets/sol.svg";
+import steam from "../../assets/steam.png";
 import success from "../../assets/suc.png";
+import telegram from "../../assets/telegram.svg";
+import tiktok from "../../assets/tiktok.svg";
 import warning from "../../assets/triangle.svg";
 import tron from "../../assets/trx.svg";
+import tumblr from "../../assets/tumblr.svg";
+import twitch from "../../assets/twitch.svg";
+import twitter from "../../assets/twitter.svg";
 import ug1 from "../../assets/ug1.png";
 import ug2 from "../../assets/ug2.png";
 import ug3 from "../../assets/ug3.png";
 import ug4 from "../../assets/ug4.jpg";
 import usdc from "../../assets/usdc.svg";
 import usdt from "../../assets/usdt.svg";
-import base from "../../assets/base-logo.png";
-import face from "../../assets/face.svg";
-import twitter from "../../assets/twitter.svg";
-import ig from "../../assets/ig2.svg";
-import tiktok from "../../assets/tiktok.svg";
-import linkedin from "../../assets/linkedin2.svg";
-import snap from "../../assets/snapchat.svg";
-import youtube from "../../assets/youtube.svg";
-import telegram from "../../assets/telegram.svg";
-import discord from "../../assets/discord.svg";
-import pinterest from "../../assets/pinterest.svg";
-import reddit from "../../assets/reddit.svg";
-import wechat from "../../assets/wechat.svg";
-import onlyfans from "../../assets/onlyfans.svg";
-import flickr from "../../assets/flickr.svg";
 import vimeo from "../../assets/vimeo.svg";
-import qoura from "../../assets/qoura.svg";
-import twitch from "../../assets/twitch.svg";
-import tumblr from "../../assets/tumblr.svg";
-import rumble from "../../assets/rumble.png";
-import steam from "../../assets/steam.png";
+import wechat from "../../assets/wechat.svg";
+import youtube from "../../assets/youtube.svg";
 import { useUser } from '../../context/userContext';
 import apiService from '../../services/api.js';
 import { createChannelMetadata, getChannelMetadata, setChannelMetadata as persistChannelMetadata } from '../../services/channelMetadataService';
@@ -43,6 +43,7 @@ import chatService from '../../services/chatService';
 import TradeStateManager from '../../services/tradeStateManager';
 import transactionService from '../../services/transactionService';
 import walletService from '../../services/walletService';
+import SupportChatModal from './SupportChatModal';
 
 
 // Add this function in chat.jsx after the imports
@@ -94,9 +95,6 @@ const extractChatTypeFromChannelId = (channelId) => {
   // Legacy channels without chatType in ID, default to 'buy'
   return 'buy';
 };
-
-
-
 
 const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToList, showChat, walletData }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,6 +153,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const [showAppealMenu, setShowAppealMenu] = useState(false);
   const [copiedChannelId, setCopiedChannelId] = useState(false);
   const [isReleasingFunds, setIsReleasingFunds] = useState(false);
+  const [showSupportChatModal, setShowSupportChatModal] = useState(false);
+  const [supportChannelId, setSupportChannelId] = useState(null);
+  const [supportChannelType, setSupportChannelType] = useState('support');
+  const [isOpeningSupport, setIsOpeningSupport] = useState(false);
   
   // 🔥 NEW: Full-screen transaction success modal
   const [showTransactionSuccessModal, setShowTransactionSuccessModal] = useState(false);
@@ -808,19 +810,29 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             // 🔥 NEW: Handle buyer_initiated message to start seller's timer
             if (message.buyer_initiated === true) {
               const sellerId = message.seller_id;
-              const isForCurrentChannel = !event.cid || event.cid === currentChannelRef.current?.cid;
+              const curCid = currentChannelRef.current?.cid;
+              const curChannelId = currentChannelRef.current?.id || (curCid && curCid.includes(':') ? curCid.split(':')[1] : curCid);
+              const eventCid = event?.cid;
+              const eventChannelId = event?.channel_id ?? event?.channel?.id ?? (eventCid && eventCid.includes(':') ? eventCid.split(':')[1] : eventCid);
+              const isForCurrentChannel = !curChannelId || !eventChannelId || eventCid === curCid || eventChannelId === curChannelId;
               console.log('📦 Received buyer_initiated message:', {
                 sellerId,
                 currentUserId,
                 isForMe: sellerId === currentUserId,
                 transactionId: message.transaction_id,
-                isForCurrentChannel
+                isForCurrentChannel,
+                eventCid,
+                eventChannelId,
+                curCid,
+                curChannelId
               });
               
               // If current user is the seller and this message is for the channel they're viewing, set activeTransaction so countdown banner shows
               if (sellerId === currentUserId && isForCurrentChannel) {
                 const timerDuration = message.timer_duration || 300;
                 const initiatedAt = message.initiated_at || message.created_at || new Date().toISOString();
+                const buyerIdFromMsg = message.user?.id || message.user_id || event?.user?.id;
+                const sellerChId = currentChannelRef.current?.id || (currentChannelRef.current?.cid && currentChannelRef.current.cid.includes(':') ? currentChannelRef.current.cid.split(':')[1] : currentChannelRef.current?.cid);
                 console.log('🔥 SELLER: Buyer has initiated trade! Setting activeTransaction and starting timer...');
                 setShowAcceptanceNotification(false);
                 setAcceptanceData(null);
@@ -830,6 +842,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   role: 'seller',
                   status: 'pending',
                   sellerId: currentUserId,
+                  seller: { userId: currentUserId, _id: currentUserId },
+                  buyer: buyerIdFromMsg ? { userId: buyerIdFromMsg, _id: buyerIdFromMsg } : undefined,
+                  buyerId: buyerIdFromMsg,
+                  channelId: sellerChId,
                   createdAt: initiatedAt,
                   timerDuration
                 });
@@ -2646,8 +2662,50 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser?.id || selectedUser?._id, selectedUser?.accountId || selectedUser?.sellOrderId, isInitialized, userData?._id || userData?.id]);
 
-
-
+  const openSupportChat = async () => {
+    // Prefer actual transaction _id (from API) over trade init data which may contain invoice id
+    const transactionId =
+      activeTransaction?._id ||
+      activeTransaction?.id ||
+      pendingTransaction?._id ||
+      pendingTransaction?.id ||
+      tradeData?.transactionId ||
+      tradeInitData?.transactionId ||
+      tradeInitData?._id;
+    if (!transactionId) {
+      setErrorModalData({
+        title: 'Appeal',
+        message: 'No active transaction. Start or open a trade first, then use Appeal.',
+        canRetry: false,
+      });
+      setShowErrorModal(true);
+      return;
+    }
+    setIsOpeningSupport(true);
+    try {
+      const res = await apiService.post('/support/channel', { transactionId });
+      const data = res?.data || res;
+      const cid = data?.channelId;
+      const ctype = data?.channelType || 'support';
+      if (cid) {
+        setSupportChannelId(cid);
+        setSupportChannelType(ctype);
+        setShowSupportChatModal(true);
+      } else {
+        setErrorModalData({ title: 'Appeal', message: 'Could not open support chat.', canRetry: true });
+        setShowErrorModal(true);
+      }
+    } catch (err) {
+      setErrorModalData({
+        title: 'Appeal',
+        message: err?.response?.data?.message || err?.message || 'Failed to open support chat.',
+        canRetry: true,
+      });
+      setShowErrorModal(true);
+    } finally {
+      setIsOpeningSupport(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -4088,20 +4146,44 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       // Step 7: Call invoice endpoint - /invoices/from-sell-order
       let response;
 
-      // 🔥 Get the order ID based on chat type
+      // 🔥 Prefer backend channel metadata (source of truth) so buyOrderId/sellOrderId match DB
+      const channelIdForMeta = currentChannel?.id || (currentChannel?.cid && currentChannel.cid.includes(':') ? currentChannel.cid.split(':')[1] : currentChannel?.cid);
+      let backendMeta = null;
+      if (channelIdForMeta) {
+        try {
+          backendMeta = await getChannelMetadata(channelIdForMeta);
+        } catch (e) {
+          console.warn('⚠️ getChannelMetadata before invoice:', e?.message);
+        }
+      }
+
+      const toOrderId = (v) => {
+        if (v == null) return v;
+        if (typeof v === 'object' && (v.$oid != null || v.oid != null)) return v.$oid ?? v.oid ?? null;
+        return typeof v === 'string' ? v : String(v);
+      };
+
+      // 🔥 Get the order ID based on chat type (backend metadata first, then Stream, then fallbacks)
       let invoiceOrderId;
       if (chatType === 'sell') {
-        invoiceOrderId = currentChannel?.data?.metadata?.accountId ||
+        const raw = toOrderId(backendMeta?.buyOrderId) ||
           currentChannel?.data?.metadata?.buyOrderId ||
+          currentChannel?.data?.metadata?.accountId ||
           selectedUser?.buyOrderId ||
           orderId;
+        invoiceOrderId = toOrderId(raw) ?? raw;
         console.log('🔍 BuyOrderId for invoice:', invoiceOrderId);
+        if (!invoiceOrderId || invoiceOrderId === 'undefined') {
+          throw new Error('Buy order ID not found. Please ensure this channel has a valid buy order.');
+        }
       } else {
-        invoiceOrderId = currentChannel?.data?.metadata?.accountId ||
+        const raw = toOrderId(backendMeta?.sellOrderId) ||
           currentChannel?.data?.metadata?.sellOrderId ||
+          currentChannel?.data?.metadata?.accountId ||
           selectedUser?.sellOrderId ||
           selectedUser?._id ||
           orderId;
+        invoiceOrderId = toOrderId(raw) ?? raw;
         console.log('🔍 SellOrderId for invoice:', invoiceOrderId);
 
         if (!invoiceOrderId || invoiceOrderId === 'undefined') {
@@ -4581,9 +4663,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const getChatUsersFromChannels = () => {
     const currentUserId = userData?._id || userData?.id;
 
-    // 🔥 FIXED: Only filter channels that THIS user specifically deleted
+    // 🔥 FIXED: Only filter channels that THIS user specifically deleted; never show support/appeal channels in main list
     const visibleChannels = channels.filter(channel => {
       const channelId = channel.id || (channel.cid ? channel.cid.split(':')[1] : null);
+
+      // Support (appeal) channels are opened via Appeal button in a modal — do not show in chat list
+      if (channelId && String(channelId).startsWith('support_')) {
+        return false;
+      }
 
       // Extract base channel ID for deletion marker lookup
       const idParts = channelId?.split('_') || [];
@@ -4998,13 +5085,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               Cancel Trade
             </button>
             <button
-              onClick={() => {
-                if (window.zE) {
-                  window.zE('messenger', 'open');
-                } else {
-                  window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                }
-              }}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
               className="flex ml-0 items-end justify-end gap-2 px-4 py-2 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors"
             >
               Appeal
@@ -5338,13 +5420,22 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       ...tradeInitData,
                       transactionId: transactionId
                     });
+                    const buyerUserId = userData?._id || userData?.id;
+                    const sellerUserId = tradeInitData.sellerId || tradeInitData.seller?.id || tradeInitData.seller?._id;
+                    const chId = currentChannel?.id || currentChannel?.cid?.split(':')[1] || '';
                     setActiveTransaction({
                       id: transactionId,
+                      _id: transactionId,
                       status: 'locked',
                       role: 'buyer',
                       amount: tradeInitData.accountPrice || tradeInitData.amount || 0,
                       currency: (tradeInitData.paymentMethod || 'SOL').toUpperCase(),
-                      createdAt: new Date().toISOString()
+                      createdAt: new Date().toISOString(),
+                      channelId: chId,
+                      seller: sellerUserId ? { userId: sellerUserId, _id: sellerUserId } : undefined,
+                      sellerId: sellerUserId,
+                      buyer: buyerUserId ? { userId: buyerUserId, _id: buyerUserId } : undefined,
+                      buyerId: buyerUserId
                     });
                     
                     // 🔥 NEW: Persist to TradeStateManager for reload persistence
@@ -6061,13 +6152,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 <span><img src={arrow1} /></span>
               </button>
               <button
-                onClick={() => {
-                  if (window.zE) {
-                    window.zE('messenger', 'open');
-                  } else {
-                    window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                  }
-                }}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
                 className="w-full px-6 py-4 bg-white/10 text-white rounded-full font-semibold hover:bg-white/20 transition-colors"
               >
                 Appeal
@@ -6491,8 +6577,19 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   {showAppealMenu && (
                     <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl z-30 overflow-hidden">
                       <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowAppealMenu(false);
+                          openSupportChat();
+                        }}
+                        className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors"
+                      >
+                        Contact support
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => {
-                          // Navigate to seller profile
                           setShowAppealMenu(false);
                         }}
                         className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors"
@@ -6500,8 +6597,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         View Seller Profile
                       </button>
                       <button
+                        type="button"
                         onClick={() => {
-                          // Report seller
                           setShowAppealMenu(false);
                           handleReportUser();
                         }}
@@ -6625,15 +6722,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   Release Funds
                 </button>
 
-                {/* 🔥 Appeal button for buyer - matches seller's appeal functionality */}
+                {/* 🔥 Appeal button for buyer - open in-page support chat (same as bottom-right launcher) */}
                 <button
-                  onClick={() => {
-                    if (window.zE) {
-                      window.zE('messenger', 'open');
-                    } else {
-                      window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                    }
-                  }}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
                   className="flex items-center gap-1 px-3 py-2 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
                 >
                   Appeal
@@ -6893,13 +6985,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         Release Funds
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.zE) {
-                            window.zE('messenger', 'open');
-                          } else {
-                            window.open('https://soctraltechnologyhelp.zendesk.com', '_blank');
-                          }
-                        }}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openSupportChat(); }}
                         className="flex items-center gap-1 px-2 py-1.5 hover:bg-white/10 text-white text-xs font-medium rounded-full transition-colors"
                       >
                         Appeal
@@ -7501,6 +7588,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             }
           }}
           isProcessing={false}
+        />
+
+        {/* Support / Appeal chat modal */}
+        <SupportChatModal
+          isOpen={showSupportChatModal}
+          onClose={() => {
+            setShowSupportChatModal(false);
+            setSupportChannelId(null);
+            setSupportChannelType('support');
+          }}
+          channelType={supportChannelType}
+          channelId={supportChannelId}
         />
 
       </>
