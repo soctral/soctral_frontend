@@ -5369,7 +5369,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       if (isInsufficientFunds && errorData) {
                         const availableBalance = parseFloat(errorData.availableBalance || 0);
                         const requiredAmount = parseFloat(errorData.requiredAmount || 0);
-                        const requiredForGas = parseFloat(errorData.requiredForGas || 0);
+                        const requiredForGas = parseFloat(errorData.gasFeeUSD || 0);
                         const frozenAmount = parseFloat(errorData.frozenAmount || 0);
                         const currency = (tradeInitData.paymentMethod || 'ETH').toUpperCase();
                         
