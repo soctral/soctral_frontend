@@ -5368,12 +5368,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       if (isInsufficientFunds && errorData) {
                         const availableBalance = parseFloat(errorData.availableBalance || 0);
                         const requiredAmount = parseFloat(errorData.requiredAmount || 0);
+                        const requiredForGas = parseFloat(errorData.requiredForGas || 0);
                         const frozenAmount = parseFloat(errorData.frozenAmount || 0);
                         const currency = (tradeInitData.paymentMethod || 'ETH').toUpperCase();
                         
                         setErrorModalData({
                           title: 'Insufficient Funds',
-                          message: `You don't have enough ${currency} to complete this trade. Please fund your wallet with at least ${requiredAmount.toFixed(6)} ${currency} (includes ~$0.2 for gas fees) before accepting.`,
+                          message: `You don't have enough ${currency} to complete this trade. Please fund your wallet with at least ${requiredAmount.toFixed(6)} ${currency} (includes ~$${requiredForGas.toFixed(2)} for gas fees) before accepting.`,
                           details: {
                             'Available Balance': `${availableBalance.toFixed(6)} ${currency}`,
                             'Required Amount': `${requiredAmount.toFixed(6)} ${currency}`,
