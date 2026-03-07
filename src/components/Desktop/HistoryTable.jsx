@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, Star, ArrowLeft, Filter, Calendar, Copy, 
 import btc from "../../assets/btc.svg";
 import usdt from "../../assets/usdt.svg";
 import eth from "../../assets/eth.svg";
+import usdc from "../../assets/usdc.svg";
 import filter2 from "../../assets/filter2.svg";
 import shield from "../../assets/Shield.svg";
 import notice from "../../assets/notice.svg";
@@ -59,6 +60,8 @@ const HistoryTable = ({
     ETH: eth,
     Tether: usdt,
     USDT: usdt,
+    USDC: usdc,
+    "USD Coin": usdc,
     Solana: solana,
     SOL: solana,
     "Binance Coin": bnb,
@@ -750,8 +753,10 @@ const fetchTransactions = async () => {
                 {/* Transaction Summary */}
                 <div className="p-3 border-gray-700">
                   {/* Header */}
-                  <div className="flex items-center justify-center p-3 lg:p-6 border-gray-700">
+                  <div className="flex items-center justify-center gap-3 lg:p-6 border-gray-700">
                     <h3 className="text-white font-semibold text-lg">Transaction Details</h3>
+
+                                      <X className="flex md:hidden w-5 h-5" />
                   </div>
 
                   <div className="text-center">
