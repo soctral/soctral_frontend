@@ -5148,8 +5148,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   };
 
 
-  const TradeInitModal = () => {
-    if (!showTradeInitModal || !tradeInitData) return null;
+  // 🔥 FIX: Converted from inline function component to direct JSX variable
+  // to prevent React unmount/remount on parent re-render (which caused scroll-to-top bug)
+  const tradeInitModalJSX = !(showTradeInitModal && tradeInitData) ? null : (() => {
 
     // 🔥 FIX: Get currency image mapping
     const getCurrencyImage = (currency) => {
@@ -5553,7 +5554,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         </div>
       </div>
     );
-  };
+  })();
 
   const AccountReviewModal = () => {
     if (!showAccountReviewModal || !accountReviewData) return null;
@@ -5795,10 +5796,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
 
 
-  const ReleaseFundsModal = () => {
-    if (!showReleaseFundsModal || !tradeData) return null;
+  // 🔥 FIX: Converted from inline function component to direct JSX variable
+  // to prevent React unmount/remount on parent re-render (which caused scroll-to-top bug)
+  const releaseFundsModalJSX = !(showReleaseFundsModal && tradeData) ? null : (
 
-    return (
       <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
         <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
           <div className="p-6">
@@ -5849,8 +5850,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           </div>
         </div>
       </div>
-    );
-  };
+  );
 
 
 
@@ -7475,8 +7475,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         <SuccessModal />
         <ErrorModal />
         <TransactionSuccessModal />
-        <TradeInitModal />
-        <ReleaseFundsModal />
+        {tradeInitModalJSX}
+        {releaseFundsModalJSX}
         {PinModal()}
         <AccountReviewModal />
 
@@ -7512,8 +7512,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         <SuccessModal />
         <ErrorModal />
         <TransactionSuccessModal />
-        <TradeInitModal />
-        <ReleaseFundsModal />
+        {tradeInitModalJSX}
+        {releaseFundsModalJSX}
         {PinModal()}
         <AccountReviewModal />
 
@@ -7709,20 +7709,26 @@ const SellerInitiateModal = React.memo(({
   // 🔥 Validation state for empty fields
   const [fieldErrors, setFieldErrors] = React.useState({});
 
-  // Update local state when parent state changes (e.g., modal re-opens)
+  // 🔥 FIX: Track previous show value to only re-init when modal opens (not on every sellerTradeData change)
+  const prevShowRef = React.useRef(false);
+
+  // Update local state only when modal opens (show transitions false -> true)
   React.useEffect(() => {
-    if (show) {
+    if (show && !prevShowRef.current) {
+      // Modal just opened — initialize form from current sellerTradeData
+      const data = sellerTradeDataRef.current;
       setLocalFormData({
-        accountEmail: sellerTradeData?.accountEmail || '',
-        emailPassword: sellerTradeData?.emailPassword || '',
-        accountPassword: sellerTradeData?.accountPassword || '',
-        paymentMethod: sellerTradeData?.paymentMethod || 'USDT',
-        paymentNetwork: sellerTradeData?.paymentNetwork || '',
-        offerPrice: sellerTradeData?.offerPrice || ''
+        accountEmail: data?.accountEmail || '',
+        emailPassword: data?.emailPassword || '',
+        accountPassword: data?.accountPassword || '',
+        paymentMethod: data?.paymentMethod || 'USDT',
+        paymentNetwork: data?.paymentNetwork || '',
+        offerPrice: data?.offerPrice || ''
       });
       setFieldErrors({});
     }
-  }, [show, sellerTradeData]);
+    prevShowRef.current = show;
+  }, [show]);
 
   if (!show) {
     return null;
