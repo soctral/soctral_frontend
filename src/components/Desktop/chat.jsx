@@ -6721,14 +6721,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         usdPrice = backendTxn.amountUSD || usdPrice;
                         currency = backendTxn.currency || currency;
                         gasFeeUSD = backendTxn.gasFeeUSD ?? 0;
-                        companyFeeUSD = backendTxn.company?.totalCompanyFeesUSD ?? backendTxn.transactionFeeUSD ?? backendTxn.company?.feeUSD ?? 0;
+                        companyFeeUSD = backendTxn.company?.feeUSD ?? 0;
                         totalAmountCrypto = backendTxn.buyer?.frozenAmount ?? tokenAmount;
                         console.log('✅ Fetched real backend transaction for review modal:', { tokenAmount, usdPrice, currency, gasFeeUSD, companyFeeUSD, totalAmountCrypto });
                       }
                     } catch (err) {
                       console.warn('⚠️ Could not fetch backend transaction, using local data:', err.message);
                       gasFeeUSD = effectivePendingTxn?.gasFeeUSD ?? 0;
-                      companyFeeUSD = effectivePendingTxn?.company?.totalCompanyFeesUSD ?? effectivePendingTxn?.transactionFeeUSD ?? effectivePendingTxn?.company?.feeUSD ?? 0;
+                      companyFeeUSD = effectivePendingTxn?.company?.feeUSD ?? 0;
                       totalAmountCrypto = effectivePendingTxn?.buyer?.frozenAmount ?? tokenAmount;
                     }
                     const totalAmountUSD = Number(usdPrice) + Number(gasFeeUSD);
@@ -7000,13 +7000,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                               usdPrice = backendTxn.amountUSD || usdPrice;
                               currency = backendTxn.currency || currency;
                               gasFeeUSD = backendTxn.gasFeeUSD ?? 0;
-                              companyFeeUSD = backendTxn.company?.totalCompanyFeesUSD ?? backendTxn.transactionFeeUSD ?? backendTxn.company?.feeUSD ?? 0;
+                              companyFeeUSD = backendTxn.company?.feeUSD ?? 0;
                               totalAmountCrypto = backendTxn.buyer?.frozenAmount ?? tokenAmount;
                             }
                           } catch (err) {
                             console.warn('⚠️ Could not fetch backend transaction:', err.message);
                             gasFeeUSD = effectivePendingTxn?.gasFeeUSD ?? 0;
-                            companyFeeUSD = effectivePendingTxn?.company?.totalCompanyFeesUSD ?? effectivePendingTxn?.transactionFeeUSD ?? effectivePendingTxn?.company?.feeUSD ?? 0;
+                            companyFeeUSD = effectivePendingTxn?.company?.feeUSD ?? 0;
                             totalAmountCrypto = effectivePendingTxn?.buyer?.frozenAmount ?? tokenAmount;
                           }
                           const totalAmountUSD = Number(usdPrice) + Number(gasFeeUSD);
