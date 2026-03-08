@@ -5624,42 +5624,39 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </div>
               )}
 
-              {/* Funds breakdown (same style as invoice accept screen) */}
-              <div className="border-t border-white/10 mt-3 pt-3">
+              {/* Funds breakdown — same arrangement as Trade Details (invoice accept) */}
+              <div className="border-t border-b border-white/10 py-4 mt-3">
                 <div className="flex gap-6">
+                  {/* Seller receives */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Trade amount</p>
-                    <p className="text-white font-semibold text-sm">${formatAmt(accountDetails.price)}</p>
+                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Seller receives</p>
+                    <p className="text-white font-semibold text-base">${formatAmt(Number(accountDetails.price) - Number(companyFeeUSD))}</p>
                   </div>
                   <div className="w-px bg-white/10 flex-shrink-0" aria-hidden />
+                  {/* Transaction fees */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Fees</p>
-                    {(companyFeeUSD > 0 || gasFeeUSD > 0) ? (
-                      <div className="flex flex-col gap-1">
-                        {companyFeeUSD > 0 && (
-                          <div className="flex items-center justify-between gap-3 text-sm">
-                            <span className="text-gray-500">Escrow fee</span>
-                            <span className="text-white/90 tabular-nums">${formatAmt(companyFeeUSD)}</span>
-                          </div>
-                        )}
-                        {gasFeeUSD > 0 && (
-                          <div className="flex items-center justify-between gap-3 text-sm">
-                            <span className="text-gray-500">Gas fees</span>
-                            <span className="text-white/90 tabular-nums">${formatAmt(gasFeeUSD)}</span>
-                          </div>
-                        )}
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <p className="text-gray-400 text-xs uppercase tracking-wider">Transaction fees</p>
+                      <span className="text-white font-semibold text-base tabular-nums">${formatAmt(Number(companyFeeUSD) + Number(gasFeeUSD))}</span>
+                    </div>
+                    {(companyFeeUSD > 0 || gasFeeUSD > 0) && (
+                      <div className="flex flex-col gap-1 mt-2 pl-0">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-500">Escrow fee</span>
+                          <span className="text-white/90 tabular-nums">${formatAmt(companyFeeUSD)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-gray-500">Gas fees</span>
+                          <span className="text-white/90 tabular-nums">${formatAmt(gasFeeUSD)}</span>
+                        </div>
                       </div>
-                    ) : (
-                      <p className="text-white/90 text-sm">—</p>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-primary/10 mt-3">
-                  <span className="text-gray-400 font-semibold text-sm">Total to release</span>
-                  <span className="text-white font-bold text-base tabular-nums">
-                    ${formatAmt(totalUSD)} · {typeof totalCrypto === 'number' ? formatAmt(totalCrypto) : totalCrypto} {accountDetails.currency?.toUpperCase()}
-                  </span>
-                </div>
+              </div>
+              <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/5 mt-1">
+                <span className="text-gray-400 font-semibold text-sm">Total amount</span>
+                <span className="text-white font-bold text-base tabular-nums">${formatAmt(totalUSD)}</span>
               </div>
             </div>
 
