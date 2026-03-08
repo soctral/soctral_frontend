@@ -5561,6 +5561,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     if (!showAccountReviewModal || !accountReviewData) return null;
 
     const { seller, transaction, accountDetails } = accountReviewData;
+    const formatAmt = (val) => {
+      if (val == null || val === '') return '0.00';
+      const n = Number(val);
+      if (n < 0.01) return n.toFixed(6);
+      if (n < 1) return n.toFixed(4);
+      return n.toFixed(2);
+    };
+    const gasFeeUSD = accountDetails.gasFeeUSD ?? 0;
+    const companyFeeUSD = accountDetails.companyFeeUSD ?? 0;
+    const totalUSD = accountDetails.totalAmountUSD != null ? accountDetails.totalAmountUSD : (Number(accountDetails.price) + Number(gasFeeUSD));
+    const totalCrypto = accountDetails.totalAmountCrypto ?? accountDetails.amount;
 
     return (
       <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70] p-4">
@@ -5613,28 +5624,42 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </div>
               )}
 
-              {/* Transaction Details */}
-              <div className='flex border-t mt-3 pt-3 items-center border-white/10'>
-                <div className="flex items-center py-2 gap-2 pr-[1.5rem] border-r border-white/10">
-                  <span className="text-gray-400 text-sm">Amount</span>
-                  <span className="text-white font-medium text-sm">
-                    ${accountDetails.price}
+              {/* Funds breakdown (same style as invoice accept screen) */}
+              <div className="border-t border-white/10 mt-3 pt-3">
+                <div className="flex gap-6">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Trade amount</p>
+                    <p className="text-white font-semibold text-sm">${formatAmt(accountDetails.price)}</p>
+                  </div>
+                  <div className="w-px bg-white/10 flex-shrink-0" aria-hidden />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Fees</p>
+                    {(companyFeeUSD > 0 || gasFeeUSD > 0) ? (
+                      <div className="flex flex-col gap-1">
+                        {companyFeeUSD > 0 && (
+                          <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-gray-500">Escrow fee</span>
+                            <span className="text-white/90 tabular-nums">${formatAmt(companyFeeUSD)}</span>
+                          </div>
+                        )}
+                        {gasFeeUSD > 0 && (
+                          <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-gray-500">Gas fees</span>
+                            <span className="text-white/90 tabular-nums">${formatAmt(gasFeeUSD)}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-white/90 text-sm">—</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-primary/10 mt-3">
+                  <span className="text-gray-400 font-semibold text-sm">Total to release</span>
+                  <span className="text-white font-bold text-base tabular-nums">
+                    ${formatAmt(totalUSD)} · {typeof totalCrypto === 'number' ? formatAmt(totalCrypto) : totalCrypto} {accountDetails.currency?.toUpperCase()}
                   </span>
                 </div>
-
-                <div className="flex items-center py-2 gap-2 pl-[1.5rem]">
-                  <span className="text-gray-400 text-sm">Currency</span>
-                  <span className="text-white font-medium text-sm uppercase">
-                    {accountDetails.currency}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col items-center py-3 rounded-lg px-4 bg-primary/10 mt-3">
-                <span className="text-gray-400 font-semibold text-sm">Total to Release</span>
-                <span className="text-white font-bold text-lg">
-                  {accountDetails.amount} {accountDetails.currency?.toUpperCase()}
-                </span>
               </div>
             </div>
 
@@ -6687,6 +6712,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                     let usdPrice = tradeData?.accountPrice || effectivePendingTxn?.amountUSD || effectivePendingTxn?.amount || 0;
                     let currency = effectivePendingTxn?.currency || 'BTC';
 
+                    let gasFeeUSD = 0;
+                    let companyFeeUSD = 0;
+                    let totalAmountCrypto = tokenAmount;
                     try {
                       const activeCheck = await checkActiveTransactions();
                       if (activeCheck?.hasActiveTransaction && activeCheck?.activeTransaction) {
@@ -6695,11 +6723,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         tokenAmount = backendTxn.amount || tokenAmount;
                         usdPrice = backendTxn.amountUSD || usdPrice;
                         currency = backendTxn.currency || currency;
-                        console.log('✅ Fetched real backend transaction for review modal:', { tokenAmount, usdPrice, currency });
+                        gasFeeUSD = backendTxn.gasFeeUSD ?? 0;
+                        companyFeeUSD = backendTxn.company?.totalCompanyFeesUSD ?? backendTxn.transactionFeeUSD ?? backendTxn.company?.feeUSD ?? 0;
+                        totalAmountCrypto = backendTxn.buyer?.frozenAmount ?? tokenAmount;
+                        console.log('✅ Fetched real backend transaction for review modal:', { tokenAmount, usdPrice, currency, gasFeeUSD, companyFeeUSD, totalAmountCrypto });
                       }
                     } catch (err) {
                       console.warn('⚠️ Could not fetch backend transaction, using local data:', err.message);
+                      gasFeeUSD = effectivePendingTxn?.gasFeeUSD ?? 0;
+                      companyFeeUSD = effectivePendingTxn?.company?.totalCompanyFeesUSD ?? effectivePendingTxn?.transactionFeeUSD ?? effectivePendingTxn?.company?.feeUSD ?? 0;
+                      totalAmountCrypto = effectivePendingTxn?.buyer?.frozenAmount ?? tokenAmount;
                     }
+                    const totalAmountUSD = Number(usdPrice) + Number(gasFeeUSD);
 
                     setAccountReviewData({
                       seller: selectedUser,
@@ -6711,7 +6746,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         followers: selectedUser?.followers || 'N/A',
                         price: usdPrice,
                         amount: tokenAmount,
-                        currency: currency
+                        currency: currency,
+                        gasFeeUSD,
+                        companyFeeUSD,
+                        totalAmountUSD,
+                        totalAmountCrypto: typeof totalAmountCrypto === 'string' ? totalAmountCrypto : String(totalAmountCrypto),
                       }
                     });
                     setShowAccountReviewModal(true);
@@ -6953,6 +6992,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                           let tokenAmount = effectivePendingTxn?.amount || 0;
                           let usdPrice = tradeData?.accountPrice || effectivePendingTxn?.amountUSD || effectivePendingTxn?.amount || 0;
                           let currency = effectivePendingTxn?.currency || 'BTC';
+                          let gasFeeUSD = 0;
+                          let companyFeeUSD = 0;
+                          let totalAmountCrypto = tokenAmount;
                           try {
                             const activeCheck = await checkActiveTransactions();
                             if (activeCheck?.hasActiveTransaction && activeCheck?.activeTransaction) {
@@ -6960,10 +7002,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                               tokenAmount = backendTxn.amount || tokenAmount;
                               usdPrice = backendTxn.amountUSD || usdPrice;
                               currency = backendTxn.currency || currency;
+                              gasFeeUSD = backendTxn.gasFeeUSD ?? 0;
+                              companyFeeUSD = backendTxn.company?.totalCompanyFeesUSD ?? backendTxn.transactionFeeUSD ?? backendTxn.company?.feeUSD ?? 0;
+                              totalAmountCrypto = backendTxn.buyer?.frozenAmount ?? tokenAmount;
                             }
                           } catch (err) {
                             console.warn('⚠️ Could not fetch backend transaction:', err.message);
+                            gasFeeUSD = effectivePendingTxn?.gasFeeUSD ?? 0;
+                            companyFeeUSD = effectivePendingTxn?.company?.totalCompanyFeesUSD ?? effectivePendingTxn?.transactionFeeUSD ?? effectivePendingTxn?.company?.feeUSD ?? 0;
+                            totalAmountCrypto = effectivePendingTxn?.buyer?.frozenAmount ?? tokenAmount;
                           }
+                          const totalAmountUSD = Number(usdPrice) + Number(gasFeeUSD);
                           setAccountReviewData({
                             seller: selectedUser,
                             transaction: effectivePendingTxn,
@@ -6974,7 +7023,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                               followers: selectedUser?.followers || 'N/A',
                               price: usdPrice,
                               amount: tokenAmount,
-                              currency: currency
+                              currency: currency,
+                              gasFeeUSD,
+                              companyFeeUSD,
+                              totalAmountUSD,
+                              totalAmountCrypto: typeof totalAmountCrypto === 'string' ? totalAmountCrypto : String(totalAmountCrypto),
                             }
                           });
                           setShowAccountReviewModal(true);
