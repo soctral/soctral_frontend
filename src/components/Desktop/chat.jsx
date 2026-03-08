@@ -886,10 +886,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                   setActiveTransaction(null);
                   setShowRequestModal(false);
 
-                  // Show seller's Funds Received modal
+                  // Show seller's Funds Received modal (amount = net received; amount_crypto = actual token amount)
                   setTransactionSuccessData({
                     role: 'seller',
                     amount: releaseData.amount || '0.00',
+                    amountCrypto: releaseData.amount_crypto,
                     recipientName: releaseData.buyer_name || 'Buyer',
                     transactionId: releaseData.transaction_id,
                     currency: releaseData.currency || 'BTC'
@@ -3291,6 +3292,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
       console.log('✅ Funds released successfully:', result);
 
+      // 🔥 Actual amount released to seller (net after company fee), not trade amount
+      const updatedTxn = result?.data;
+      const sellerNetUSD = updatedTxn
+        ? (Number(updatedTxn.amountUSD) - Number(updatedTxn.company?.feeUSD ?? 0))
+        : (pendingTransaction?.amountUSD || tradeData?.accountPrice || 0) - (pendingTransaction?.company?.feeUSD ?? 0);
+      const sellerNetCrypto = updatedTxn?.seller?.netAmount ?? pendingTransaction?.seller?.netAmount ?? '';
+
       // 🔥 NEW: Mark transaction as completed to disable all trade UI permanently
       TradeStateManager.markCompleted(transactionId);
       // 🔥 Credentials persist after completion — buyer purchased the account
@@ -3320,21 +3328,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       const credChId = currentChannelRef.current?.id || currentChannelRef.current?.cid?.split(':')[1] || '';
       if (credChId) localStorage.removeItem(`soctra_cred_${credChId}`);
 
-      // 🔥 NEW: Show full-screen transaction success modal for buyer
-      const releasedAmount = pendingTransaction?.amountUSD || tradeData?.accountPrice || tradeData?.totalAmount || pendingTransaction?.amount || 0;
+      // 🔥 NEW: Show full-screen transaction success modal for buyer (amount = actual released to seller)
       const sellerName = selectedUser?.name || selectedUser?.displayName || tradeData?.seller?.name || 'Seller';
-      const currency = pendingTransaction?.currency || tradeData?.paymentMethod || 'BTC';
+      const currency = updatedTxn?.currency || pendingTransaction?.currency || tradeData?.paymentMethod || 'BTC';
       
       setTransactionSuccessData({
         role: 'buyer',
-        amount: parseFloat(releasedAmount).toFixed(2),
+        amount: parseFloat(sellerNetUSD).toFixed(2),
         recipientName: sellerName,
         transactionId: transactionId,
         currency: currency
       });
       setShowTransactionSuccessModal(true);
 
-    // 🔥 NEW: Send real-time notification to seller via chat channel
+    // 🔥 NEW: Send real-time notification to seller via chat channel (seller net amount + crypto)
     try {
       if (currentChannel) {
         const sellerId = tradeData?.sellerId || pendingTransaction?.seller?.userId || pendingTransaction?.sellerId;
@@ -3345,7 +3352,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           transaction_id: transactionId,
           buyer_id: userData?._id || userData?.id,
           seller_id: sellerId,
-          amount: parseFloat(releasedAmount).toFixed(2),
+          amount: parseFloat(sellerNetUSD).toFixed(2),
+          amount_crypto: sellerNetCrypto,
           currency: currency,
           buyer_name: buyerName,
           released_at: new Date().toISOString()
@@ -6136,7 +6144,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const TransactionSuccessModal = () => {
     if (!showTransactionSuccessModal || !transactionSuccessData) return null;
 
-    const { role, amount, recipientName, transactionId, currency } = transactionSuccessData;
+    const { role, amount, amountCrypto, recipientName, transactionId, currency } = transactionSuccessData;
 
     // Helper: Navigate to history tab via custom event
     const navigateToHistory = () => {
@@ -6232,7 +6240,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
               {/* Message */}
               <p className="text-white text-sm">
-                You've received <span className="font-bold">${amount}</span> (≈ 0.0118 {currency}) in your {currency} wallet.
+                You've received <span className="font-bold">${amount}</span>
+                {amountCrypto != null && amountCrypto !== '' ? (
+                  <> (= <span className="font-bold">{Number(amountCrypto).toFixed(6)}</span> {currency})</>
+                ) : (
+                  <> (in {currency})</>
+                )}
+                {' '}in your {currency} wallet.
               </p>
 
               {/* View Transaction Button */}

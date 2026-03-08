@@ -106,11 +106,11 @@ const HistoryTable = ({
         amount: transaction.amount?.toString() || '0',
         status: status.charAt(0).toUpperCase() + status.slice(1), // Capitalize
         description: description,
-        date: transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt 
-          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toISOString().split('T')[0] 
+        date: transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt
+          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
         time: transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt
-          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toTimeString().split(' ')[0].substring(0, 5) 
+          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toTimeString().split(' ')[0].substring(0, 5)
           : '00:00',
         icon: getCryptoImage(transaction.currency),
         hash: transaction.transactionHash || transaction.hash || 'N/A',
