@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import countryCodeOptions from "../data/countryCodeOptions";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
@@ -510,11 +511,11 @@ const handleSignIn = () => {
                   onChange={handleInputChange}
                   className="bg-black text-white pl-3 pr-2 py-2 outline-none appearance-none text-sm"
                 >
-                  <option value="+234">🇳🇬 (+234)</option>
-                  <option value="+1">🇺🇸 (+1)</option>
-                  <option value="+44">🇬🇧 (+44)</option>
-                  <option value="+91">🇮🇳 (+91)</option>
-                  <option value="+27">🇿🇦 (+27)</option>
+                  {countryCodeOptions.map((c) => (
+                    <option key={`${c.code}-${c.country}`} value={c.code}>
+                      {c.flag} ({c.code})
+                    </option>
+                  ))}
                 </select>
                 <div className="h-4 w-px bg-white/30 mx-2" />
                 <input
