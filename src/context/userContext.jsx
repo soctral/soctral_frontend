@@ -358,6 +358,69 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  const sendOTPToEmail = async (email) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.sendOTPWithEmail(email, 'verification');
+      if (response.message && response.message.toLowerCase().includes('sent successfully')) {
+        return response;
+      } else if (response.success || response.status) {
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to send OTP');
+      }
+    } catch (error) {
+      console.error('UserContext: Send OTP to email error:', error);
+      setError(error.message || 'Failed to send OTP');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOTPToEmail = async (email, otp) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.verifyOTPWithEmail(email, otp, 'verification');
+      if (response.message && response.message.toLowerCase().includes('verified successfully')) {
+        return response;
+      } else if (response.success || response.status) {
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to verify OTP');
+      }
+    } catch (error) {
+      console.error('UserContext: Verify OTP error:', error);
+      setError(error.message || 'Failed to verify OTP');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendOTPToEmail = async (email) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.sendOTPWithEmail(email, 'verification');
+      if (response.message && response.message.toLowerCase().includes('sent successfully')) {
+        return response;
+      } else if (response.success || response.status) {
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to resend OTP');
+      }
+    } catch (error) {
+      console.error('UserContext: Resend OTP error:', error);
+      setError(error.message || 'Failed to resend OTP');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateUserProfile = async (newUserData) => {
     try {
       // Merge with existing user data to get complete user object
@@ -432,6 +495,9 @@ export const UserProvider = ({ children }) => {
     sendOTP,
     verifyOTP,
     resendOTP,
+    sendOTPToEmail,
+    verifyOTPToEmail,
+    resendOTPToEmail,
     updateUserProfile,
     logout,
     setSignupStep,
