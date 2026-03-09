@@ -51,9 +51,9 @@ const SignUp = () => {
     signupStep,
     signupData,
     createUser,
-    sendOTP,
-    verifyOTP,
-    resendOTP,
+    sendOTPToEmail,
+    verifyOTPToEmail,
+    resendOTPToEmail,
     setSignupStep,
     updateSignupData,
     clearSignupData,
@@ -70,7 +70,7 @@ const SignUp = () => {
   const [localPassword, setLocalPassword] = useState("");
   const [localConfirmPassword, setLocalConfirmPassword] = useState("");
 
-  // Countdown timer for OTP
+  // Countdown timer for OTP (step 3)
   useEffect(() => {
     let timer;
     if (signupStep === 3 && countdown > 0) {
@@ -83,7 +83,7 @@ const SignUp = () => {
     return () => clearTimeout(timer);
   }, [signupStep, countdown]);
 
-  // Reset countdown when moving to step 3
+  // Reset countdown when moving to OTP step
   useEffect(() => {
     if (signupStep === 3) {
       setCountdown(30);
@@ -136,13 +136,12 @@ const SignUp = () => {
     setPasswordStrength(strength);
   };
 
-  // Function to mask phone number for OTP display
-  const getMaskedPhoneNumber = () => {
-    const fullNumber = signupData.countryCode + signupData.phoneNumber;
-    if (fullNumber.length < 2) return fullNumber;
-    const lastTwo = fullNumber.slice(-2);
-    const masked = fullNumber.slice(0, -2).replace(/./g, 'x');
-    return masked + lastTwo;
+  const getMaskedEmail = () => {
+    const email = signupData.email || '';
+    if (!email || !email.includes('@')) return email;
+    const [local, domain] = email.split('@');
+    if (local.length <= 2) return `${local[0]}***@${domain}`;
+    return `${local[0]}${'*'.repeat(Math.min(local.length - 2, 3))}${local[local.length - 1]}@${domain}`;
   };
 
   // Enhanced validation functions
@@ -153,7 +152,7 @@ const SignUp = () => {
 
   const isValidPhoneNumber = (phone) => {
     const phoneRegex = /^\d{10,11}$/;
-    return phoneRegex.test(phone.replace(/\s+/g, ''));
+    return phoneRegex.test((phone || '').replace(/\s+/g, ''));
   };
 
   const isStep1Valid = () => {
@@ -213,53 +212,27 @@ const SignUp = () => {
   const handleSubmitStep1 = async (e) => {
     e.preventDefault();
     if (!isStep1Valid()) return;
-    
-    // Move to next step - no API call needed for email validation
     transitionToStep(2);
   };
 
-const handleSubmitStep2 = async (e) => {
-  e.preventDefault();
-  if (!isStep2Valid()) return;
-  
-  try {
-    const fullPhoneNumber = signupData.countryCode + signupData.phoneNumber;
+  const handleSubmitStep2 = async (e) => {
+    e.preventDefault();
+    if (!isStep2Valid()) return;
     
-    // Add debugging logs
-    console.log('Country Code:', signupData.countryCode);
-    console.log('Phone Number:', signupData.phoneNumber);
-    console.log('Full Phone Number:', fullPhoneNumber);
-    console.log('Full Phone Number length:', fullPhoneNumber.length);
-    console.log('Full Phone Number type:', typeof fullPhoneNumber);
-    
-    // Log the exact payload that will be sent
-    const payload = { phoneNumber: fullPhoneNumber };
-    console.log('Payload being sent:', JSON.stringify(payload));
-    
-    await sendOTP(fullPhoneNumber);
-    transitionToStep(3);
-  } catch (error) {
-    console.error('Send OTP error:', error);
-    
-    // Log more details about the error
-    if (error.response) {
-      console.error('Error status:', error.response.status);
-      console.error('Error data:', error.response.data);
-      console.error('Error headers:', error.response.headers);
+    try {
+      await sendOTPToEmail(signupData.email);
+      transitionToStep(3);
+    } catch (error) {
+      console.error('Send OTP error:', error);
     }
-  }
-};
-
-
-  // Continuing from where your code left off...
+  };
 
   const handleSubmitStep3 = async (e) => {
     e.preventDefault();
     if (!isStep3Valid()) return;
     
     try {
-      const fullPhoneNumber = signupData.countryCode + signupData.phoneNumber;
-      await verifyOTP(fullPhoneNumber, signupData.otp);
+      await verifyOTPToEmail(signupData.email, signupData.otp);
       transitionToStep(4);
     } catch (error) {
       console.error('Verify OTP error:', error);
@@ -278,9 +251,10 @@ const handleSubmitStep2 = async (e) => {
     if (!isStep5Valid()) return;
     
     try {
+      const fullPhone = signupData.countryCode + (signupData.phoneNumber || '').replace(/\s+/g, '');
       const userData = {
         email: signupData.email,
-        phoneNumber: signupData.countryCode + signupData.phoneNumber,
+        phoneNumber: fullPhone,
         password: signupData.password,
         displayName: signupData.displayName,
       };
@@ -315,8 +289,7 @@ const handleSubmitStep2 = async (e) => {
     if (!canResend) return;
     
     try {
-      const fullPhoneNumber = signupData.countryCode + signupData.phoneNumber;
-      await resendOTP(fullPhoneNumber);
+      await resendOTPToEmail(signupData.email);
       setCountdown(30);
       setCanResend(false);
     } catch (error) {
@@ -398,17 +371,17 @@ const handleSubmitStep2 = async (e) => {
             <div className={`transition-all duration-200 ${isTransitioning ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
               <h3 className="text-[33px] leading-[38px] font-bold mb-[16px]">
                 {signupStep === 1 ? "Get Started with Soctral and Experience Secure Social Media Trading" :
-                 signupStep === 2 ? "Verify Your Phone Number" :
-                 signupStep === 3 ?  `Enter The 6-Digit Code we Texted to +${getMaskedPhoneNumber()}` : 
+                 signupStep === 2 ? "Enter Your Phone Number" :
+                 signupStep === 3 ? `Enter the 6-digit code we emailed to ${getMaskedEmail()}` :
                  signupStep === 4 ? "Set Your Password" : "Enter Your Display Name"}
               </h3>
               <p className="text-xs text-gray-400 mb-4">
                 {signupStep === 1
-                  ? "Create an Account to Buy and Sell Social Media Accounts Securely.."
+                  ? "Create an Account to Buy and Sell Social Media Accounts Securely."
                   : signupStep === 2
-                  ? "Enter your phone number to receive a verification code."
+                  ? "We'll use this to stay in touch. OTP is sent to your email for verification."
                   : signupStep === 3
-                  ? "This helps us keep your account secure by ensuring it's really you."
+                  ? "Check your email for the verification code."
                   : signupStep === 4
                   ? "Create a strong password for your account."
                   : "Enter a Display Name to Represent You on Soctral."}
@@ -509,49 +482,49 @@ const handleSubmitStep2 = async (e) => {
               </>
             ) : signupStep === 2 ? (
               <>
-                <div className="flex items-center justify-center">
-                  <div className="w-full">
-                    <label className="block text-sm mb-2 font-medium">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm mb-1 font-medium">
                       Phone Number
                     </label>
-                    <div className="flex items-center border border-gray-400 rounded-full bg-black overflow-hidden focus-within:border-white transition-colors">
+                    <div className="flex gap-2">
                       <select
                         name="countryCode"
                         value={signupData.countryCode}
                         onChange={handleInputChange}
-                        className="bg-black text-white pl-3 pr-2 py-2 outline-none appearance-none text-sm"
+                        className="w-24 py-4 rounded-full border border-gray-400 bg-black text-white focus:border-white outline-none text-sm"
                         style={{ fontSize: '16px' }}
                       >
-                        {countryCodeOptions.map((c) => (
-                          <option key={`${c.code}-${c.country}`} value={c.code}>
-                            {c.flag} ({c.code})
+                        {countryCodeOptions.map((opt) => (
+                          <option key={opt.code} value={opt.code}>
+                            {opt.flag} {opt.code}
                           </option>
                         ))}
                       </select>
-                      <div className="h-4 w-px bg-white/30 mx-2" />
                       <input
                         type="tel"
                         name="phoneNumber"
                         value={signupData.phoneNumber}
                         onChange={handleInputChange}
                         placeholder="Phone number"
-                        className="bg-black text-white placeholder-gray-400 outline-none py-4 flex-1 text-sm"
+                        className="flex-1 py-4 rounded-full pl-4 border border-gray-400 bg-black text-white placeholder-gray-400 outline-none focus:border-white text-sm transition-colors"
                         style={{ fontSize: '16px' }}
                       />
                     </div>
                     {signupData.phoneNumber && !isValidPhoneNumber(signupData.phoneNumber) && (
-                      <p className="text-red-400 text-xs mt-1">Please enter a valid phone number</p>
-                    )}
-                    {error && (
-                      <div className="flex items-center p-2 bg-red-900/30 border border-red-500/50 rounded mt-2 animate-pulse">
-                        <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-xs">!</div>
-                        <p className="text-red-400 text-xs ml-2">{error}</p>
-                      </div>
+                      <p className="text-red-400 text-xs mt-1">Please enter a valid 10–11 digit phone number</p>
                     )}
                   </div>
+
+                  {error && (
+                    <div className="flex items-center mb-4">
+                      <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs">!</div>
+                      <p className="text-red-500 text-sm ml-2">{error}</p>
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-4">
+                <div className="space-y-2 mt-4">
                   <button
                     onClick={handleSubmitStep2}
                     disabled={isLoading || !isStep2Valid()}
@@ -725,14 +698,14 @@ const handleSubmitStep2 = async (e) => {
                     onClick={handleSubmitStep4}
                     disabled={isLoading || !isStep4Valid()}
                     className={`w-full py-4 rounded-full text-white font-semibold transition-all text-sm flex items-center justify-center transform hover:scale-105 ${
-                      isLoading || !isStep4Valid() ? "opacity-50 cursor-not-allowed" : ""
+                      isLoading || !isStep3Valid() ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                     style={{ backgroundColor: 'rgba(96, 60, 208, 1)' }}
                   >
                     {isLoading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Creating...
+                        Processing...
                       </>
                     ) : (
                       "Continue"
