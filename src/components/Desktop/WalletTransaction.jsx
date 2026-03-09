@@ -1350,12 +1350,9 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
 
   // Withdraw Step 2 Modal
   if (currentModal === 'withdrawStep2') {
-    const networkFee = networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || "0.0";
-    const companyFee = getCompanyFee(withdrawAmount, selectedAsset?.name);
-    const totalFees = parseFloat(networkFee) + companyFee;
-    const amountReceived = withdrawAmount ? Math.max(0, parseFloat(withdrawAmount) - totalFees).toFixed(8) : "0.00";
-    const companyFeeUsd = (companyFee * parseFloat(selectedAsset?.priceUSD || 0)).toFixed(2);
-    const networkFeeUsd = (parseFloat(networkFee) * parseFloat(selectedAsset?.priceUSD || 0)).toFixed(2);
+    const gasFee = parseFloat(networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || "0");
+    const amountReceived = withdrawAmount ? Math.max(0, parseFloat(withdrawAmount) - gasFee).toFixed(8) : "0.00";
+    const gasFeeUsd = (gasFee * parseFloat(selectedAsset?.priceUSD || 0)).toFixed(2);
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center overflow-y-auto z-50">
@@ -1442,16 +1439,8 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
 
                             <div className="rounded-lg p-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Company Fee (1%):</span>
-                  <span className="text-white">{companyFee.toFixed(8)} {selectedAsset?.abbreviation} <span className="text-gray-500">(≈ ${companyFeeUsd})</span></span>
-                </div>
-                {/* <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Network Fee:</span>
-                  <span className="text-white">{networkFee} {selectedAsset?.abbreviation} <span className="text-gray-500">(≈ ${networkFeeUsd})</span></span>
-                </div> */}
-                <div className="border-t border-white/10 pt-2 flex justify-between text-sm">
-                  <span className="text-gray-400 font-medium">Total Fees:</span>
-                  <span className="text-white font-medium">{totalFees.toFixed(8)} {selectedAsset?.abbreviation}</span>
+                  <span className="text-gray-400">Gas Fee:</span>
+                  <span className="text-white">{gasFee.toFixed(8)} {selectedAsset?.abbreviation} <span className="text-gray-500">(≈ ${gasFeeUsd})</span></span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400 font-medium">Amount Received:</span>
