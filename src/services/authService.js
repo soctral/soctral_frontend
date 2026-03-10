@@ -46,13 +46,14 @@ class AuthService {
     // });
   }
 
-  // Unified token storage method
+  // Unified token storage method (replaces any existing token)
   async ensureTokenStorage(token, userData) {
     try {
       if (!token || !userData) {
         throw new Error('Token and user data are required');
       }
 
+      this.storage.removeItem('authToken');
       this.storage.setItem('authToken', token);
       this.storage.setItem('userData', JSON.stringify(userData));
       this.storage.setItem('hasCompletedSignup', 'true');
@@ -230,6 +231,18 @@ class AuthService {
         } catch {
           processedResponse = response;
         }
+      }
+      if (processedResponse?.status && processedResponse?.pendingGoogle && processedResponse?.token) {
+        this.storage.removeItem('authToken');
+        this.storage.setItem('authToken', processedResponse.token);
+        this.storage.removeItem('userData');
+        return {
+          status: true,
+          success: true,
+          pendingGoogle: true,
+          token: processedResponse.token,
+          message: processedResponse.message || "Enter your phone number to complete sign up",
+        };
       }
       if (
         processedResponse?.status &&
@@ -1135,7 +1148,32 @@ class AuthService {
     }
   }
 
-  // Set initial phone (for Google sign-up users who don't have a phone yet)
+  // Complete Google sign-up: create profile with phone (only when we have a pending Google token)
+  async completeGoogleSignup(phoneNumber) {
+    try {
+      if (!this.getAuthToken()) {
+        throw new Error('Session expired. Please sign in with Google again.');
+      }
+      const normalized = String(phoneNumber).replace(/[\s\-\(\)]/g, '').trim();
+      if (!normalized || normalized.length < 7) {
+        throw new Error('Valid phone number is required');
+      }
+      const response = await this.requestWithRetry('/auth/complete-google-signup', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: normalized }),
+      });
+      if (response?.status && response?.token && response?.user) {
+        await this.ensureTokenStorage(response.token, response.user);
+        return { ...response, user: response.user };
+      }
+      throw new Error(response?.message || 'Failed to complete sign up');
+    } catch (error) {
+      console.error('❌ Complete Google signup failed:', error.message);
+      throw error;
+    }
+  }
+
+  // Set initial phone (for existing Google users who don't have a phone yet)
   async setInitialPhone(phoneNumber) {
     try {
       if (!this.isAuthenticated()) {
@@ -1314,6 +1352,7 @@ class AuthService {
       });
 
       if (response.token) {
+        this.storage.removeItem('authToken');
         this.storage.setItem('authToken', response.token);
         // console.log('✅ Token refreshed successfully');
         return response.token;

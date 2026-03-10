@@ -246,8 +246,8 @@ const SignIn = ({ apiUrl, onClose, onShowSignUp }) => {
                           if (!credentialResponse?.credential) return;
                           try {
                             await signUpWithGoogle(credentialResponse.credential);
-                            if (onClose) onClose();
                             navigate("/google-onboarding");
+                            if (onClose) onClose();
                           } catch (err) {}
                         }}
                         onError={() => clearError()}

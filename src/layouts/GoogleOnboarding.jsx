@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { useUser } from "../context/userContext";
+import authService from "../services/authService";
 import countryCodeOptions from "../data/countryCodeOptions";
 import Warning from "../assets/warning.png";
 
@@ -11,6 +12,7 @@ export default function GoogleOnboarding() {
   const {
     user,
     setInitialPhone,
+    completeGoogleSignup,
     getUserByToken,
     isLoading,
     error,
@@ -20,13 +22,18 @@ export default function GoogleOnboarding() {
   const [countryCode, setCountryCode] = useState("+234");
   const [phoneNumber, setPhoneNumber] = useState("");
 
-  // If no user or already has phone, go to homepage (email is auto-verified for Google sign-up)
+  const hasToken = !!authService.getAuthToken();
+  const isPendingGoogle = !user && hasToken;
+
   useEffect(() => {
-    if (!user) return;
-    if (user.phoneNumber) {
+    if (!user && !hasToken) {
+      navigate("/", { replace: true });
+      return;
+    }
+    if (user?.phoneNumber && !isPendingGoogle) {
       navigate("/homepage", { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, hasToken, navigate, isPendingGoogle]);
 
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
@@ -34,15 +41,19 @@ export default function GoogleOnboarding() {
     const full = `${countryCode}${phoneNumber.replace(/[\s\-\(\)]/g, "")}`;
     if (full.length < 10) return;
     try {
-      await setInitialPhone(full);
-      await getUserByToken();
+      if (isPendingGoogle) {
+        await completeGoogleSignup(full);
+      } else {
+        await setInitialPhone(full);
+        await getUserByToken();
+      }
       navigate("/homepage", { replace: true });
     } catch (err) {
       // error set in context
     }
   };
 
-  if (!user) {
+  if (!user && !isPendingGoogle) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
@@ -50,7 +61,7 @@ export default function GoogleOnboarding() {
     );
   }
 
-  if (user.phoneNumber) {
+  if (user?.phoneNumber) {
     return null;
   }
 

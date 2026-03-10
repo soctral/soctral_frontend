@@ -578,6 +578,40 @@ class TransactionService {
   async getOutgoingWalletTransactions(filters = {}) {
     return this.getWalletTransactionHistory({ ...filters, type: 'withdrawal' });
   }
+
+  /**
+   * Get withdrawal fee estimate (gas fee in native token) for a currency/network.
+   * Used to show "Network Fee" on withdraw screen as the gas we charge in that token.
+   * @param {string} currency - API currency code (btc, eth, usdt, sol, usdc, bnb, trx)
+   * @param {string} network - API network (bitcoin, ethereum, base, binance, solana, tron)
+   * @returns {Promise<{ gasFeeUSD: number, gasFeeInNative: number, nativeCurrency: string }>}
+   */
+  async getWithdrawalFeeEstimate(currency, network) {
+    try {
+      if (!this.isAuthenticated()) {
+        return { gasFeeUSD: 0, gasFeeInNative: 0, nativeCurrency: '' };
+      }
+      if (!currency || !network) {
+        return { gasFeeUSD: 0, gasFeeInNative: 0, nativeCurrency: '' };
+      }
+      const params = new URLSearchParams({
+        currency: String(currency).toLowerCase(),
+        network: String(network).toLowerCase(),
+      });
+      const response = await this.requestWithRetry(
+        `/transaction/withdrawal-fee-estimate?${params.toString()}`
+      );
+      const data = response?.data ?? response;
+      return {
+        gasFeeUSD: data.gasFeeUSD ?? 0,
+        gasFeeInNative: data.gasFeeInNative ?? 0,
+        nativeCurrency: data.nativeCurrency ?? '',
+      };
+    } catch (error) {
+      console.warn('Withdrawal fee estimate failed:', error?.message);
+      return { gasFeeUSD: 0, gasFeeInNative: 0, nativeCurrency: '' };
+    }
+  }
 }
 
 export default new TransactionService();
