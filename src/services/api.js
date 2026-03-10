@@ -22,6 +22,7 @@ class ApiService {
       "/encryption",
       "/auth/login",
       "/auth/create",
+      "/auth/signupWithGoogle",
       "/auth/refresh",
       "/auth/profile",
       "/otp/send",
@@ -111,7 +112,7 @@ class ApiService {
   decryptResponseData(data, endpoint) {
     // 🔥 CRITICAL FIX: Force decrypt for auth endpoints if data is encrypted
     // This handles the backend bug where auth endpoints return encrypted data
-    const authEndpoints = ["/auth/login", "/auth/create", "/auth/refresh"];
+    const authEndpoints = ["/auth/login", "/auth/create", "/auth/signupWithGoogle", "/auth/refresh"];
     const isAuthEndpoint = authEndpoints.some((path) =>
       endpoint.startsWith(path),
     );

@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import countryCodeOptions from "../data/countryCodeOptions";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { useUser } from "../context/userContext"; // Import your user context
 import Warning from "../assets/warning.png";
 import GoogleIcon from "../assets/google.png";
-import AppleIcon from "../assets/apple.png";
 
 // Defined outside to avoid new component identity on every render (fixes input lag)
 const PasswordStrengthIndicator = ({ password, passwordStrength }) => {
@@ -48,6 +48,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
   const navigate = useNavigate();
   const {
     createUser,
+    signUpWithGoogle,
     sendOTPToEmail,
     verifyOTPToEmail,
     resendOTPToEmail,
@@ -429,12 +430,37 @@ const handleSignIn = () => {
 
             <div className="text-center text-sm">Or Sign up with</div>
             <div className="flex justify-center gap-6">
-              <button type="button" className="text-white">
-                <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
-              </button>
-              <button type="button" className="text-white">
-                <img src={AppleIcon} alt="Apple" className="w-8 h-8" />
-              </button>
+              <GoogleLogin
+                onSuccess={async (credentialResponse) => {
+                  if (!credentialResponse?.credential) return;
+                  try {
+                    await signUpWithGoogle(credentialResponse.credential);
+                    if (onClose) onClose();
+                    navigate("/google-onboarding");
+                  } catch (err) {
+                    // Error already set in context
+                  }
+                }}
+                onError={() => {
+                  clearError();
+                  setLocalError("Google sign-in was cancelled or failed.");
+                }}
+                useOneTap={false}
+                theme="filled_black"
+                size="medium"
+                type="icon"
+                shape="circle"
+                customButton={(renderProps) => (
+                  <button
+                    type="button"
+                    onClick={renderProps.onClick}
+                    disabled={renderProps.disabled || isLoading}
+                    className="text-white disabled:opacity-50"
+                  >
+                    <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
+                  </button>
+                )}
+              />
             </div>
 
             <div className="flex items-start gap-2">
