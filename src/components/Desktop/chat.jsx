@@ -2902,17 +2902,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
           console.log('📝 Sending acceptance custom message');
 
-          await channelToUse.sendMessage({
-            text: `✅ Trade accepted! Waiting for transaction to be created...`,
-            user_id: currentUserId,
-            // 🔥 REMOVED: type: 'system' - this causes the error
-            // 🔥 ADDED: Use custom fields to track acceptance
-            trade_accepted: true,
-            accepted_by: currentUserId,
-            acceptor_name: acceptorName,
-            accepted_at: new Date().toISOString(),
-            silent: true
-          });
+          // await channelToUse.sendMessage({
+          //   text: `✅ Trade accepted! Waiting for transaction to be created...`,
+          //   user_id: currentUserId,
+          //   // 🔥 REMOVED: type: 'system' - this causes the error
+          //   // 🔥 ADDED: Use custom fields to track acceptance
+          //   trade_accepted: true,
+          //   accepted_by: currentUserId,
+          //   acceptor_name: acceptorName,
+          //   accepted_at: new Date().toISOString(),
+          //   silent: true
+          // });
 
           console.log('✅ Acceptance message sent successfully');
 
