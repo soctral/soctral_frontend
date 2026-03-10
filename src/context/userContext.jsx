@@ -260,6 +260,16 @@ export const UserProvider = ({ children }) => {
       setLoading(true);
       clearError();
       const response = await authService.signUpWithGoogle(idToken);
+      if (response?.pendingGoogle && response?.token) {
+        dispatch({ type: USER_ACTIONS.SET_USER, payload: null });
+        return {
+          status: true,
+          success: true,
+          pendingGoogle: true,
+          token: response.token,
+          message: response.message || "Enter your phone number to complete sign up",
+        };
+      }
       if (!response?.user || !response?.token) {
         throw new Error(response?.message || "Google sign-in failed");
       }
@@ -292,6 +302,24 @@ export const UserProvider = ({ children }) => {
       return response;
     } catch (error) {
       setError(error.message || "Failed to set phone number");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeGoogleSignup = async (phoneNumber) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.completeGoogleSignup(phoneNumber);
+      if (response?.user) {
+        dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
+        dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
+      }
+      return response;
+    } catch (error) {
+      setError(error.message || "Failed to complete sign up");
       throw error;
     } finally {
       setLoading(false);
@@ -537,6 +565,7 @@ export const UserProvider = ({ children }) => {
     signInUser,
     signUpWithGoogle,
     setInitialPhone,
+    completeGoogleSignup,
     sendOTP,
     verifyOTP,
     resendOTP,

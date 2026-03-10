@@ -23,6 +23,7 @@ class ApiService {
       "/auth/login",
       "/auth/create",
       "/auth/signupWithGoogle",
+      "/auth/complete-google-signup",
       "/auth/refresh",
       "/auth/profile",
       "/otp/send",

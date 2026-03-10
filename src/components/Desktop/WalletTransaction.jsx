@@ -14,6 +14,7 @@ import notice from "../../assets/notice.svg";
 import alt from "../../assets/alt.svg";
 import tick from "../../assets/tick.svg";
 import authService from '../../services/authService';
+import transactionService from '../../services/transactionService';
 import CryptoPriceChart from './CryptoPriceChart';
 import base from "../../assets/base-logo.png";
 import { fixWithdrawalPrecision, validateWithdrawalAmount } from '../../services/Withdrawalprecisionfix';
@@ -230,6 +231,8 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
   const [inputMode, setInputMode] = useState('usd'); // 🔥 CHANGED: Default to 'usd' mode (was 'token')
   const [withdrawalSuccessData, setWithdrawalSuccessData] = useState(null);
+  // Network fee from API (gas fee in native token) for withdraw screen
+  const [withdrawalFeeEstimate, setWithdrawalFeeEstimate] = useState(null);
 
   // 🔥 NEW: Chart view state
   const [showChartView, setShowChartView] = useState(false);
@@ -249,6 +252,51 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
       hasInitializedRef.current = false;
     }
   }, [isOpen]);
+
+  // Fetch withdrawal network fee (gas in native token) when asset/network selected for withdraw
+  const assetToCurrency = {
+    Bitcoin: 'btc',
+    Ethereum: 'eth',
+    Tether: 'usdt',
+    Solana: 'sol',
+    USDCoin: 'usdc',
+    'Binance Coin': 'bnb',
+    Tron: 'trx',
+  };
+  const networkNameToApi = {
+    'Bitcoin Main Network': 'bitcoin',
+    'Lightning Network': 'lightning',
+    'Ethereum Main Network': 'ethereum',
+    'Base Network': 'base',
+    'Solana Network': 'solana',
+    'Ethereum Network': 'ethereum',
+    'BEP20 Network': 'binance',
+    'Tron Network': 'tron',
+  };
+  useEffect(() => {
+    if (!selectedAsset?.name || !selectedNetwork?.name) {
+      setWithdrawalFeeEstimate(null);
+      return;
+    }
+    const currency = assetToCurrency[selectedAsset.name];
+    const network = networkNameToApi[selectedNetwork.name];
+    if (!currency || !network) {
+      setWithdrawalFeeEstimate(null);
+      return;
+    }
+    let cancelled = false;
+    transactionService.getWithdrawalFeeEstimate(currency, network).then((data) => {
+      if (cancelled) return;
+      setWithdrawalFeeEstimate({
+        gasFeeInNative: data.gasFeeInNative ?? 0,
+        gasFeeUSD: data.gasFeeUSD ?? 0,
+        nativeCurrency: (data.nativeCurrency || '').toUpperCase(),
+      });
+    }).catch(() => {
+      if (!cancelled) setWithdrawalFeeEstimate(null);
+    });
+    return () => { cancelled = true; };
+  }, [selectedAsset?.name, selectedNetwork?.name]);
 
   // Generate QR code when deposit address changes
   useEffect(() => {
@@ -751,7 +799,9 @@ const handleVerifyPinAndProceed = async () => {
 
 if (withdrawalResponse.status || withdrawalResponse.success) {
   console.log('✅ Withdrawal successful:', withdrawalResponse);
-  
+  const feeCur = withdrawalFeeEstimate?.nativeCurrency || selectedAsset?.abbreviation || '';
+  const feeAmt = withdrawalFeeEstimate?.gasFeeInNative ?? parseFloat(networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || '0');
+  const feeDisplay = feeAmt >= 0.0001 ? feeAmt.toFixed(6) : feeAmt.toFixed(8);
   // 🔥 FIX: Store the withdrawal data BEFORE clearing form
   setWithdrawalSuccessData({
     amount: withdrawalResponse.data?.amount || fixedAmount,
@@ -760,6 +810,8 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
     networkName: selectedNetwork?.name,
     toAddress: withdrawalResponse.data?.toAddress || withdrawAddress,
     fromAddress: withdrawalResponse.data?.fromAddress || '',
+    networkFeeAmount: feeDisplay,
+    networkFeeCurrency: feeCur,
     transactionHash: withdrawalResponse.data?.transactionHash || '',
     explorerUrl: withdrawalResponse.data?.explorerUrl || '',
     usdEquivalent: usdEquivalent,
@@ -1242,9 +1294,14 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
 
   // Withdraw Step 1 Modal
   if (currentModal === 'withdrawStep1') {
-    const networkFee = networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || "0.0";
+    const gasInNative = withdrawalFeeEstimate?.gasFeeInNative ?? parseFloat(networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || '0');
+    const feeCurrency = withdrawalFeeEstimate?.nativeCurrency || selectedAsset?.abbreviation || '';
+    const isNativeWithdrawal = selectedAsset?.abbreviation?.toUpperCase() === feeCurrency?.toUpperCase();
+    const amountReceived = withdrawAmount
+      ? (isNativeWithdrawal ? Math.max(0, parseFloat(withdrawAmount) - gasInNative) : parseFloat(withdrawAmount)).toFixed(8)
+      : '0.00';
     const availableNetworks = networkConfigs[selectedAsset?.name] || [];
-    const amountReceived = withdrawAmount ? (parseFloat(withdrawAmount) - parseFloat(networkFee)).toFixed(8) : "0.00";
+    const networkFeeDisplay = gasInNative >= 0.0001 ? gasInNative.toFixed(6) : gasInNative.toFixed(8);
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center overflow-y-auto z-50">
@@ -1328,11 +1385,11 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
               </div>
 
                               <div className="rounded-lg p-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Network Fee:</span>
-                  <span className="text-white">{networkFee} {selectedAsset?.abbreviation}</span>
-                </div>
-              </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-400">Network Fee:</span>
+                                  <span className="text-white">{networkFeeDisplay} {feeCurrency}</span>
+                                </div>
+                              </div>
 
               <button
                 onClick={() => setCurrentModal('withdrawStep2')}
@@ -1350,9 +1407,14 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
 
   // Withdraw Step 2 Modal
   if (currentModal === 'withdrawStep2') {
-    const gasFee = parseFloat(networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || "0");
-    const amountReceived = withdrawAmount ? Math.max(0, parseFloat(withdrawAmount) - gasFee).toFixed(8) : "0.00";
-    const gasFeeUsd = (gasFee * parseFloat(selectedAsset?.priceUSD || 0)).toFixed(2);
+    const gasInNative = withdrawalFeeEstimate?.gasFeeInNative ?? parseFloat(networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || '0');
+    const feeCurrency = withdrawalFeeEstimate?.nativeCurrency || selectedAsset?.abbreviation || '';
+    const isNativeWithdrawal = selectedAsset?.abbreviation?.toUpperCase() === feeCurrency?.toUpperCase();
+    const amountReceived = withdrawAmount
+      ? (isNativeWithdrawal ? Math.max(0, parseFloat(withdrawAmount) - gasInNative) : parseFloat(withdrawAmount)).toFixed(8)
+      : '0.00';
+    const gasFeeUsd = (withdrawalFeeEstimate?.gasFeeUSD != null ? withdrawalFeeEstimate.gasFeeUSD : gasInNative * parseFloat(selectedAsset?.priceUSD || 0)).toFixed(2);
+    const gasFeeDisplay = gasInNative >= 0.0001 ? gasInNative.toFixed(6) : gasInNative.toFixed(8);
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center overflow-y-auto z-50">
@@ -1440,7 +1502,7 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
                             <div className="rounded-lg p-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Gas Fee:</span>
-                  <span className="text-white">{gasFee.toFixed(8)} {selectedAsset?.abbreviation} <span className="text-gray-500">(≈ ${gasFeeUsd})</span></span>
+                  <span className="text-white">{gasFeeDisplay} {feeCurrency} <span className="text-gray-500">(≈ ${gasFeeUsd})</span></span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400 font-medium">Amount Received:</span>
@@ -1542,8 +1604,6 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
   // Withdraw Step 4 Modal
 
 if (currentModal === 'withdrawStep4') {
-  const networkFee = networkFees[selectedAsset?.name]?.[selectedNetwork?.name] || "0.0";
-  
   // 🔥 FIX: Use stored withdrawal success data instead of state variables
   const successData = withdrawalSuccessData || {};
   const displayAmount = successData.amount || withdrawAmount || '0';
@@ -1552,6 +1612,8 @@ if (currentModal === 'withdrawStep4') {
   const displayCurrency = successData.currency || selectedAsset?.abbreviation || '';
   const displayAssetName = successData.assetName || selectedAsset?.name || '';
   const displayNetworkName = successData.networkName || selectedNetwork?.name || '';
+  const displayNetworkFee = successData.networkFeeAmount ?? networkFees[selectedAsset?.name]?.[selectedNetwork?.name] ?? '0.0';
+  const displayNetworkFeeCurrency = successData.networkFeeCurrency || selectedAsset?.abbreviation || '';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center overflow-y-auto justify-center z-50">
@@ -1613,7 +1675,7 @@ if (currentModal === 'withdrawStep4') {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Network Fee:</span>
-              <span className="text-white">{networkFee} {displayCurrency}</span>
+              <span className="text-white">{displayNetworkFee} {displayNetworkFeeCurrency}</span>
             </div>
             
             {/* 🔥 NEW: Show transaction hash and explorer link if available */}

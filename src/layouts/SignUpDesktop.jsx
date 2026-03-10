@@ -435,8 +435,8 @@ const handleSignIn = () => {
                   if (!credentialResponse?.credential) return;
                   try {
                     await signUpWithGoogle(credentialResponse.credential);
-                    if (onClose) onClose();
                     navigate("/google-onboarding");
+                    if (onClose) onClose();
                   } catch (err) {
                     // Error already set in context
                   }
