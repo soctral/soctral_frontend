@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import Onboarding from "./components/Onboarding";
 import DesktopOnboardingSteps from "./components/StepOneDesktop";
 import MobileOnboardingSteps from "./components/StepOneMobile";
@@ -9,8 +10,11 @@ import SignInDesktop from "./layouts/SignInDesktop";
 import SignInMobile from "./layouts/SignInMobile";
 import SignUpDesktop from "./layouts/SignUpDesktop";
 import SignUpMobile from "./layouts/SignUpMobile";
+import GoogleOnboarding from "./layouts/GoogleOnboarding";
 import MobileHomepage from "./layouts/mobilehomepage";
 import './services/tradeStateMigration';
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
 
 
@@ -140,6 +144,7 @@ function App() {
 
   return (
     <UserProvider>
+      <GoogleOAuthProvider clientId={googleClientId}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
          
@@ -182,9 +187,11 @@ function App() {
               />
             } 
           />
+          <Route path="/google-onboarding" element={<GoogleOnboarding />} />
           <Route path="*" element={<Navigate to="/homepage" replace />} />
         </Routes>
       </BrowserRouter>
+      </GoogleOAuthProvider>
     </UserProvider>
   );
 }

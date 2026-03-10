@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import countryCodeOptions from "../data/countryCodeOptions";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
 import { useUser } from "../context/userContext";
 import Warning from "../assets/warning.png";
 import GoogleIcon from "../assets/google.png";
-import AppleIcon from "../assets/apple.png";
 
 // Defined outside to avoid new component identity on every render (fixes input lag)
 const PasswordStrengthIndicator = ({ password, passwordStrength }) => {
@@ -51,6 +51,7 @@ const SignUp = () => {
     signupStep,
     signupData,
     createUser,
+    signUpWithGoogle,
     sendOTPToEmail,
     verifyOTPToEmail,
     resendOTPToEmail,
@@ -426,12 +427,31 @@ const SignUp = () => {
                   </div>
 
                   <div className="flex justify-center space-x-8 mb-6">
-                    <button type="button" onClick={() => {}}>
-                      <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
-                    </button>
-                    <button type="button" onClick={() => {}}>
-                      <img src={AppleIcon} alt="Apple" className="w-8 h-8" />
-                    </button>
+                    <GoogleLogin
+                      onSuccess={async (credentialResponse) => {
+                        if (!credentialResponse?.credential) return;
+                        try {
+                          await signUpWithGoogle(credentialResponse.credential);
+                          navigate("/google-onboarding");
+                        } catch (err) {}
+                      }}
+                      onError={() => clearError()}
+                      useOneTap={false}
+                      theme="filled_black"
+                      size="medium"
+                      type="icon"
+                      shape="circle"
+                      customButton={(renderProps) => (
+                        <button
+                          type="button"
+                          onClick={renderProps.onClick}
+                          disabled={renderProps.disabled || isLoading}
+                          className="disabled:opacity-50"
+                        >
+                          <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
+                        </button>
+                      )}
+                    />
                   </div>
 
                   <div className="flex items-start space-x-2">

@@ -255,6 +255,49 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  const signUpWithGoogle = async (idToken) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.signUpWithGoogle(idToken);
+      if (!response?.user || !response?.token) {
+        throw new Error(response?.message || "Google sign-in failed");
+      }
+      dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
+      dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
+      return {
+        status: true,
+        success: true,
+        user: response.user,
+        token: response.token,
+        message: response.message || "Signed in with Google successfully",
+      };
+    } catch (error) {
+      const errorMessage = error.message || "Google sign-in failed";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setInitialPhone = async (phoneNumber) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.setInitialPhone(phoneNumber);
+      if (response?.user) {
+        dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
+      }
+      return response;
+    } catch (error) {
+      setError(error.message || "Failed to set phone number");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getUserByToken = async () => {
     try {
       setLoading(true);
@@ -492,6 +535,8 @@ export const UserProvider = ({ children }) => {
     signupData: state.signupData,
     createUser,
     signInUser,
+    signUpWithGoogle,
+    setInitialPhone,
     sendOTP,
     verifyOTP,
     resendOTP,

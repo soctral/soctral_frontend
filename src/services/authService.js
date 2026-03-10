@@ -207,6 +207,55 @@ class AuthService {
     }
   }
 
+  // Sign up or sign in with Google (uses same backend endpoint)
+  async signUpWithGoogle(idToken) {
+    try {
+      if (!idToken || typeof idToken !== "string") {
+        throw new Error("Google credential is required");
+      }
+      const response = await this.requestWithRetry("/auth/signupWithGoogle", {
+        method: "POST",
+        body: JSON.stringify({ idToken }),
+      });
+      let processedResponse = response;
+      if (
+        response &&
+        typeof response === "object" &&
+        response.data &&
+        typeof response.data === "string"
+      ) {
+        try {
+          const encryptionService = (await import("./encryption.service.js")).default;
+          processedResponse = encryptionService.decrypt(response.data);
+        } catch {
+          processedResponse = response;
+        }
+      }
+      if (
+        processedResponse?.status &&
+        processedResponse?.token &&
+        processedResponse?.user
+      ) {
+        await this.ensureTokenStorage(processedResponse.token, processedResponse.user);
+        return {
+          status: true,
+          success: true,
+          token: processedResponse.token,
+          user: processedResponse.user,
+          message: processedResponse.message || "Signed in with Google successfully",
+        };
+      }
+      const errorMessage =
+        processedResponse?.message ||
+        processedResponse?.error ||
+        "Google sign-in failed";
+      throw new Error(errorMessage);
+    } catch (error) {
+      console.error("❌ Google sign-in failed:", error.message);
+      throw error;
+    }
+  }
+
   // Login user (NEW METHOD)
   async loginUser(credentials) {
     try {
@@ -1082,6 +1131,34 @@ class AuthService {
       return response;
     } catch (error) {
       console.error('❌ Update phone number failed:', error.message);
+      throw error;
+    }
+  }
+
+  // Set initial phone (for Google sign-up users who don't have a phone yet)
+  async setInitialPhone(phoneNumber) {
+    try {
+      if (!this.isAuthenticated()) {
+        throw new Error('User not authenticated');
+      }
+      const normalized = String(phoneNumber).replace(/[\s\-\(\)]/g, '').trim();
+      if (!normalized || normalized.length < 7) {
+        throw new Error('Valid phone number is required');
+      }
+      const response = await this.requestWithRetry('/user/set-initial-phone', {
+        method: 'PUT',
+        body: JSON.stringify({ phoneNumber: normalized }),
+      });
+      if (response.status) {
+        const latest = await this.getCurrentUser();
+        if (latest?.user) {
+          this.storage.setItem('userData', JSON.stringify(latest.user));
+          return { ...response, user: latest.user };
+        }
+      }
+      return response;
+    } catch (error) {
+      console.error('❌ Set initial phone failed:', error.message);
       throw error;
     }
   }
