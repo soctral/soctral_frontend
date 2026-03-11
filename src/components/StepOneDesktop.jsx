@@ -40,6 +40,21 @@ export default function DesktopOnboardingSteps() {
     }
   }, [searchParams]);
 
+  // Set document title and meta description when sign-in/sign-up modal is open (for sitelink context)
+  useEffect(() => {
+    let metaDesc = document.querySelector('meta[name="description"]');
+    if (showSignIn) {
+      document.title = "Login – Soctral";
+      if (metaDesc) metaDesc.setAttribute("content", "Sign in to your Soctral account. Access your wallet, listings, and trade social media accounts securely with escrow protection.");
+    } else if (showSignUp) {
+      document.title = "Sign up – Soctral";
+      if (metaDesc) metaDesc.setAttribute("content", "Create a Soctral account to buy and sell social media accounts securely. Wallet, escrow, and verified trading.");
+    } else {
+      document.title = "Soctral – Secure Social Media Trading";
+      if (metaDesc) metaDesc.setAttribute("content", "Soctral is a secure platform for buying and selling social media accounts. Fund your wallet, browse listings, and trade with escrow protection.");
+    }
+  }, [showSignIn, showSignUp]);
+
   const openSignIn = () => {
     setShowSignIn(true);
     setShowSignUp(false);  // Close Sign Up when Sign In is opened
@@ -80,8 +95,8 @@ export default function DesktopOnboardingSteps() {
           <div className="flex justify-between items-center w-full mb-2">
             <img src={logo} alt="Soctral Logo" className="w-8 h-8 object-contain" />
             <nav className="flex items-center gap-3" aria-label="Account">
-              <Link to="/login" className="text-white text-xs font-medium hover:underline">Login</Link>
-              <Link to="/signup" className="text-white text-xs font-medium hover:underline">Sign up</Link>
+              <Link to="/login" className="text-white text-xs font-medium hover:underline" title="Sign in to your Soctral account" aria-label="Sign in to your Soctral account">Login</Link>
+              <Link to="/signup" className="text-white text-xs font-medium hover:underline" title="Create a Soctral account to buy and sell social media securely" aria-label="Create a Soctral account">Sign up</Link>
               <p className="text-white cursor-pointer text-xs font-normal" onClick={handleSkip}>Skip</p>
             </nav>
           </div>

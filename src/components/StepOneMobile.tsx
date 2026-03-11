@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import logo from "../assets/soctraLogo.png";
-import Card from "../components/OnboardingMobileCard";
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import one from "../assets/1.svg";
 import two from "../assets/2.svg";
 import three from "../assets/3.svg";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import Card from "../components/OnboardingMobileCard";
 import authService from "../services/authService";
 
 const steps = [
@@ -108,8 +107,8 @@ export default function MobileOnboardingSteps() {
         {/* Top: Skip + crawlable Login / Sign up links for sitelinks */}
         <div className="flex justify-end items-center gap-3 w-full mb-6">
           <nav className="flex items-center gap-3" aria-label="Account">
-            <Link to="/login" className="text-white text-xs font-medium">Login</Link>
-            <Link to="/signup" className="text-white text-xs font-medium">Sign up</Link>
+            <Link to="/login" className="text-white text-xs font-medium" title="Sign in to your Soctral account" aria-label="Sign in to your Soctral account">Login</Link>
+            <Link to="/signup" className="text-white text-xs font-medium" title="Create a Soctral account to buy and sell social media securely" aria-label="Create a Soctral account">Sign up</Link>
           </nav>
           <p
             onClick={handleSkip}
