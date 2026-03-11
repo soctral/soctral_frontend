@@ -1697,15 +1697,22 @@ const HomePage = () => {
             )}
 
             {showVerificationCard && activeTab !== 'trade' && activeTab !== 'history' && activeTab !== 'chat' && (
-              /* Complete Verification Card */
-              <div className="bg-[rgba(24,24,24,1)] p-5 rounded-lg text-[#fff] relative">
+              /* Complete Verification Card - Coming Soon */
+              <div className="bg-[rgba(24,24,24,1)] p-5 rounded-lg text-[#fff] relative overflow-hidden">
                 {/* Cancel Button */}
                 <button
                   onClick={() => setShowVerificationCard(false)}
-                  className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors z-20"
                 >
                   <X className="text-white w-5 h-5" />
                 </button>
+
+                {/* Coming Soon Overlay */}
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-lg">
+                  <div className="bg-primary/90 text-white px-6 py-2 rounded-full text-sm font-semibold tracking-wide shadow-lg">
+                    🚀 Coming Soon
+                  </div>
+                </div>
 
                 <div className="flex gap-4 items-center">
                   <div>
@@ -1726,20 +1733,8 @@ const HomePage = () => {
 
                       <div className="mt-7">
                         <button
-                          className="text-sm bg-primary text-white py-3 px-6 rounded-full hover:bg-opacity-80 transition-colors"
-                          onClick={() => {
-                            // Check if user is authenticated before allowing access to verification
-                            if (!isAuthenticated) {
-                              // Show the same authentication modal as navbar
-                              setShowAuthModal(true);
-                              setAuthModalType('profile');
-                              return;
-                            }
-
-                            // If authenticated, proceed to profile section
-                            setActiveMenuSection('profile');
-                            setActiveTab('profile');
-                          }}
+                          className="text-sm bg-primary text-white py-3 px-6 rounded-full opacity-50 cursor-not-allowed"
+                          disabled
                         >
                           Verify Now
                         </button>
