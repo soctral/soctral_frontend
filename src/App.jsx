@@ -147,7 +147,10 @@ function App() {
       <GoogleOAuthProvider clientId={googleClientId}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-         
+          {/* Sitelink-friendly URLs: land on homepage with sign-in/sign-up dialog open */}
+          <Route path="/login" element={<Navigate to="/?open=login" replace />} />
+          <Route path="/signup" element={<Navigate to="/?open=signup" replace />} />
+
           <Route 
             path="/" 
             element={

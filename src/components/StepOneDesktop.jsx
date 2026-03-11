@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import logo from "../assets/SoctralbgLogo.png";
 import Card from "../components/OnboardingDesktopCard";
 import one from "../assets/1.svg";
@@ -13,6 +13,7 @@ export default function DesktopOnboardingSteps() {
   const [showSignIn, setShowSignIn] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Check if user is already authenticated on component mount
   useEffect(() => {
@@ -26,6 +27,18 @@ export default function DesktopOnboardingSteps() {
 
     checkAuthentication();
   }, [navigate]);
+
+  // Open sign-in or sign-up modal when arriving via /login or /signup (for Google sitelinks)
+  useEffect(() => {
+    const open = searchParams.get("open");
+    if (open === "login") {
+      setShowSignIn(true);
+      setShowSignUp(false);
+    } else if (open === "signup") {
+      setShowSignUp(true);
+      setShowSignIn(false);
+    }
+  }, [searchParams]);
 
   const openSignIn = () => {
     setShowSignIn(true);
@@ -63,10 +76,14 @@ export default function DesktopOnboardingSteps() {
     <>
       <div className="bg-tertiary relative w-screen h-screen overflow-visible">
         <div className="flex flex-col justify-between h-full max-w-screen-xl mx-auto px-4 py-4">
-          {/* Top Row */}
+          {/* Top Row: logo, sitelink-friendly Login/Sign up (crawlable), Skip */}
           <div className="flex justify-between items-center w-full mb-2">
-            <img src={logo} alt="Soctra Logo" className="w-8 h-8 object-contain" />
-            <p className="text-white cursor-pointer text-xs font-normal" onClick={handleSkip}>Skip</p>
+            <img src={logo} alt="Soctral Logo" className="w-8 h-8 object-contain" />
+            <nav className="flex items-center gap-3" aria-label="Account">
+              <Link to="/login" className="text-white text-xs font-medium hover:underline">Login</Link>
+              <Link to="/signup" className="text-white text-xs font-medium hover:underline">Sign up</Link>
+              <p className="text-white cursor-pointer text-xs font-normal" onClick={handleSkip}>Skip</p>
+            </nav>
           </div>
 
           {/* Welcome Text */}

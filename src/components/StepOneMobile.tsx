@@ -5,7 +5,7 @@ import Card from "../components/OnboardingMobileCard";
 import one from "../assets/1.svg";
 import two from "../assets/2.svg";
 import three from "../assets/3.svg";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import authService from "../services/authService";
 
 const steps = [
@@ -33,6 +33,7 @@ export default function MobileOnboardingSteps() {
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(0);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Check if user is already authenticated on component mount
   useEffect(() => {
@@ -47,6 +48,16 @@ export default function MobileOnboardingSteps() {
 
     checkAuthentication();
   }, [navigate]);
+
+  // Sitelink URLs (/login, /signup): on mobile send to full-page sign-in/sign-up
+  useEffect(() => {
+    const open = searchParams.get("open");
+    if (open === "login") {
+      navigate("/sign-in", { replace: true });
+    } else if (open === "signup") {
+      navigate("/sign-up", { replace: true });
+    }
+  }, [searchParams, navigate]);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -94,9 +105,12 @@ export default function MobileOnboardingSteps() {
     <div className="bg-tertiary min-h-screen h-[100dvh] overflow-hidden">
       <div className="flex flex-col items-center justify-between max-w-screen-md mx-auto h-full bg-tertiary p-5 relative">
 
-        {/* Top Logo and Skip */}
-        <div className="flex justify-end items-center w-full mb-6">
-          <img src={logo} alt="Logo" className="w-[50px] hidden h-[50px]" />
+        {/* Top: Skip + crawlable Login / Sign up links for sitelinks */}
+        <div className="flex justify-end items-center gap-3 w-full mb-6">
+          <nav className="flex items-center gap-3" aria-label="Account">
+            <Link to="/login" className="text-white text-xs font-medium">Login</Link>
+            <Link to="/signup" className="text-white text-xs font-medium">Sign up</Link>
+          </nav>
           <p
             onClick={handleSkip}
             className="text-white cursor-pointer mb-[.6rem] mt-[.7rem] flex justify-end items-end font-normal"
