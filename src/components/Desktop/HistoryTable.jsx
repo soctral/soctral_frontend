@@ -742,7 +742,7 @@ const fetchTransactions = async () => {
               onClick={() => setShowTransactionModal(false)}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center lg:p-4">
-              <div className="bg-[#000000] rounded-lg max-w-md w-full px-3 lg:mx-4 relative max-h-[100vh] lg:max-h-[90vh] overflow-y-auto">
+              <div className="bg-[#000000] rounded-lg max-w-md w-full px-3 pt-10 lg:pt-3 lg:mx-4 relative max-h-[100vh] lg:max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
                 <button
                   onClick={() => setShowTransactionModal(false)}
                   className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition-colors z-10"
@@ -943,7 +943,7 @@ const fetchTransactions = async () => {
               onClick={() => setShowFilterModal(false)}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center lg:p-4">
-              <div className="bg-[#000000] h-screen lg:h-[31rem] rounded-lg p-3 lg:p-6 lg:max-w-lg w-full lg:mx-4 relative">
+              <div className="bg-[#000000] h-screen lg:h-[31rem] rounded-lg p-3 pt-10 lg:pt-6 lg:p-6 lg:max-w-lg w-full lg:mx-4 relative overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
                 {/* Header with Back Arrow */}
                 <div className="flex items-center justify-between mb-6">
                   <button
