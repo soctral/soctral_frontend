@@ -28,7 +28,9 @@ const steps = [
   },
 ];
 
-export default function MobileOnboardingSteps() {
+type OpenModal = "login" | "signup" | undefined;
+
+export default function MobileOnboardingSteps({ openModal }: { openModal?: OpenModal }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(0);
   const navigate = useNavigate();
@@ -50,13 +52,21 @@ export default function MobileOnboardingSteps() {
 
   // Sitelink URLs (/login, /signup): on mobile send to full-page sign-in/sign-up
   useEffect(() => {
+    if (openModal === "login") {
+      navigate("/sign-in", { replace: true });
+      return;
+    }
+    if (openModal === "signup") {
+      navigate("/sign-up", { replace: true });
+      return;
+    }
     const open = searchParams.get("open");
     if (open === "login") {
       navigate("/sign-in", { replace: true });
     } else if (open === "signup") {
       navigate("/sign-up", { replace: true });
     }
-  }, [searchParams, navigate]);
+  }, [openModal, searchParams, navigate]);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {

@@ -9,7 +9,14 @@ import SignIn from "../layouts/SignInDesktop";
 import SignUp from "../layouts/SignUpDesktop";
 import authService from "../services/authService";
 
-export default function DesktopOnboardingSteps() {
+const LOGIN_TITLE = "Login – Soctral";
+const LOGIN_DESCRIPTION = "Sign in to your Soctral account. Access your wallet, listings, and trade social media accounts securely with escrow protection.";
+const SIGNUP_TITLE = "Sign up – Soctral";
+const SIGNUP_DESCRIPTION = "Create a Soctral account to buy and sell social media accounts securely. Wallet, escrow, and verified trading.";
+const DEFAULT_TITLE = "Soctral – Secure Social Media Trading";
+const DEFAULT_DESCRIPTION = "Soctral is a secure platform for buying and selling social media accounts. Fund your wallet, browse listings, and trade with escrow protection.";
+
+export default function DesktopOnboardingSteps({ openModal }) {
   const [showSignIn, setShowSignIn] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const navigate = useNavigate();
@@ -28,8 +35,26 @@ export default function DesktopOnboardingSteps() {
     checkAuthentication();
   }, [navigate]);
 
-  // Open sign-in or sign-up modal when arriving via /login or /signup (for Google sitelinks)
+  // Sitelinks: /login and /signup are real URLs – set modal and distinct title/description immediately
   useEffect(() => {
+    if (openModal === "login") {
+      setShowSignIn(true);
+      setShowSignUp(false);
+      document.title = LOGIN_TITLE;
+      const meta = document.querySelector('meta[name="description"]');
+      if (meta) meta.setAttribute("content", LOGIN_DESCRIPTION);
+    } else if (openModal === "signup") {
+      setShowSignUp(true);
+      setShowSignIn(false);
+      document.title = SIGNUP_TITLE;
+      const meta = document.querySelector('meta[name="description"]');
+      if (meta) meta.setAttribute("content", SIGNUP_DESCRIPTION);
+    }
+  }, [openModal]);
+
+  // Backwards compatibility: ?open=login and ?open=signup still work
+  useEffect(() => {
+    if (openModal) return;
     const open = searchParams.get("open");
     if (open === "login") {
       setShowSignIn(true);
@@ -38,22 +63,22 @@ export default function DesktopOnboardingSteps() {
       setShowSignUp(true);
       setShowSignIn(false);
     }
-  }, [searchParams]);
+  }, [searchParams, openModal]);
 
-  // Set document title and meta description when sign-in/sign-up modal is open (for sitelink context)
+  // Keep document title and meta in sync when modal state changes (e.g. user closes modal)
   useEffect(() => {
-    let metaDesc = document.querySelector('meta[name="description"]');
+    const metaDesc = document.querySelector('meta[name="description"]');
     if (showSignIn) {
-      document.title = "Login – Soctral";
-      if (metaDesc) metaDesc.setAttribute("content", "Sign in to your Soctral account. Access your wallet, listings, and trade social media accounts securely with escrow protection.");
+      document.title = LOGIN_TITLE;
+      if (metaDesc) metaDesc.setAttribute("content", LOGIN_DESCRIPTION);
     } else if (showSignUp) {
-      document.title = "Sign up – Soctral";
-      if (metaDesc) metaDesc.setAttribute("content", "Create a Soctral account to buy and sell social media accounts securely. Wallet, escrow, and verified trading.");
-    } else {
-      document.title = "Soctral – Secure Social Media Trading";
-      if (metaDesc) metaDesc.setAttribute("content", "Soctral is a secure platform for buying and selling social media accounts. Fund your wallet, browse listings, and trade with escrow protection.");
+      document.title = SIGNUP_TITLE;
+      if (metaDesc) metaDesc.setAttribute("content", SIGNUP_DESCRIPTION);
+    } else if (!openModal) {
+      document.title = DEFAULT_TITLE;
+      if (metaDesc) metaDesc.setAttribute("content", DEFAULT_DESCRIPTION);
     }
-  }, [showSignIn, showSignUp]);
+  }, [showSignIn, showSignUp, openModal]);
 
   const openSignIn = () => {
     setShowSignIn(true);
