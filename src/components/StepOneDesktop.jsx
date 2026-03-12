@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import logo from "../assets/SoctralbgLogo.png";
-import Card from "../components/OnboardingDesktopCard";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import one from "../assets/1.svg";
 import two from "../assets/2.svg";
 import three from "../assets/3.svg";
+import logo from "../assets/SoctralbgLogo.png";
+import Card from "../components/OnboardingDesktopCard";
 import SignIn from "../layouts/SignInDesktop";
 import SignUp from "../layouts/SignUpDesktop";
 import authService from "../services/authService";
