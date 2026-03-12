@@ -3968,13 +3968,13 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       console.log('Form Data:', tradeData);
 
       // Step 1: Validate all required fields are filled (using passed data)
-      // 🔥 Check if original email was provided during upload
+      // 🔥 Only require original email fields when sell order filter original_email is true
       const hasOriginalEmail = (() => {
         const filters = selectedUser?.filters || [];
         const metrics = selectedUser?.metrics || [];
         const allData = [...filters, ...metrics];
         const emailFilter = allData.find(f => f.key === 'original_email');
-        if (!emailFilter) return true; // backward compat
+        if (!emailFilter) return false;
         return emailFilter.value === true || emailFilter.value === 'yes';
       })();
 
@@ -7799,14 +7799,13 @@ const SellerInitiateModal = React.memo(({
     return null;
   }
 
-  // 🔥 Determine if original email was provided during upload
+  // 🔥 Show original email fields only when sell order filter original_email is true; hide when false or missing
   const hasOriginalEmail = (() => {
     const filters = selectedUser?.filters || [];
     const metrics = selectedUser?.metrics || [];
     const allData = [...filters, ...metrics];
     const emailFilter = allData.find(f => f.key === 'original_email');
-    // Default to true if not found (backward compat for older accounts)
-    if (!emailFilter) return true;
+    if (!emailFilter) return false;
     return emailFilter.value === true || emailFilter.value === 'yes';
   })();
 
@@ -7894,7 +7893,7 @@ const SellerInitiateModal = React.memo(({
             </div>
 
             <div className="space-y-3">
-              {/* 🔥 FIXED: Only show email fields if original_email was 'yes' during upload */}
+              {/* Show original email fields only when sell order filter original_email is true */}
               {hasOriginalEmail && (
                 <>
                   <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
