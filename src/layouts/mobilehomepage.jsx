@@ -1184,13 +1184,20 @@ const MobileHomePage = () => {
             </div>
           </div>
         ) : showVerificationCard ? (
-          <div className="bg-[rgba(255,255,255,1)] p-5 rounded-lg text-[#fff] relative">
+          <div className="bg-[rgba(255,255,255,1)] p-5 rounded-lg text-[#fff] relative overflow-hidden">
             <button
               onClick={() => setShowVerificationCard(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10 transition-colors"
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-20 transition-colors"
             >
               <X className="text-black w-5 h-5" />
             </button>
+
+            {/* Coming Soon Overlay */}
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-lg">
+              <div className="bg-primary/90 text-white px-5 py-2 rounded-full text-sm font-semibold tracking-wide shadow-lg">
+                🚀 Coming Soon
+              </div>
+            </div>
 
             <div className="flex items-center text-black">
               <div className="max-w-[200px]">
