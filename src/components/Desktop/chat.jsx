@@ -180,6 +180,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     accountEmail: '',
     emailPassword: '',
     accountPassword: '',
+    accountUsername: '',
     paymentMethod: 'USDT',
     paymentNetwork: '',
     offerPrice: ''
@@ -3982,6 +3983,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       if (hasOriginalEmail && !tradeData.accountEmail) missingFields.push('accountEmail');
       if (hasOriginalEmail && !tradeData.emailPassword) missingFields.push('emailPassword');
       if (!tradeData.accountPassword) missingFields.push('accountPassword');
+      if (!tradeData.accountUsername?.trim()) missingFields.push('accountUsername');
       if (!tradeData.paymentMethod) missingFields.push('paymentMethod');
       if (!tradeData.paymentNetwork) missingFields.push('paymentNetwork');
       if (!tradeData.offerPrice) missingFields.push('offerPrice');
@@ -4208,6 +4210,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         accountOriginalEmail: tradeData.accountEmail,
         originalEmailPassword: tradeData.emailPassword,
         socialAccountPassword: tradeData.accountPassword,
+        ...(tradeData.accountUsername?.trim() && { accountUsername: tradeData.accountUsername.trim() }),
         sellerWalletAddress: sellerAddress,
         buyerWalletAddress: buyerAddress,
         offerAmount: parseFloat(tradeData.offerPrice),
@@ -4394,6 +4397,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         accountEmail: '',
         emailPassword: '',
         accountPassword: '',
+        accountUsername: '',
         paymentMethod: 'BTC',
         paymentNetwork: '',
         offerPrice: ''
@@ -7766,6 +7770,7 @@ const SellerInitiateModal = React.memo(({
     accountEmail: sellerTradeData?.accountEmail || '',
     emailPassword: sellerTradeData?.emailPassword || '',
     accountPassword: sellerTradeData?.accountPassword || '',
+    accountUsername: sellerTradeData?.accountUsername || '',
     paymentMethod: sellerTradeData?.paymentMethod || 'USDT',
     paymentNetwork: sellerTradeData?.paymentNetwork || '',
     offerPrice: sellerTradeData?.offerPrice || ''
@@ -7786,6 +7791,7 @@ const SellerInitiateModal = React.memo(({
         accountEmail: data?.accountEmail || '',
         emailPassword: data?.emailPassword || '',
         accountPassword: data?.accountPassword || '',
+        accountUsername: data?.accountUsername || '',
         paymentMethod: data?.paymentMethod || 'USDT',
         paymentNetwork: data?.paymentNetwork || '',
         offerPrice: data?.offerPrice || ''
@@ -7821,6 +7827,7 @@ const SellerInitiateModal = React.memo(({
       if (!localFormData.emailPassword?.trim()) errors.emailPassword = 'Email password is required';
     }
     if (!localFormData.accountPassword?.trim()) errors.accountPassword = 'Account password is required';
+    if (!localFormData.accountUsername?.trim()) errors.accountUsername = 'Account username is required';
     if (!localFormData.paymentNetwork?.trim()) errors.paymentNetwork = 'Payment network is required';
     if (!localFormData.offerPrice || parseFloat(localFormData.offerPrice) <= 0) errors.offerPrice = 'Offer amount is required';
 
@@ -7883,16 +7890,25 @@ const SellerInitiateModal = React.memo(({
                   {channelMetadata.platform !== 'Unknown' ? channelMetadata.platform : (selectedUser?.platform || 'Unknown')}
                 </span>
               </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm">Account Username:</span>
-                <span className="text-white font-medium">
-                  {channelMetadata.accountUsername !== 'N/A' ? channelMetadata.accountUsername : (selectedUser?.accountUsername || 'N/A')}
-                </span>
-              </div>
             </div>
 
             <div className="space-y-3">
+              <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
+                <label className="text-gray-400 text-sm">Account Username</label>
+                <input
+                  type="text"
+                  placeholder="Enter the account username/handle you are selling"
+                  value={localFormData.accountUsername}
+                  onChange={(e) => {
+                    setLocalFormData(prev => ({ ...prev, accountUsername: e.target.value }));
+                    if (fieldErrors.accountUsername) setFieldErrors(prev => ({ ...prev, accountUsername: '' }));
+                  }}
+                  className={`w-full mt-1 bg-[#1a1a1a] border rounded-full px-4 py-4 text-white ${fieldErrors.accountUsername ? 'border-red-500' : 'border-white/10'}`}
+                  autoComplete="off"
+                />
+                {fieldErrors.accountUsername && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.accountUsername}</p>}
+              </div>
+
               {/* Show original email fields only when sell order filter original_email is true */}
               {hasOriginalEmail && (
                 <>
