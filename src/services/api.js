@@ -1,5 +1,5 @@
 // ========================================
-// services/api.js - FIXED: Removed encryption for trade initiation
+// services/api.js - E2E encryption enabled: only health/docs/encryption excluded
 // ========================================
 
 import { API_BASE_URL } from "../config.js";
@@ -13,38 +13,13 @@ class ApiService {
       Accept: "application/json",
     };
 
-    // 🔥 CRITICAL: These paths should NOT be encrypted/decrypted
-    // IMPORTANT: Added '/buy-orders/' to exclude ALL buy-order and sell-order operations including trade initiation
+    // Only these paths skip encryption/decryption (public or key-exchange)
     this.excludedPaths = [
       "/health",
       "/api/docs",
       "/metrics",
       "/encryption",
-      "/auth/login",
-      "/auth/create",
-      "/auth/signupWithGoogle",
-      "/auth/complete-google-signup",
-      "/auth/refresh",
-      "/auth/profile",
-      "/otp/send",
-      "/otp/verify",
-      "/otp/resend",
-      "/sell-orders",
-      "/sell-orders/", // Matches /sell-orders/ and all sub-paths like /sell-orders/initiate-transaction
-      "/sell-orders/my-orders",
-      "/buy-orders", // Matches /buy-orders exactly
-      "/buy-orders/", // Matches /buy-orders/ and all sub-paths like /buy-orders/123/initiate-transaction
-      "/buy-orders/my-orders",
-      "/user",
-      "/transaction",
-      "/wallet-transaction", // New: Wallet transaction endpoints
-      "/wallet-transaction/",
-      "/invoices", // Invoice endpoints - no encryption
-      "/invoices/",
-      "/channels", // Channel metadata/lifecycle - no encryption
-      "/channels/",
-      "/support", // Support/appeal chat channel - no encryption
-      "/support/",
+      "/docs",
     ];
   }
 
