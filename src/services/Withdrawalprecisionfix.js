@@ -40,9 +40,8 @@ export const fixWithdrawalPrecision = (amount, network, currency = '') => {
     'arbitrum': 18,
     'optimism': 18,
     
-    // Bitcoin networks - 8 decimals
+    // Bitcoin network - 8 decimals
     'bitcoin': 8,
-    'lightning': 8,
     
     // Other networks
     'solana': 9,
@@ -135,7 +134,6 @@ export const getMinimumWithdrawal = (network, currency) => {
     
     // Bitcoin
     'bitcoin': 0.00001,
-    'lightning': 0.000001,
     
     // Others
     'solana': 0.001,
