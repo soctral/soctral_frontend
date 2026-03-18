@@ -642,14 +642,15 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                   {/* Full Account Details Section (View Mode) */}
                   {viewMode && viewAccountData && (
                     <div className="mt-4 p-4 bg-[rgba(255,255,255,0.05)] rounded-lg space-y-3">
-                      {/* Share link - Copy button */}
-                      {viewAccountData.accountId && (
+                      {/* Share link - Copy button (uses shortCode when available for shorter URLs) */}
+                      {(viewAccountData.shortCode || viewAccountData.accountId) && (
                         <div className="flex items-center justify-between gap-3 pb-3 border-b border-gray-700/50">
                           <span className="text-gray-400 text-sm">Share this order</span>
                           <button
                             type="button"
                             onClick={async () => {
-                              const path = `/order/${viewAccountData.isBuyOrder ? 'buy' : 'sell'}/${viewAccountData.accountId}`;
+                              const idOrCode = viewAccountData.shortCode || viewAccountData.accountId;
+                              const path = `/order/${viewAccountData.isBuyOrder ? 'buy' : 'sell'}/${idOrCode}`;
                               const url = `${window.location.origin}${path}`;
                               try {
                                 await navigator.clipboard.writeText(url);

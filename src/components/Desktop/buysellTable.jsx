@@ -230,7 +230,8 @@ const BuySellTable = ({
       platform: account.platform,
       metrics: account.metrics,
       filters: account.filters,
-      accountId: account.id
+      accountId: account.id,
+      shortCode: account.shortCode || undefined
     };
 
     // For sell tab (buy orders), include all extra details
@@ -360,6 +361,7 @@ const BuySellTable = ({
         const accountUsername = order.accountUsername || order.username || order.handle || order.accountHandle || 'N/A';
         return {
           id: order._id,
+          shortCode: order.shortCode,
           seller: { id: seller._id, _id: seller._id, image: sellerImage || ug1, name: seller.displayName || seller.email?.split('@')[0] || 'Anonymous', displayName: seller.displayName || seller.email?.split('@')[0] || 'Anonymous', verified: seller.emailVerified || false, bitmojiUrl: sellerImage, avatar: sellerImage, avatarUrl: sellerImage, profileImage: sellerImage, averageRating: seller.averageRating, totalRatings: seller.totalRatings || 0 },
           item: { image: PLATFORM_ICONS[order.platform?.toLowerCase()] || ig, name: order.platform ? (order.platform.charAt(0).toUpperCase() + order.platform.slice(1)) : 'Unknown' },
           platform: order.platform?.toLowerCase(),
@@ -391,6 +393,7 @@ const BuySellTable = ({
         const accountUsername = order.accountUsername || order.username || order.handle || order.accountHandle || 'N/A';
         return {
           id: order._id,
+          shortCode: order.shortCode,
           buyer: { id: buyerData._id || order.userId, _id: buyerData._id || order.userId, image: buyerImage || ug1, name: buyerData.displayName || buyerData.username || buyerData.email?.split('@')[0] || 'Anonymous', displayName: buyerData.displayName || buyerData.username || buyerData.email?.split('@')[0] || 'Anonymous', verified: buyerData.emailVerified || buyerData.verified || false, bitmojiUrl: buyerImage, avatar: buyerImage, avatarUrl: buyerImage, profileImage: buyerImage },
           item: { image: PLATFORM_ICONS[order.platform?.toLowerCase()] || ig, name: order.platform ? (order.platform.charAt(0).toUpperCase() + order.platform.slice(1)) : 'Unknown' },
           platform: order.platform?.toLowerCase(),
@@ -467,6 +470,7 @@ const BuySellTable = ({
 
             return {
               id: order._id,
+              shortCode: order.shortCode,
               seller: {
                 id: seller._id,
                 _id: seller._id,
@@ -560,6 +564,7 @@ const BuySellTable = ({
 
             return {
               id: order._id,
+              shortCode: order.shortCode,
               buyer: {
                 id: buyerData._id || order.userId,
                 _id: buyerData._id || order.userId,
@@ -667,7 +672,9 @@ const BuySellTable = ({
   // Scroll to shared order when data has loaded (must be after filteredTableData is defined)
   useEffect(() => {
     if (!highlightOrderId || isLoading) return;
-    const hasRow = filteredTableData.some((r) => String(r.id) === String(highlightOrderId));
+    const hasRow = filteredTableData.some(
+      (r) => String(r.id) === String(highlightOrderId) || String(r.shortCode) === String(highlightOrderId)
+    );
     if (hasRow) highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [highlightOrderId, isLoading, filteredTableData]);
 
