@@ -313,10 +313,8 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
         onClose();
       }
       
-      // Force navigation with window.location for guaranteed redirect
-      setTimeout(() => {
-        window.location.href = "/homepage";
-      }, 100);
+      // Replace history so back doesn't return to sign-up page
+      navigate("/homepage", { replace: true });
       
     } catch (error) {
       console.error("Failed to create user:", error);
@@ -329,7 +327,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     if (onClose) {
       onClose();
     }
-    navigate("/homepage");
+    navigate("/homepage", { replace: true });
   };
   
 const handleSignIn = () => {

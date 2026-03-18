@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import marketplaceService from '../services/marketplaceService';
 import badge from "../assets/verifiedstar.svg";
 import ig2 from "../assets/socialicon.svg";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import dotmenu from "../assets/menu.svg"
 import gift from "../assets/gift.svg"
 import notification from "../assets/notifications.svg"
@@ -69,10 +69,20 @@ import bnb from "../assets/bnb.svg";
 import solana from "../assets/sol.svg";
 
 
+const VALID_TABS = ['home', 'wallet', 'chat', 'history', 'trade', 'profile'];
+
 const MobileHomePage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const tabFromUrl = searchParams.get('tab') || 'home';
+  const initialTab = VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'home';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const tabFromUrlRef = useRef(false);
+  // Shareable order links: ?orderType=sell|buy&orderId=...
+  const highlightOrderId = searchParams.get('orderId') || undefined;
+  const highlightOrderType = (searchParams.get('orderType') === 'sell' || searchParams.get('orderType') === 'buy') ? searchParams.get('orderType') : undefined;
   const [showBalance, setShowBalance] = useState(true);
-  const [activeTab, setActiveTab] = useState('home');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [viewAccountData, setViewAccountData] = useState(null);
   const [selectedCurrency, setSelectedCurrency] = useState('USDT');
@@ -118,7 +128,28 @@ const MobileHomePage = () => {
     logout
   } = useUser();
 
+  // Sync URL -> state when user hits back/forward (native back button support)
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'home';
+    const nextTab = VALID_TABS.includes(tab) ? tab : 'home';
+    if (nextTab !== activeTab) {
+      tabFromUrlRef.current = true;
+      setActiveTab(nextTab);
+      setActiveMenuSection(nextTab === 'history' ? 'wallet' : nextTab);
+    }
+  }, [location.pathname, location.search]);
 
+  // Push URL when tab changes from user interaction so back has in-app history
+  useEffect(() => {
+    if (tabFromUrlRef.current) {
+      tabFromUrlRef.current = false;
+      return;
+    }
+    const current = searchParams.get('tab') || 'home';
+    if (activeTab !== current) {
+      setSearchParams({ tab: activeTab }, { replace: false });
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const fetchUserDetails = async () => {
@@ -1150,6 +1181,8 @@ const MobileHomePage = () => {
               setActiveTab={setActiveTab}
               onSelectChatUser={handleChatUserSelect}
               onViewAccountMetrics={handleViewAccountMetrics}
+              highlightOrderId={highlightOrderId}
+              highlightOrderType={highlightOrderType}
             />
           </div>
         );

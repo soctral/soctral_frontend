@@ -262,14 +262,14 @@ const SignUp = () => {
       
       await createUser(userData);
       
-      // Set flag to skip onboarding and navigate to homepage
+      // Set flag to skip onboarding and navigate to homepage (replace so back doesn't return to sign-up)
       localStorage.setItem('hasCompletedSignup', 'true');
       localStorage.setItem('skipOnboarding', 'true');
       
       // Clear signup data
       clearSignupData();
       
-      navigate("/homepage");
+      navigate("/homepage", { replace: true });
     } catch (error) {
       console.error('Create user error:', error);
     }
@@ -278,7 +278,7 @@ const SignUp = () => {
   const handleSkip = () => {
     localStorage.setItem('skipOnboarding', 'true');
     clearSignupData();
-    navigate('/homepage');
+    navigate('/homepage', { replace: true });
   };
 
   const handleSignIn = () => {
