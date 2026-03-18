@@ -200,13 +200,6 @@ const BuySellTable = ({
   });
   const highlightOrderData = highlightOrderQuery.data;
 
-  // Scroll to shared order when data has loaded (optional; dialog opens separately)
-  useEffect(() => {
-    if (!highlightOrderId || isLoading) return;
-    const hasRow = filteredTableData.some((r) => String(r.id) === String(highlightOrderId));
-    if (hasRow) highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [highlightOrderId, isLoading, filteredTableData]);
-
   // When user opens a share link: fetch order and open the same order-details dialog as "View Metrics"
   useEffect(() => {
     if (!highlightOrderData || !onViewAccountMetrics || hasOpenedHighlightOrderRef.current) return;
@@ -671,7 +664,12 @@ const BuySellTable = ({
     return filtered;
   }, [activeFilters, tableData, activeTab]);
 
-
+  // Scroll to shared order when data has loaded (must be after filteredTableData is defined)
+  useEffect(() => {
+    if (!highlightOrderId || isLoading) return;
+    const hasRow = filteredTableData.some((r) => String(r.id) === String(highlightOrderId));
+    if (hasRow) highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [highlightOrderId, isLoading, filteredTableData]);
 
   const proceedWithInitiateTrade = async (user, accountData) => {
     setLoadingRowId(accountData?.id);
