@@ -649,7 +649,18 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                           <button
                             type="button"
                             onClick={async () => {
-                              const idOrCode = viewAccountData.shortCode || viewAccountData.accountId;
+                              let idOrCode = viewAccountData.shortCode || viewAccountData.accountId;
+                              if (!viewAccountData.shortCode && viewAccountData.accountId) {
+                                try {
+                                  const res = viewAccountData.isBuyOrder
+                                    ? await marketplaceService.getBuyOrderById(viewAccountData.accountId)
+                                    : await marketplaceService.getSellOrderById(viewAccountData.accountId);
+                                  const data = res?.data ?? res;
+                                  if (data?.shortCode) idOrCode = data.shortCode;
+                                } catch (e) {
+                                  // keep idOrCode as accountId
+                                }
+                              }
                               const path = `/order/${viewAccountData.isBuyOrder ? 'buy' : 'sell'}/${idOrCode}`;
                               const url = `${window.location.origin}${path}`;
                               try {
