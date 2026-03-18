@@ -2,7 +2,15 @@
 // services/authService.js - Improved Auth Service
 // ========================================
 
-import apiService from './api.js';
+// Lazy-load api to avoid "Cannot access before initialization" (bundle init order)
+let _apiService = null;
+async function getApiService() {
+  if (!_apiService) {
+    const mod = await import('./api.js');
+    _apiService = mod.default;
+  }
+  return _apiService;
+}
 
 class AuthService {
   constructor() {
@@ -84,7 +92,8 @@ class AuthService {
           await new Promise(resolve => setTimeout(resolve, 1000 * i));
         }
 
-        return await apiService.request(endpoint, options);
+        const api = await getApiService();
+        return await api.request(endpoint, options);
       } catch (error) {
         lastError = error;
         console.warn(`❌ Attempt ${i + 1} failed:`, error.message);
@@ -1580,7 +1589,8 @@ class AuthService {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await apiService.request('/user/upload-bitmoji', {
+      const api = await getApiService();
+      const response = await api.request('/user/upload-bitmoji', {
         method: 'POST',
         body: formData,
         headers
