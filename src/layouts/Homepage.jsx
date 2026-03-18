@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   Plus,
   Eye,
@@ -65,9 +65,19 @@ import { API_BASE_URL } from '../config.js';
 
 
 
+const HOMEPAGE_VALID_TABS = ['home', 'wallet', 'chat', 'history', 'trade', 'profile'];
+
 const HomePage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const tabFromUrl = searchParams.get('tab') || 'home';
+  const initialTab = HOMEPAGE_VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'home';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  // Shareable order links: ?orderType=sell|buy&orderId=...
+  const highlightOrderId = searchParams.get('orderId') || undefined;
+  const highlightOrderType = (searchParams.get('orderType') === 'sell' || searchParams.get('orderType') === 'buy') ? searchParams.get('orderType') : undefined;
+  const tabFromUrlRef = useRef(false);
   const [showBalance, setShowBalance] = useState(true);
-  const [activeTab, setActiveTab] = useState("home");
   const [selectedCurrency, setSelectedCurrency] = useState("USDT");
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [tableHeight, setTableHeight] = useState(320);
@@ -119,8 +129,28 @@ const HomePage = () => {
 
   const { logout } = useUser();
 
+  // Sync URL -> state when user hits back/forward (native back button support)
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'home';
+    const nextTab = HOMEPAGE_VALID_TABS.includes(tab) ? tab : 'home';
+    if (nextTab !== activeTab) {
+      tabFromUrlRef.current = true;
+      setActiveTab(nextTab);
+      setActiveMenuSection(nextTab === 'history' ? 'wallet' : nextTab);
+    }
+  }, [location.pathname, location.search]);
 
-
+  // Push URL when tab changes from user interaction so back has in-app history
+  useEffect(() => {
+    if (tabFromUrlRef.current) {
+      tabFromUrlRef.current = false;
+      return;
+    }
+    const current = searchParams.get('tab') || 'home';
+    if (activeTab !== current) {
+      setSearchParams({ tab: activeTab }, { replace: false });
+    }
+  }, [activeTab]);
 
   // Socket.IO connection setup
   useEffect(() => {
@@ -1195,6 +1225,8 @@ const HomePage = () => {
               setActiveTab('chat');
             }}
             onViewAccountMetrics={handleViewAccountMetrics}
+            highlightOrderId={highlightOrderId}
+            highlightOrderType={highlightOrderType}
           />
         );
       case 'history':
@@ -1680,6 +1712,8 @@ const HomePage = () => {
                 setAuthModalType={setAuthModalType}
                 setActiveMenuSection={setActiveMenuSection}
                 setActiveTab={setActiveTab}
+                highlightOrderId={highlightOrderId}
+                highlightOrderType={highlightOrderType}
               />
             )}
 

@@ -37,11 +37,13 @@ import bnb from "../../assets/bnb.svg";
 import solana from "../../assets/sol.svg";
 import rumble from "../../assets/rumble.png";
 import Filters from "../../components/Desktop/Filter";
+import { useQuery } from "@tanstack/react-query";
 import { useUser } from "../../context/userContext";
 import { useAllSellOrders, useAllBuyOrders } from "../../hooks/useOrders";
 import { queryKeys } from "../../hooks/queryKeys";
 import logo from "../../assets/SoctralbgLogo.png";
-import apiService from "../../services/api"
+import apiService from "../../services/api";
+import marketplaceService from "../../services/marketplaceService";
 
 
 const LoadingSpinner = () => (
@@ -135,12 +137,16 @@ const BuySellTable = ({
   setActiveMenuSection,
   setActiveTab,
   onSelectChatUser,
-  onViewAccountMetrics
+  onViewAccountMetrics,
+  highlightOrderId,
+  highlightOrderType
 }) => {
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(true);
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [activeTab, setActiveTabState] = useState('buy');
+  // Shareable link: show correct tab (sell order → "buy" tab, buy order → "sell" tab)
+  const initialTab = highlightOrderType === 'sell' ? 'buy' : highlightOrderType === 'buy' ? 'sell' : 'buy';
+  const [activeTab, setActiveTabState] = useState(initialTab);
   const [tableHeight, setTableHeight] = useState(530);
   const [activeFilters, setActiveFilters] = useState([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -177,6 +183,33 @@ const BuySellTable = ({
   const tableContainerRef = useRef(null);
   const bodyRef = useRef(null);
   const tableBodyRef = useRef(null);
+  const highlightRowRef = useRef(null);
+  const hasOpenedHighlightOrderRef = useRef(false);
+
+  // Fetch single order for shareable link so we can open the same details dialog
+  const highlightOrderQuery = useQuery({
+    queryKey: ['order', highlightOrderType, highlightOrderId],
+    queryFn: async () => {
+      const res = highlightOrderType === 'sell'
+        ? await marketplaceService.getSellOrderById(highlightOrderId)
+        : await marketplaceService.getBuyOrderById(highlightOrderId);
+      return res?.data ?? res;
+    },
+    enabled: !!(highlightOrderId && highlightOrderType),
+    staleTime: 60 * 1000,
+  });
+  const highlightOrderData = highlightOrderQuery.data;
+
+  // When user opens a share link: fetch order and open the same order-details dialog as "View Metrics"
+  useEffect(() => {
+    if (!highlightOrderData || !onViewAccountMetrics || hasOpenedHighlightOrderRef.current) return;
+    const isSellOrder = highlightOrderType === 'sell';
+    const row = transformOrderToRow(highlightOrderData, isSellOrder);
+    if (row) {
+      hasOpenedHighlightOrderRef.current = true;
+      handleViewAccountMetrics(row);
+    }
+  }, [highlightOrderData, highlightOrderType, onViewAccountMetrics]);
 
   // Helper function to get seller/buyer image
   const getUserImage = (user) => {
@@ -197,7 +230,8 @@ const BuySellTable = ({
       platform: account.platform,
       metrics: account.metrics,
       filters: account.filters,
-      accountId: account.id
+      accountId: account.id,
+      shortCode: account.shortCode || undefined
     };
 
     // For sell tab (buy orders), include all extra details
@@ -311,6 +345,78 @@ const BuySellTable = ({
     return 5; // Default 5 stars
   };
 
+  // Transform a single API order to table row shape (for share link → open details dialog)
+  const transformOrderToRow = (order, isSellOrder) => {
+    if (!order || !order._id) return null;
+    try {
+      if (isSellOrder) {
+        const seller = order.seller || {};
+        let sellerImage = seller.bitmojiUrl || seller.avatar || seller.avatarUrl || seller.profileImage || seller.profile_image || seller.picture || seller.image;
+        if (!sellerImage) {
+          try {
+            const currentUserData = JSON.parse(localStorage.getItem('userData') || '{}');
+            if (currentUserData._id === seller._id) sellerImage = currentUserData.bitmojiUrl || currentUserData.avatar || currentUserData.avatarUrl || currentUserData.profileImage;
+          } catch (e) {}
+        }
+        const accountUsername = order.accountUsername || order.username || order.handle || order.accountHandle || 'N/A';
+        return {
+          id: order._id,
+          shortCode: order.shortCode,
+          seller: { id: seller._id, _id: seller._id, image: sellerImage || ug1, name: seller.displayName || seller.email?.split('@')[0] || 'Anonymous', displayName: seller.displayName || seller.email?.split('@')[0] || 'Anonymous', verified: seller.emailVerified || false, bitmojiUrl: sellerImage, avatar: sellerImage, avatarUrl: sellerImage, profileImage: sellerImage, averageRating: seller.averageRating, totalRatings: seller.totalRatings || 0 },
+          item: { image: PLATFORM_ICONS[order.platform?.toLowerCase()] || ig, name: order.platform ? (order.platform.charAt(0).toUpperCase() + order.platform.slice(1)) : 'Unknown' },
+          platform: order.platform?.toLowerCase(),
+          followers: getFollowerCount(order.metrics, order.filters),
+          rating: calculateRating(seller),
+          price: order.price || 0,
+          currency: order.currency || 'USD',
+          description: order.description || '',
+          accountType: order.accountType || '0',
+          metrics: order.metrics || [],
+          filters: order.filters || [],
+          accountUsername,
+          username: accountUsername,
+          handle: accountUsername,
+        };
+      } else {
+        const buyerData = order.buyer || order.user || order.userId || {};
+        let buyerImage = buyerData.bitmojiUrl || buyerData.avatar || buyerData.avatarUrl || buyerData.profileImage || buyerData.profile_image || buyerData.picture || buyerData.image;
+        if (!buyerImage && order.user) buyerImage = order.user.bitmojiUrl || order.user.avatar || order.user.avatarUrl || order.user.profileImage;
+        if (!buyerImage && order.userId && typeof order.userId === 'object') buyerImage = order.userId.bitmojiUrl || order.userId.avatar || order.userId.avatarUrl || order.userId.profileImage;
+        if (!buyerImage) buyerImage = order.buyerImage || order.userImage || order.profileImage;
+        if (!buyerImage) {
+          try {
+            const currentUserData = JSON.parse(localStorage.getItem('userData') || '{}');
+            const buyerId = buyerData._id || buyerData.id || order.userId;
+            if (currentUserData._id === buyerId || currentUserData.id === buyerId) buyerImage = currentUserData.bitmojiUrl || currentUserData.avatar || currentUserData.avatarUrl || currentUserData.profileImage;
+          } catch (e) {}
+        }
+        const accountUsername = order.accountUsername || order.username || order.handle || order.accountHandle || 'N/A';
+        return {
+          id: order._id,
+          shortCode: order.shortCode,
+          buyer: { id: buyerData._id || order.userId, _id: buyerData._id || order.userId, image: buyerImage || ug1, name: buyerData.displayName || buyerData.username || buyerData.email?.split('@')[0] || 'Anonymous', displayName: buyerData.displayName || buyerData.username || buyerData.email?.split('@')[0] || 'Anonymous', verified: buyerData.emailVerified || buyerData.verified || false, bitmojiUrl: buyerImage, avatar: buyerImage, avatarUrl: buyerImage, profileImage: buyerImage },
+          item: { image: PLATFORM_ICONS[order.platform?.toLowerCase()] || ig, name: order.platform ? (order.platform.charAt(0).toUpperCase() + order.platform.slice(1)) : 'Unknown' },
+          platform: order.platform?.toLowerCase(),
+          requirements: getRequirementCount(order.requirements),
+          followers: getFollowerCount(order.metrics, order.filters) || getRequirementCount(order.requirements),
+          rating: calculateRating(buyerData),
+          maxPrice: order.maxPrice || 0,
+          currency: order.currency || 'USD',
+          description: order.description || '',
+          isUrgent: order.isUrgent || false,
+          metrics: order.metrics || [],
+          filters: order.filters || [],
+          accountUsername,
+          username: accountUsername,
+          handle: accountUsername,
+        };
+      }
+    } catch (e) {
+      console.error('Transform order for share link:', e);
+      return null;
+    }
+  };
+
   // Transform API response data using useMemo for performance
   // React Query handles fetching, caching, retry, and polling automatically
   const tableData = useMemo(() => {
@@ -364,6 +470,7 @@ const BuySellTable = ({
 
             return {
               id: order._id,
+              shortCode: order.shortCode,
               seller: {
                 id: seller._id,
                 _id: seller._id,
@@ -457,6 +564,7 @@ const BuySellTable = ({
 
             return {
               id: order._id,
+              shortCode: order.shortCode,
               buyer: {
                 id: buyerData._id || order.userId,
                 _id: buyerData._id || order.userId,
@@ -561,7 +669,14 @@ const BuySellTable = ({
     return filtered;
   }, [activeFilters, tableData, activeTab]);
 
-
+  // Scroll to shared order when data has loaded (must be after filteredTableData is defined)
+  useEffect(() => {
+    if (!highlightOrderId || isLoading) return;
+    const hasRow = filteredTableData.some(
+      (r) => String(r.id) === String(highlightOrderId) || String(r.shortCode) === String(highlightOrderId)
+    );
+    if (hasRow) highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [highlightOrderId, isLoading, filteredTableData]);
 
   const proceedWithInitiateTrade = async (user, accountData) => {
     setLoadingRowId(accountData?.id);

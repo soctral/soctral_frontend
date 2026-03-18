@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import Onboarding from "./components/Onboarding";
 import DesktopOnboardingSteps from "./components/StepOneDesktop";
@@ -66,6 +66,13 @@ const ResponsiveComponent = ({ MobileComponent, DesktopComponent, ...props }) =>
   return isDesktop ? 
     <DesktopComponent {...props} /> : 
     <MobileComponent {...props} />;
+};
+
+// Redirect shareable order URLs to homepage with query params so the app can highlight the order
+const OrderRedirect = ({ orderType }) => {
+  const { orderId } = useParams();
+  const to = `/homepage?tab=trade&orderType=${orderType}&orderId=${encodeURIComponent(orderId || '')}`;
+  return <Navigate to={to} replace />;
 };
 
 function App() {
@@ -209,6 +216,9 @@ function App() {
             } 
           />
           <Route path="/google-onboarding" element={<GoogleOnboarding />} />
+          {/* Shareable order links: /order/sell/:orderId and /order/buy/:orderId → homepage trade tab with order highlighted */}
+          <Route path="/order/sell/:orderId" element={<OrderRedirect orderType="sell" />} />
+          <Route path="/order/buy/:orderId" element={<OrderRedirect orderType="buy" />} />
           <Route path="*" element={<Navigate to="/homepage" replace />} />
         </Routes>
       </BrowserRouter>

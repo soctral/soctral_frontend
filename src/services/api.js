@@ -3,7 +3,16 @@
 // ========================================
 
 import { API_BASE_URL } from "../config.js";
-import encryptionService from "./encryption.service.js";
+
+// Lazy-load encryption to avoid "Cannot access before initialization" (circular/init order)
+let _encryptionService = null;
+async function getEncryptionService() {
+  if (!_encryptionService) {
+    const mod = await import("./encryption.service.js");
+    _encryptionService = mod.default;
+  }
+  return _encryptionService;
+}
 
 class ApiService {
   constructor() {
@@ -62,8 +71,8 @@ class ApiService {
     });
   }
 
-  // Encrypt request data
-  encryptRequestData(data, method, endpoint) {
+  // Encrypt request data (async for lazy encryption service)
+  async encryptRequestData(data, method, endpoint) {
     // Skip encryption for excluded endpoints or non-mutating methods
     if (
       this.shouldSkipEncryption(endpoint) ||
@@ -73,6 +82,7 @@ class ApiService {
     }
 
     try {
+      const encryptionService = await getEncryptionService();
       const dataToEncrypt = typeof data === "string" ? JSON.parse(data) : data;
       const encrypted = encryptionService.encrypt(dataToEncrypt);
       return JSON.stringify({ data: encrypted });
@@ -85,26 +95,32 @@ class ApiService {
     }
   }
 
-  decryptResponseData(data, endpoint) {
-    // 🔥 CRITICAL FIX: Force decrypt for auth endpoints if data is encrypted
-    // This handles the backend bug where auth endpoints return encrypted data
-    const authEndpoints = ["/auth/login", "/auth/create", "/auth/signupWithGoogle", "/auth/refresh"];
-    const isAuthEndpoint = authEndpoints.some((path) =>
-      endpoint.startsWith(path),
+  async decryptResponseData(data, endpoint) {
+    // 🔥 CRITICAL FIX: Force decrypt for auth and wallet-info if data is encrypted
+    const forceDecryptPaths = [
+      "/auth/login",
+      "/auth/create",
+      "/auth/signupWithGoogle",
+      "/auth/refresh",
+      "/user/wallet-info",
+    ];
+    const shouldForceDecrypt = forceDecryptPaths.some((path) =>
+      endpoint.startsWith(path) || endpoint.includes(path),
     );
 
-    // If it's an auth endpoint and data looks encrypted, force decrypt
+    // If this path returns encrypted payload, force decrypt
     if (
-      isAuthEndpoint &&
+      shouldForceDecrypt &&
       data &&
       typeof data === "object" &&
       data.data &&
       typeof data.data === "string"
     ) {
       console.warn(
-        `⚠️ ${endpoint} returned encrypted data - forcing decryption`,
+        `⚠️ ${endpoint} returned encrypted data - decrypting on frontend`,
       );
       try {
+        const encryptionService = await getEncryptionService();
         const decrypted = encryptionService.decrypt(data.data);
         return decrypted;
       } catch (error) {
@@ -127,6 +143,7 @@ class ApiService {
       typeof data.data === "string"
     ) {
       try {
+        const encryptionService = await getEncryptionService();
         const decrypted = encryptionService.decrypt(data.data);
         return decrypted;
       } catch (error) {
@@ -187,7 +204,7 @@ class ApiService {
           }
         }
 
-        const encryptedBody = this.encryptRequestData(
+        const encryptedBody = await this.encryptRequestData(
           bodyData,
           method,
           endpoint,
@@ -217,7 +234,7 @@ class ApiService {
 
       // Try to decrypt data (only if not excluded)
       try {
-        data = this.decryptResponseData(data, endpoint);
+        data = await this.decryptResponseData(data, endpoint);
       } catch (decryptError) {
         console.warn(
           "⚠️ Decryption failed, using raw data:",

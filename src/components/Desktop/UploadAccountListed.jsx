@@ -7,39 +7,39 @@
  * No PIN verification step.
  */
 
-import { X } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { Check, Copy, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 // Platform icons
-import face from "../../assets/face.svg";
-import twitter from "../../assets/twitter.svg";
-import ig from "../../assets/ig2.svg";
-import tiktok from "../../assets/tiktok.svg";
-import linkedin from "../../assets/linkedin2.svg";
-import snap from "../../assets/snapchat.svg";
-import youtube from "../../assets/youtube.svg";
-import telegram from "../../assets/telegram.svg";
-import discord from "../../assets/discord.svg";
-import pinterest from "../../assets/pinterest.svg";
-import reddit from "../../assets/reddit.svg";
-import wechat from "../../assets/wechat.svg";
-import onlyfans from "../../assets/onlyfans.svg";
-import flickr from "../../assets/flickr.svg";
-import vimeo from "../../assets/vimeo.svg";
-import qoura from "../../assets/qoura.svg";
-import twitch from "../../assets/twitch.svg";
-import tumblr from "../../assets/tumblr.svg";
-import rumble from "../../assets/rumble.png";
-import steam from "../../assets/steam.png";
 import arr from "../../assets/ar.svg";
+import discord from "../../assets/discord.svg";
+import face from "../../assets/face.svg";
+import flickr from "../../assets/flickr.svg";
+import ig from "../../assets/ig2.svg";
+import linkedin from "../../assets/linkedin2.svg";
 import star from "../../assets/newstar.svg";
+import onlyfans from "../../assets/onlyfans.svg";
+import pinterest from "../../assets/pinterest.svg";
+import qoura from "../../assets/qoura.svg";
+import reddit from "../../assets/reddit.svg";
+import rumble from "../../assets/rumble.png";
+import snap from "../../assets/snapchat.svg";
+import steam from "../../assets/steam.png";
+import telegram from "../../assets/telegram.svg";
+import tiktok from "../../assets/tiktok.svg";
+import tumblr from "../../assets/tumblr.svg";
+import twitch from "../../assets/twitch.svg";
+import twitter from "../../assets/twitter.svg";
+import vimeo from "../../assets/vimeo.svg";
+import wechat from "../../assets/wechat.svg";
+import youtube from "../../assets/youtube.svg";
 
 // Unified Form Components (replaces 40+ individual imports)
-import { UnifiedMetricForm, UnifiedFilterForm } from '../forms';
+import { UnifiedFilterForm, UnifiedMetricForm } from '../forms';
 
 // Services
-import marketplaceService from "../../services/marketplaceService";
 import authService from "../../services/authService";
+import marketplaceService from "../../services/marketplaceService";
 import walletService from "../../services/walletService";
 import WalletSetupModal from '../Desktop/WalletModal';
 import TransactionResultModal from './TransactionResultModal';
@@ -48,7 +48,6 @@ import TransactionResultModal from './TransactionResultModal';
 import { useCurrencyOptions } from "../../hooks/useCurrencyOptions";
 
 // Platform Configuration
-import { getSupportedPlatforms } from "../../config/platformConfig";
 
 // Platform button configuration with icons
 const PLATFORM_BUTTONS = [
@@ -114,6 +113,9 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
 
   // View mode state
   const [viewMode, setViewMode] = useState(false);
+
+  // Copy share link state
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Dynamic currency options from wallet data
   const { currencies, defaultCurrency } = useCurrencyOptions(walletData);
@@ -640,6 +642,51 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                   {/* Full Account Details Section (View Mode) */}
                   {viewMode && viewAccountData && (
                     <div className="mt-4 p-4 bg-[rgba(255,255,255,0.05)] rounded-lg space-y-3">
+                      {/* Share link - Copy button (uses shortCode when available for shorter URLs) */}
+                      {(viewAccountData.shortCode || viewAccountData.accountId) && (
+                        <div className="flex items-center justify-between gap-3 pb-3 border-b border-gray-700/50">
+                          <span className="text-gray-400 text-sm">Share this order</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              let idOrCode = viewAccountData.shortCode || viewAccountData.accountId;
+                              if (!viewAccountData.shortCode && viewAccountData.accountId) {
+                                try {
+                                  const res = viewAccountData.isBuyOrder
+                                    ? await marketplaceService.getBuyOrderById(viewAccountData.accountId)
+                                    : await marketplaceService.getSellOrderById(viewAccountData.accountId);
+                                  const data = res?.data ?? res;
+                                  if (data?.shortCode) idOrCode = data.shortCode;
+                                } catch (e) {
+                                  // keep idOrCode as accountId
+                                }
+                              }
+                              const path = `/order/${viewAccountData.isBuyOrder ? 'buy' : 'sell'}/${idOrCode}`;
+                              const url = `${window.location.origin}${path}`;
+                              try {
+                                await navigator.clipboard.writeText(url);
+                                setCopiedLink(true);
+                                setTimeout(() => setCopiedLink(false), 2000);
+                              } catch (err) {
+                                console.warn('Copy failed:', err);
+                              }
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.12)] text-white text-sm font-medium transition-colors"
+                          >
+                            {copiedLink ? (
+                              <>
+                                <Check className="w-4 h-4 text-green-400" />
+                                Copied!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                Copy link
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                       {/* Buyer / Seller Info */}
                       {viewAccountData.buyer && (
                         <div className="flex items-center gap-3 pb-3 border-b border-gray-700/50">

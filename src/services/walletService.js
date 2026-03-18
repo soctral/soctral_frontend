@@ -3,7 +3,12 @@
 // ========================================
 
 import apiService from "../services/api.js";
-import authService from "../services/authService.js";
+
+// Lazy-load authService to avoid bundle init-order / TDZ issues
+async function getAuthService() {
+  const mod = await import("../services/authService.js");
+  return mod.default;
+}
 
 class WalletService {
   constructor() {
@@ -142,6 +147,7 @@ class WalletService {
         console.log(
           "🔄 Trying Priority 2: AuthService getUserWalletInfo (Current User)",
         );
+        const authService = await getAuthService();
         const walletInfo = await Promise.race([
           authService.getUserWalletInfo(),
           new Promise((_, reject) =>
