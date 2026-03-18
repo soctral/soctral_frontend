@@ -823,27 +823,47 @@ class AuthService {
     }
   }
 
-  // NEW METHOD: Get user wallet info
+  // NEW METHOD: Get user wallet info (decrypt on frontend if backend sent encrypted payload)
   async getUserWalletInfo() {
     try {
       if (!this.isAuthenticated()) {
         throw new Error('User not authenticated');
       }
 
-      const response = await this.requestWithRetry('/user/wallet-info');
+      let response = await this.requestWithRetry('/user/wallet-info');
 
-      if (response.walletAddresses && response.walletBalances) {
+      // Decrypt on frontend if response is still encrypted (same pattern as login/create)
+      if (
+        response &&
+        typeof response === 'object' &&
+        response.data &&
+        typeof response.data === 'string' &&
+        !response.walletAddresses
+      ) {
+        try {
+          const encryptionService = (await import('./encryption.service.js')).default;
+          response = encryptionService.decrypt(response.data);
+        } catch (decryptError) {
+          console.warn('⚠️ Wallet info response was encrypted but decryption failed:', decryptError.message);
+        }
+      }
+
+      // Normalize: accept top-level or nested (response.data.walletAddresses)
+      const walletAddresses = response?.walletAddresses ?? response?.data?.walletAddresses;
+      const walletBalances = response?.walletBalances ?? response?.data?.walletBalances;
+
+      if (walletAddresses && walletBalances) {
         // Store wallet info in localStorage for caching
         this.storage.setItem('walletInfo', JSON.stringify({
-          walletAddresses: response.walletAddresses,
-          walletBalances: response.walletBalances,
+          walletAddresses,
+          walletBalances,
           lastUpdated: new Date().toISOString()
         }));
 
         return {
           status: true,
-          walletAddresses: response.walletAddresses,
-          walletBalances: response.walletBalances,
+          walletAddresses,
+          walletBalances,
           message: 'Wallet info retrieved successfully'
         };
       }
@@ -895,15 +915,34 @@ class AuthService {
         throw new Error('Invalid user ID format');
       }
 
-      const response = await this.requestWithRetry(`/user/wallet-info?userId=${userId}`);
+      let response = await this.requestWithRetry(`/user/wallet-info?userId=${userId}`);
 
-      if (response.walletAddresses && response.walletBalances) {
+      // Decrypt on frontend if response is still encrypted
+      if (
+        response &&
+        typeof response === 'object' &&
+        response.data &&
+        typeof response.data === 'string' &&
+        !response.walletAddresses
+      ) {
+        try {
+          const encryptionService = (await import('./encryption.service.js')).default;
+          response = encryptionService.decrypt(response.data);
+        } catch (decryptError) {
+          console.warn('⚠️ Wallet info (by id) response was encrypted but decryption failed:', decryptError.message);
+        }
+      }
+
+      const walletAddresses = response?.walletAddresses ?? response?.data?.walletAddresses;
+      const walletBalances = response?.walletBalances ?? response?.data?.walletBalances;
+
+      if (walletAddresses && walletBalances) {
         console.log('✅ Wallet info retrieved successfully for user:', userId);
 
         return {
           status: true,
-          walletAddresses: response.walletAddresses,
-          walletBalances: response.walletBalances,
+          walletAddresses,
+          walletBalances,
           message: 'Wallet info retrieved successfully'
         };
       }
