@@ -159,8 +159,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
     if (!currentWalletData || !currentWalletData.addresses || Object.keys(currentWalletData.addresses).length === 0) {
       return {
         Bitcoin: {
-          "Bitcoin Main Network": "",
-          "Lightning Network": null
+          "Bitcoin Main Network": ""
         },
         Ethereum: {
           "Ethereum Main Network": "",
@@ -188,8 +187,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
 
     return {
       Bitcoin: {
-        "Bitcoin Main Network": addresses.bitcoin || "",
-        "Lightning Network": null
+        "Bitcoin Main Network": addresses.bitcoin || ""
       },
       Ethereum: {
         "Ethereum Main Network": addresses.ethereum || "",
@@ -219,7 +217,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [selectedNetwork, setSelectedNetwork] = useState(null);
   const [transactionType, setTransactionType] = useState(null);
-  const [lightningAmount, setLightningAmount] = useState('');
+
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
@@ -265,7 +263,6 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
   };
   const networkNameToApi = {
     'Bitcoin Main Network': 'bitcoin',
-    'Lightning Network': 'lightning',
     'Ethereum Main Network': 'ethereum',
     'Base Network': 'base',
     'Solana Network': 'solana',
@@ -304,7 +301,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
       if (currentModal === 'depositStep1' && selectedAsset && selectedNetwork) {
         const depositAddress = depositAddresses[selectedAsset?.name]?.[selectedNetwork?.name];
 
-        if (depositAddress && selectedNetwork?.name !== "Lightning Network") {
+        if (depositAddress) {
           try {
             const qrDataUrl = await QRCode.toDataURL(depositAddress, {
               width: 200,
@@ -352,12 +349,6 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
         confirmations: "1 block confirmation/s",
         minDeposit: ">0.000006 BTC",
         arrival: "=10 min"
-      },
-      {
-        name: "Lightning Network",
-        confirmations: "Instant",
-        minDeposit: ">0.00000001 BTC",
-        arrival: "=1 sec"
       }
     ],
     Ethereum: [
@@ -428,8 +419,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
 
   const networkFees = {
     Bitcoin: {
-      "Bitcoin Main Network": "0.0002",
-      "Lightning Network": "0.0001"
+      "Bitcoin Main Network": "0.0002"
     },
     Ethereum: {
       "Ethereum Main Network": "0.002",
@@ -495,7 +485,6 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
   if (value && value.includes('.')) {
     const networkIdentifierMap = {
       "Bitcoin Main Network": "bitcoin",
-      "Lightning Network": "lightning",
       "Ethereum Main Network": "ethereum",
       "Base Network": "base",
       "Solana Network": "solana",
@@ -508,7 +497,6 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
     
     const maxDecimalsMap = {
       'bitcoin': 8,
-      'lightning': 8,
       'ethereum': 18,
       'base': 18,
       'binance': 18,
@@ -561,7 +549,6 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
       // Map UI network names to actual network keys in wallet data
       const networkKeyMap = {
         "Bitcoin Main Network": "bitcoin",
-        "Lightning Network": "lightning",
         "Ethereum Main Network": "ethereum",
         "Base Network": "base",
         "Solana Network": "solana",
@@ -604,7 +591,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
     setSelectedAsset(null);
     setSelectedNetwork(null);
     setTransactionType(null);
-    setLightningAmount('');
+
     setCopiedAddress(false);
     setWithdrawAmount('');
     setWithdrawAddress('');
@@ -703,11 +690,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
     setTimeout(() => setCopiedAddress(false), 2000);
   };
 
-  const handleGenerateInvoice = () => {
-    if (lightningAmount) {
-      console.log('Generating invoice for:', lightningAmount);
-    }
-  };
+
 
 const handleVerifyPinAndProceed = async () => {
   if (withdrawPin.length !== 4) {
@@ -730,7 +713,6 @@ const handleVerifyPinAndProceed = async () => {
     // Map UI network names to backend network identifiers
     const networkIdentifierMap = {
       "Bitcoin Main Network": "bitcoin",
-      "Lightning Network": "lightning",
       "Ethereum Main Network": "ethereum",
       "Base Network": "base",
       "Solana Network": "solana",
@@ -1143,71 +1125,8 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
 
   // Deposit Step 1 Modal
   if (currentModal === 'depositStep1') {
-    const isLightning = selectedNetwork?.name === "Lightning Network";
     const depositAddress = depositAddresses[selectedAsset?.name]?.[selectedNetwork?.name];
     const limits = depositLimits[selectedAsset?.name];
-
-    if (isLightning) {
-      return (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-          <div className="bg-[rgba(0,0,0,0.7)] lg:rounded-xl p-6 w-full max-w-xl lg:mx-4 h-screen lg:h-[40rem] pt-12 lg:pt-0">
-            <div className='flex w-full items-center justify-between mb-6'>
-              <button
-                onClick={handleBack}
-                className="text-gray-400 hover:text-white transition-colors rounded-full p-1 hover:bg-gray-700/30"
-              >
-                <ArrowLeft size={22} />
-              </button>
-              <h1 className="text-lg font-bold text-white">Deposit {selectedAsset?.abbreviation}</h1>
-              <button
-                onClick={handleClose}
-                className="text-gray-400 hover:text-white transition-colors rounded-full p-1 hover:bg-gray-700/30"
-              >
-                <X size={22} />
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div className="text-left">
-                <h2 className="text-sm font-bold text-white mb-2">Deposit {selectedAsset?.abbreviation}</h2>
-
-                <div className='bg-[rgba(24,24,24,1)] p-3 rounded-lg'>
-                  <p className="flex gap-1 items-center text-gray-400 text-sm"> <span><img src={notice} className='h-5 w-5' alt="" /> </span>  Lightning deposit are credited to your account immediately upon receipt.</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-white font-medium mb-2">Network</label>
-                  <div className="bg-[#1a1a1a] py-5 px-3 rounded-full">
-                    <p className="text-white">{selectedNetwork?.name}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-white font-medium mb-2">Amount</label>
-                  <input
-                    type="number"
-                    placeholder="Enter Amount"
-                    value={lightningAmount}
-                    onChange={(e) => setLightningAmount(e.target.value)}
-                    className="w-full bg-[#1a1a1a] text-white py-5 px-3 rounded-full border border-gray-600 focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-
-                <button
-                  onClick={handleGenerateInvoice}
-                  disabled={!lightningAmount}
-                  className="w-full py-5 px-3 rounded-full bg-primary hover:bg-primary disabled:bg-primary/50 disabled:cursor-not-allowed text-white font-medium transition-colors"
-                >
-                  Generate Invoice
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center overflow-y-auto justify-center z-50">

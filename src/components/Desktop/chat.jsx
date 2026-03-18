@@ -4075,7 +4075,6 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       // Step 6: Convert payment network to API-compatible format
       const networkMap = {
         'Bitcoin': 'bitcoin',
-        'Lightning Network': 'bitcoin',
         'Ethereum (ERC20)': 'ethereum',
         'Base': 'base',
         'Tron (TRC20)': 'tron',
@@ -8084,8 +8083,7 @@ const SellerInitiateModal = React.memo(({
                       'trx': 'Tron (TRC20)',
                       'polygon': 'Polygon',
                       'arbitrum': 'Arbitrum',
-                      'optimism': 'Optimism',
-                      'lightning': 'Lightning Network'
+                      'optimism': 'Optimism'
                     };
                     
                     // Token to currency key mapping
@@ -8120,8 +8118,7 @@ const SellerInitiateModal = React.memo(({
                     if (networkOptions.length === 0) {
                       if (localFormData.paymentMethod === 'BTC') {
                         networkOptions.push(
-                          { value: 'Bitcoin', label: 'Bitcoin' },
-                          { value: 'Lightning Network', label: 'Lightning Network' }
+                          { value: 'Bitcoin', label: 'Bitcoin' }
                         );
                       } else if (localFormData.paymentMethod === 'ETH') {
                         networkOptions.push(
