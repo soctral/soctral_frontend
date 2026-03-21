@@ -33,6 +33,7 @@ import HistoryTable from '../components/Desktop/HistoryTable';
 import { useUser } from '../context/userContext';
 import WalletTransactionModal from '../components/Desktop/WalletTransaction';
 import authService from '../services/authService';
+import chatService from '../services/chatService';
 import face from "../assets/face.svg";
 import twitter from "../assets/twitter.svg";
 import ig from "../assets/ig2.svg";
@@ -105,6 +106,7 @@ const MobileHomePage = () => {
   const [isLoadingPickOfWeek, setIsLoadingPickOfWeek] = useState(true);
   const [walletTransactionType, setWalletTransactionType] = useState(null);
   const [showChat, setShowChat] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   // Wallet data states - SIMPLIFIED (matching Homepage.jsx)
   const [walletData, setWalletData] = useState({
@@ -539,6 +541,58 @@ const MobileHomePage = () => {
     };
   }, []);
 
+  // Chat unread badge (same pattern as desktop Homepage + Navbar)
+  useEffect(() => {
+    const handleChatUnreadUpdate = (event) => {
+      const { totalUnread } = event.detail || {};
+      if (typeof totalUnread === 'number') {
+        setChatUnreadCount(totalUnread);
+      }
+    };
+
+    window.addEventListener('chatUnreadCountUpdate', handleChatUnreadUpdate);
+    return () => {
+      window.removeEventListener('chatUnreadCountUpdate', handleChatUnreadUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !(user?._id || user?.id)) {
+      setChatUnreadCount(0);
+      return;
+    }
+
+    const fetchChatUnreadCount = async () => {
+      try {
+        await chatService.initializeChat(
+          user._id || user.id,
+          user.displayName || user.name || 'User',
+          user.avatarUrl || user.avatar
+        );
+        const channels = await chatService.getUserChannels();
+        const total = channels.reduce(
+          (sum, ch) => sum + (chatService.getUnreadCount(ch) || 0),
+          0
+        );
+        setChatUnreadCount(total);
+      } catch (err) {
+        console.warn('Could not fetch chat unread count (mobile):', err?.message);
+      }
+    };
+
+    let unsubscribeNewMessages = () => {};
+
+    const setup = async () => {
+      await fetchChatUnreadCount();
+      unsubscribeNewMessages = chatService.subscribeToNewMessages(fetchChatUnreadCount);
+    };
+
+    setup();
+
+    return () => {
+      unsubscribeNewMessages();
+    };
+  }, [isAuthenticated, user?._id, user?.id, user?.displayName, user?.name]);
 
   const handleViewAccountMetrics = (accountData) => {
     console.log('📱 MobileHomePage: Received view account request:', accountData);
@@ -1670,15 +1724,22 @@ const MobileHomePage = () => {
 
               <button
                 onClick={() => handleTabClick('chat')}
-                className={`flex flex-col items-center py-2 px-3 rounded-lg transition-all duration-200 ${activeTab === 'chat'
+                className={`flex flex-col items-center py-2 px-3 rounded-lg transition-all duration-200 relative ${activeTab === 'chat'
                   ? 'text-primary '
                   : 'text-gray-400'
                   }`}
               >
-                <MessageCircle className={`w-5 h-5 mb-1 transition-colors duration-200 ${activeTab === 'chat'
-                  ? 'text-primary '
-                  : 'text-gray-400 hover:text-primary '
-                  }`} />
+                <span className="relative inline-flex mb-1">
+                  <MessageCircle className={`w-5 h-5 transition-colors duration-200 ${activeTab === 'chat'
+                    ? 'text-primary '
+                    : 'text-gray-400 hover:text-primary '
+                    }`} />
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 animate-pulse">
+                      {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                    </span>
+                  )}
+                </span>
                 <span className={`text-xs transition-colors duration-200 ${activeTab === 'chat'
                   ? 'text-primary '
                   : 'text-gray-400 hover:text-primary '
