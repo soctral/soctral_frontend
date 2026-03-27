@@ -1,15 +1,20 @@
 import { StreamChat } from 'stream-chat';
+import apiService from './api';
+import pushNotificationService from './pushNotificationService';
 
 class ChatService {
   constructor() {
     this.client = null;
     this.currentUser = null;
     this.apiKey = '39h4m4hmwswh';
+    this.outgoingMessageUnsubscribe = null;
   }
 
   async initializeChat(userId, userName, userImage) {
     try {
       if (this.client && this.currentUser?.id === userId) {
+        this.setupOutgoingPushForwarder();
+        await pushNotificationService.initialize();
         console.log('✅ Chat already initialized for user:', userId);
         return this.client;
       }
@@ -29,6 +34,8 @@ class ChatService {
       );
 
       this.currentUser = { id: userId, name: userName, image: userImage };
+      this.setupOutgoingPushForwarder();
+      await pushNotificationService.initialize();
       // console.log('✅ Stream Chat initialized successfully');
 
       return this.client;
@@ -68,6 +75,10 @@ class ChatService {
 
   async disconnect() {
     try {
+      if (this.outgoingMessageUnsubscribe) {
+        this.outgoingMessageUnsubscribe();
+        this.outgoingMessageUnsubscribe = null;
+      }
       if (this.client) {
         await this.client.disconnectUser();
         this.client = null;
@@ -77,6 +88,45 @@ class ChatService {
     } catch (error) {
       console.error('❌ Error disconnecting chat:', error);
     }
+  }
+
+  setupOutgoingPushForwarder() {
+    if (!this.client || !this.currentUser) return;
+    if (this.outgoingMessageUnsubscribe) {
+      this.outgoingMessageUnsubscribe();
+      this.outgoingMessageUnsubscribe = null;
+    }
+
+    const handler = async (event) => {
+      try {
+        const message = event?.message;
+        if (!message) return;
+        if (message.user?.id !== this.currentUser.id) return;
+        if (message.silent === true) return;
+
+        const channelType = event?.channel_type || event?.cid?.split(':')?.[0] || 'messaging';
+        const channelId = event?.channel_id || event?.cid?.split(':')?.[1];
+        if (!channelType || !channelId) return;
+
+        await apiService.post('/web-push/chat-notify', {
+          channelType,
+          channelId,
+          messageText: message.text || '',
+          senderName: this.currentUser.name || 'New message',
+        });
+      } catch (error) {
+        console.warn('Push relay failed:', error?.message || error);
+      }
+    };
+
+    this.client.on('message.new', handler);
+    this.outgoingMessageUnsubscribe = () => {
+      try {
+        this.client?.off('message.new', handler);
+      } catch (error) {
+        // no-op
+      }
+    };
   }
 
 
