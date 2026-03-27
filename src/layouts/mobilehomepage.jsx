@@ -34,6 +34,7 @@ import { useUser } from '../context/userContext';
 import WalletTransactionModal from '../components/Desktop/WalletTransaction';
 import authService from '../services/authService';
 import chatService from '../services/chatService';
+import pushNotificationService from '../services/pushNotificationService';
 import face from "../assets/face.svg";
 import twitter from "../assets/twitter.svg";
 import ig from "../assets/ig2.svg";
@@ -584,6 +585,7 @@ const MobileHomePage = () => {
 
     const setup = async () => {
       await fetchChatUnreadCount();
+      await pushNotificationService.initialize();
       unsubscribeNewMessages = chatService.subscribeToNewMessages(fetchChatUnreadCount);
     };
 

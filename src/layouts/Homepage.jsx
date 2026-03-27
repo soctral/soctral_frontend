@@ -59,6 +59,7 @@ import WalletSetupModal from '../components/Desktop/WalletModal';
 import UploadAccountListed from '../components/Desktop/UploadAccountListed';
 import walletService from '../services/walletService';
 import chatService from '../services/chatService';
+import pushNotificationService from '../services/pushNotificationService';
 import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../config.js';
@@ -504,6 +505,7 @@ const HomePage = () => {
 
     const setup = async () => {
       await fetchChatUnreadCount();
+      await pushNotificationService.initialize();
       unsubscribeNewMessages = chatService.subscribeToNewMessages(fetchChatUnreadCount);
     };
 
