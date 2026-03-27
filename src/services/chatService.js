@@ -13,6 +13,8 @@ class ChatService {
   async initializeChat(userId, userName, userImage) {
     try {
       if (this.client && this.currentUser?.id === userId) {
+        this.setupOutgoingPushForwarder();
+        await pushNotificationService.initialize();
         console.log('✅ Chat already initialized for user:', userId);
         return this.client;
       }
