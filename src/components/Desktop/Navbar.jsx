@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Gift, Bell, X, Wallet, TrendingUp, MessageCircle, History, UserCog } from "lucide-react";
+import { Gift, Bell, X, Wallet, TrendingUp, MessageCircle, History, Upload } from "lucide-react";
 import dotmenu from "../../assets/menu.svg";
 import WalletSetupModal from "../../components/Desktop/WalletModal";
 import ReferralsModal from "../../components/Desktop/ReferralModal";
@@ -257,14 +257,18 @@ const Navbar = ({
                   onClick={handleNotificationClick}
                 />
               </div>
-              <div className="bg-[rgba(255,255,255,0.1);] rounded-full p-2">
-                <UserCog
-                  className="h-4 w-4 text-gray-300 hover:text-white cursor-pointer transition-colors"
-                  onClick={handleManageAccountsClick}
-                  aria-label="Manage accounts"
-                  title="Manage accounts"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={handleManageAccountsClick}
+                className="flex items-center gap-1.5 rounded-full bg-[rgba(255,255,255,0.1)] px-3 py-2 hover:bg-white/15 transition-colors cursor-pointer"
+                aria-label="Upload or list an account for sale"
+                title="Upload account to list for sale"
+              >
+                <Upload className="h-4 w-4 text-gray-300 shrink-0" />
+                <span className="text-xs font-medium text-gray-300 whitespace-nowrap">
+                  List account
+                </span>
+              </button>
             </div>
 
             {/* 🎨 UPDATED: Avatar with better error handling and fallback */}
@@ -382,7 +386,7 @@ const Navbar = ({
                   {authModalType === 'trade' && <TrendingUp className="w-8 h-8 text-primary" />}
                   {authModalType === 'chat' && <MessageCircle className="w-8 h-8 text-primary" />}
                   {authModalType === 'history' && <History className="w-8 h-8 text-primary" />}
-                  {authModalType === 'manageAccounts' && <UserCog className="w-8 h-8 text-primary" />}
+                  {authModalType === 'manageAccounts' && <Upload className="w-8 h-8 text-primary" />}
                 </div>
 
                 <h3 className="text-white font-semibold text-xl mb-2">Sign In Required</h3>
@@ -393,7 +397,7 @@ const Navbar = ({
                   {authModalType === 'trade' && "Please sign in to access the trading platform and buy/sell accounts safely."}
                   {authModalType === 'chat' && "Please sign in to access chat features and communicate with other users."}
                   {authModalType === 'history' && "Please sign in to view your transaction history and account activities."}
-                  {authModalType === 'manageAccounts' && "Please sign in to manage your listed social accounts and requests."}
+                  {authModalType === 'manageAccounts' && "Please sign in to upload and list social accounts for sale, and manage your listings."}
                 </p>
 
                 <div className="flex gap-3 justify-center">

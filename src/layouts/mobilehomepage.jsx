@@ -16,7 +16,7 @@ import frame0 from "../assets/slide11.svg"
 import frame00 from "../assets/slide1.svg"
 import frame000 from "../assets/slide0.svg"
 import shield from "../assets/Shield.svg"
-import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw, UserCog } from "lucide-react";
+import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw, Upload } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -1677,11 +1677,18 @@ const MobileHomePage = () => {
                   onClick={handleNotificationClick}
                   className="h-[20px] w-[20px] cursor-pointer hover:text-white transition-colors"
                 />
-                <UserCog
+                <button
+                  type="button"
                   onClick={handleManageAccountsClick}
-                  className="h-[20px] w-[20px] cursor-pointer hover:text-white transition-colors"
-                  aria-label="Manage accounts"
-                />
+                  className="flex flex-col items-center justify-center gap-0.5 min-w-[44px] rounded-lg bg-white/10 px-2 py-1 active:bg-white/20"
+                  aria-label="Upload or list an account for sale"
+                  title="Upload account to list for sale"
+                >
+                  <Upload className="h-[18px] w-[18px] text-gray-200 shrink-0" />
+                  <span className="text-[10px] font-medium leading-none text-gray-300">
+                    List
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -1853,7 +1860,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && <TrendingUp className="w-8 h-8 text-primary" />}
                     {authModalType === 'chat' && <MessageCircle className="w-8 h-8 text-primary" />}
                     {authModalType === 'history' && <History className="w-8 h-8 text-primary" />}
-                    {authModalType === 'manageAccounts' && <UserCog className="w-8 h-8 text-primary" />}
+                    {authModalType === 'manageAccounts' && <Upload className="w-8 h-8 text-primary" />}
                   </div>
 
                   <h3 className="text-white font-semibold text-xl mb-2">Sign In Required</h3>
@@ -1864,7 +1871,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && "Please sign in to access the trading platform and buy/sell accounts safely."}
                     {authModalType === 'chat' && "Please sign in to access chat features and communicate with other users."}
                     {authModalType === 'history' && "Please sign in to view your transaction history and account activities."}
-                    {authModalType === 'manageAccounts' && "Please sign in to manage your listed social accounts and requests."}
+                    {authModalType === 'manageAccounts' && "Please sign in to upload and list social accounts for sale, and manage your listings."}
                   </p>
 
                   <div className="flex gap-3 justify-center">
