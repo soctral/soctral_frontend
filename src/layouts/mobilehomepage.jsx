@@ -16,7 +16,7 @@ import frame0 from "../assets/slide11.svg"
 import frame00 from "../assets/slide1.svg"
 import frame000 from "../assets/slide0.svg"
 import shield from "../assets/Shield.svg"
-import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw } from "lucide-react";
+import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw, UserCog } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -32,6 +32,7 @@ import Chat from '../components/Desktop/chat';
 import HistoryTable from '../components/Desktop/HistoryTable';
 import { useUser } from '../context/userContext';
 import WalletTransactionModal from '../components/Desktop/WalletTransaction';
+import ManageAccountModal from '../components/Desktop/AccountManagement';
 import authService from '../services/authService';
 import chatService from '../services/chatService';
 import pushNotificationService from '../services/pushNotificationService';
@@ -102,6 +103,7 @@ const MobileHomePage = () => {
   const [hasSeenBuySellOnboarding, setHasSeenBuySellOnboarding] = useState(false);
   const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [showWalletTransactionModal, setShowWalletTransactionModal] = useState(false);
+  const [showManageAccountModal, setShowManageAccountModal] = useState(false);
   const [pickOfWeekData, setPickOfWeekData] = useState([]);
 
   const [isLoadingPickOfWeek, setIsLoadingPickOfWeek] = useState(true);
@@ -1152,6 +1154,15 @@ const MobileHomePage = () => {
     setShowNotificationPanel(!showNotificationPanel);
   };
 
+  const handleManageAccountsClick = () => {
+    if (!isAuthenticated) {
+      setAuthModalType('manageAccounts');
+      setShowAuthModal(true);
+      return;
+    }
+    setShowManageAccountModal(true);
+  };
+
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) {
       setShowSlideMenu(false);
@@ -1666,6 +1677,11 @@ const MobileHomePage = () => {
                   onClick={handleNotificationClick}
                   className="h-[20px] w-[20px] cursor-pointer hover:text-white transition-colors"
                 />
+                <UserCog
+                  onClick={handleManageAccountsClick}
+                  className="h-[20px] w-[20px] cursor-pointer hover:text-white transition-colors"
+                  aria-label="Manage accounts"
+                />
               </div>
             </div>
           </div>
@@ -1809,6 +1825,11 @@ const MobileHomePage = () => {
           walletData={walletData}
         />
 
+        <ManageAccountModal
+          isOpen={showManageAccountModal}
+          onClose={() => setShowManageAccountModal(false)}
+        />
+
         {showAuthModal && (
           <>
             <div
@@ -1832,6 +1853,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && <TrendingUp className="w-8 h-8 text-primary" />}
                     {authModalType === 'chat' && <MessageCircle className="w-8 h-8 text-primary" />}
                     {authModalType === 'history' && <History className="w-8 h-8 text-primary" />}
+                    {authModalType === 'manageAccounts' && <UserCog className="w-8 h-8 text-primary" />}
                   </div>
 
                   <h3 className="text-white font-semibold text-xl mb-2">Sign In Required</h3>
@@ -1842,6 +1864,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && "Please sign in to access the trading platform and buy/sell accounts safely."}
                     {authModalType === 'chat' && "Please sign in to access chat features and communicate with other users."}
                     {authModalType === 'history' && "Please sign in to view your transaction history and account activities."}
+                    {authModalType === 'manageAccounts' && "Please sign in to manage your listed social accounts and requests."}
                   </p>
 
                   <div className="flex gap-3 justify-center">

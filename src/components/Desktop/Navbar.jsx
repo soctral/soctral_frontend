@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Gift, Bell, X, Wallet, TrendingUp, MessageCircle, History } from "lucide-react";
+import { Gift, Bell, X, Wallet, TrendingUp, MessageCircle, History, UserCog } from "lucide-react";
 import dotmenu from "../../assets/menu.svg";
 import WalletSetupModal from "../../components/Desktop/WalletModal";
 import ReferralsModal from "../../components/Desktop/ReferralModal";
@@ -10,7 +10,7 @@ import BuySellTable from "../../components/Desktop/buysellTable";
 import { useUser } from '../../context/userContext';
 import authService from '../../services/authService';
 import WalletTransactionModal from '../../components/Desktop/WalletTransaction';
-
+import ManageAccountModal from '../../components/Desktop/AccountManagement';
 
 const Navbar = ({
   showSlideMenu,
@@ -37,6 +37,7 @@ const Navbar = ({
   const [hasSeenBuySellOnboarding, setHasSeenBuySellOnboarding] = useState(false);
   const [authModalType, setAuthModalType] = useState('');
   const [showWalletTransactionModal, setShowWalletTransactionModal] = useState(false);
+  const [showManageAccountModal, setShowManageAccountModal] = useState(false);
 
   // 🎨 UPDATED: Helper to get user avatar from context with better error handling
   const getUserAvatar = () => {
@@ -148,6 +149,15 @@ const Navbar = ({
     setShowNotificationPanel(!showNotificationPanel);
   };
 
+  const handleManageAccountsClick = () => {
+    if (!isAuthenticated) {
+      setAuthModalType('manageAccounts');
+      setShowAuthModal(true);
+      return;
+    }
+    setShowManageAccountModal(true);
+  };
+
   return (
     <>
       {showNotificationPanel && (
@@ -247,6 +257,14 @@ const Navbar = ({
                   onClick={handleNotificationClick}
                 />
               </div>
+              <div className="bg-[rgba(255,255,255,0.1);] rounded-full p-2">
+                <UserCog
+                  className="h-4 w-4 text-gray-300 hover:text-white cursor-pointer transition-colors"
+                  onClick={handleManageAccountsClick}
+                  aria-label="Manage accounts"
+                  title="Manage accounts"
+                />
+              </div>
             </div>
 
             {/* 🎨 UPDATED: Avatar with better error handling and fallback */}
@@ -336,6 +354,11 @@ const Navbar = ({
         isAuthenticated={isAuthenticated}
       />
 
+      <ManageAccountModal
+        isOpen={showManageAccountModal}
+        onClose={() => setShowManageAccountModal(false)}
+      />
+
       {showAuthModal && (
         <>
           <div
@@ -359,6 +382,7 @@ const Navbar = ({
                   {authModalType === 'trade' && <TrendingUp className="w-8 h-8 text-primary" />}
                   {authModalType === 'chat' && <MessageCircle className="w-8 h-8 text-primary" />}
                   {authModalType === 'history' && <History className="w-8 h-8 text-primary" />}
+                  {authModalType === 'manageAccounts' && <UserCog className="w-8 h-8 text-primary" />}
                 </div>
 
                 <h3 className="text-white font-semibold text-xl mb-2">Sign In Required</h3>
@@ -369,6 +393,7 @@ const Navbar = ({
                   {authModalType === 'trade' && "Please sign in to access the trading platform and buy/sell accounts safely."}
                   {authModalType === 'chat' && "Please sign in to access chat features and communicate with other users."}
                   {authModalType === 'history' && "Please sign in to view your transaction history and account activities."}
+                  {authModalType === 'manageAccounts' && "Please sign in to manage your listed social accounts and requests."}
                 </p>
 
                 <div className="flex gap-3 justify-center">
