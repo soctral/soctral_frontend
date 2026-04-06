@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { UserProvider } from "./context/userContext";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import Onboarding from "./components/Onboarding";
-import SignInMobile from "./layouts/SignInMobile";
-import SignUpMobile from "./layouts/SignUpMobile";
-import SignUpDesktop from "./layouts/SignUpDesktop";
-import SignInDesktop from "./layouts/SignInDesktop";
-import MobileHomepage from "./layouts/mobilehomepage"
 import DesktopOnboardingSteps from "./components/StepOneDesktop";
 import MobileOnboardingSteps from "./components/StepOneMobile";
+import { UserProvider } from "./context/userContext";
 import Homepage from "./layouts/Homepage";
+import SignInDesktop from "./layouts/SignInDesktop";
+import SignInMobile from "./layouts/SignInMobile";
+import SignUpDesktop from "./layouts/SignUpDesktop";
+import SignUpMobile from "./layouts/SignUpMobile";
+import GoogleOnboarding from "./layouts/GoogleOnboarding";
+import MobileHomepage from "./layouts/mobilehomepage";
 import './services/tradeStateMigration';
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
+
 
 // Enhanced responsive detection that accounts for user agent and viewport
 const useResponsive = () => {
@@ -60,6 +66,13 @@ const ResponsiveComponent = ({ MobileComponent, DesktopComponent, ...props }) =>
   return isDesktop ? 
     <DesktopComponent {...props} /> : 
     <MobileComponent {...props} />;
+};
+
+// Redirect shareable order URLs to homepage with query params so the app can highlight the order
+const OrderRedirect = ({ orderType }) => {
+  const { orderId } = useParams();
+  const to = `/homepage?tab=trade&orderType=${orderType}&orderId=${encodeURIComponent(orderId || '')}`;
+  return <Navigate to={to} replace />;
 };
 
 function App() {
@@ -138,8 +151,31 @@ function App() {
 
   return (
     <UserProvider>
+      <GoogleOAuthProvider clientId={googleClientId}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
+          {/* Sitelink URLs: real /login and /signup pages with distinct title/description for Google */}
+          <Route
+            path="/login"
+            element={
+              <ResponsiveComponent
+                MobileComponent={MobileOnboardingSteps}
+                DesktopComponent={DesktopOnboardingSteps}
+                openModal="login"
+              />
+            }
+          />
+          <Route
+            path="/signup"
+            element={
+              <ResponsiveComponent
+                MobileComponent={MobileOnboardingSteps}
+                DesktopComponent={DesktopOnboardingSteps}
+                openModal="signup"
+              />
+            }
+          />
+
           <Route 
             path="/" 
             element={
@@ -179,8 +215,14 @@ function App() {
               />
             } 
           />
+          <Route path="/google-onboarding" element={<GoogleOnboarding />} />
+          {/* Shareable order links: /order/sell/:orderId and /order/buy/:orderId → homepage trade tab with order highlighted */}
+          <Route path="/order/sell/:orderId" element={<OrderRedirect orderType="sell" />} />
+          <Route path="/order/buy/:orderId" element={<OrderRedirect orderType="buy" />} />
+          <Route path="*" element={<Navigate to="/homepage" replace />} />
         </Routes>
       </BrowserRouter>
+      </GoogleOAuthProvider>
     </UserProvider>
   );
 }

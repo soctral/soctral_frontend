@@ -14,12 +14,14 @@ import about from '../assets/about.svg'
 import signout from '../assets/sign-out.svg'
 import ManageAccountModal from '../components/Desktop/AccountManagement'
 import SupportModal from '../components/Desktop/Support'
+import SupportChatModal from '../components/Desktop/SupportChatModal';
 import AboutModal from '../components/Desktop/AboutUs'
 import RateAppModal from '../components/Desktop/RateOurApp'
 import WalletSetupModal from '../components/Desktop/WalletModal';
 import WalletTransactionModal from '../components/Desktop/WalletTransaction';
 import { useUser } from '../context/userContext';
 import authService from '../services/authService';
+import apiService from '../services/api.js';
 
 const Menu = ({ 
   showSlideMenu, 
@@ -41,11 +43,30 @@ const Menu = ({
   // Modal states
   const [showManageModal, setShowManageModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
+  const [showSupportChatModal, setShowSupportChatModal] = useState(false);
+  const [supportChatChannel, setSupportChatChannel] = useState({ type: null, id: null });
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showRateModal, setShowRateModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showWalletTransactionModal, setShowWalletTransactionModal] = useState(false);
   const [previousPage, setPreviousPage] = useState(null);
+
+  const handleOpenLiveChat = async () => {
+    try {
+      const res = await apiService.post('/support/channel', { general: true });
+      const data = res?.data ?? res;
+      const channelId = data?.channelId;
+      const channelType = data?.channelType || 'messaging';
+      if (channelId) {
+        setSupportChatChannel({ type: channelType, id: channelId });
+        setShowSupportChatModal(true);
+      }
+    } catch (err) {
+      console.error('Failed to open live support chat:', err);
+      const msg = err?.response?.data?.message || err?.message || 'Could not open chat. Please try again.';
+      alert(msg);
+    }
+  };
 
   // 🎨 UPDATED: Helper to get user avatar from context with better error handling
   const getUserAvatar = () => {
@@ -475,7 +496,14 @@ const Menu = ({
       />
       <SupportModal 
         isOpen={showSupportModal} 
-        onClose={() => handleModalClose('support')} 
+        onClose={() => handleModalClose('support')}
+        onOpenLiveChat={handleOpenLiveChat}
+      />
+      <SupportChatModal
+        isOpen={showSupportChatModal}
+        onClose={() => { setShowSupportChatModal(false); setSupportChatChannel({ type: null, id: null }); }}
+        channelType={supportChatChannel.type}
+        channelId={supportChatChannel.id}
       />
       <AboutModal 
         isOpen={showAboutModal} 

@@ -1,19 +1,57 @@
 import { useState, useEffect } from "react";
+import countryCodeOptions from "../data/countryCodeOptions";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { GoogleLogin } from "@react-oauth/google";
 import { Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react";
 import { useUser } from "../context/userContext"; // Import your user context
 import Warning from "../assets/warning.png";
 import GoogleIcon from "../assets/google.png";
-import AppleIcon from "../assets/apple.png";
+
+// Defined outside to avoid new component identity on every render (fixes input lag)
+const PasswordStrengthIndicator = ({ password, passwordStrength }) => {
+  if (!password) return null;
+  const requirements = [
+    { met: password.length >= 8, text: "Minimum Of 8 Characters" },
+    { met: /[A-Z]/.test(password), text: "At least One Uppercase" },
+    { met: /[a-z]/.test(password), text: "At least One Lowercase" },
+    { met: /[!@#$%^&*(),.?":{}|<>]/.test(password), text: "At least One Special Character" },
+    { met: /[0-9]/.test(password), text: "At least One Number" }
+  ];
+  const percentage = (passwordStrength / 5) * 100;
+  return (
+    <div className="mt-2">
+      <div className="w-full bg-black rounded-full h-2 mb-2 border-2 border-purple-600">
+        <div
+          className={`h-1 rounded-full transition-all duration-300 ${
+            passwordStrength < 2 ? "bg-red-500" :
+            passwordStrength < 4 ? "bg-yellow-500" : "bg-green-500"
+          }`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <div className="space-y-1">
+        {requirements.map((req, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${req.met ? 'bg-green-500' : 'bg-gray-500'}`} />
+            <p className={`text-xs ${req.met ? 'text-green-400' : 'text-gray-400'}`}>
+              {req.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const SignUp = ({ apiUrl, onClose, onShowSignIn }) => { 
   const navigate = useNavigate();
   const {
     createUser,
-    sendOTP,
-    verifyOTP,
-    resendOTP,
+    signUpWithGoogle,
+    sendOTPToEmail,
+    verifyOTPToEmail,
+    resendOTPToEmail,
     isLoading,
     error: contextError,
     clearError,
@@ -31,11 +69,14 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
   const [countdown, setCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [localError, setLocalError] = useState(null);
+  // Local state for step 4 only — avoids context dispatch on every keystroke (fixes lag)
+  const [localPassword, setLocalPassword] = useState("");
+  const [localConfirmPassword, setLocalConfirmPassword] = useState("");
 
   // Get the current error (either from context or local)
   const error = contextError || localError;
 
-  // Countdown timer for OTP
+  // Countdown timer for OTP (step 3)
   useEffect(() => {
     let timer;
     if (signupStep === 3 && countdown > 0) {
@@ -48,7 +89,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     return () => clearTimeout(timer);
   }, [signupStep, countdown]);
 
-  // Reset countdown when moving to step 3
+  // Reset countdown when moving to OTP step
   useEffect(() => {
     if (signupStep === 3) {
       setCountdown(30);
@@ -56,25 +97,49 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     }
   }, [signupStep]);
 
+  // Sync local password state when entering step 4
+  useEffect(() => {
+    if (signupStep === 4) {
+      setLocalPassword(signupData.password);
+      setLocalConfirmPassword(signupData.confirmPassword);
+      evaluatePasswordStrength(signupData.password);
+    }
+  }, [signupStep]); // Intentionally only when step changes; signupData read once on enter
+
   // Clear errors when component unmounts
   useEffect(() => {
     return () => {
       clearError();
       setLocalError(null);
     };
-  }, [clearError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    // Step 4: keep password/confirmPassword in local state only to avoid context lag
+    if (signupStep === 4 && (name === "password" || name === "confirmPassword")) {
+      if (name === "password") {
+        setLocalPassword(value);
+        evaluatePasswordStrength(value);
+      } else {
+        setLocalConfirmPassword(value);
+      }
+      clearError();
+      setLocalError(null);
+      return;
+    }
     updateSignupData({ [name]: value });
-    
     if (name === "password") {
       evaluatePasswordStrength(value);
     }
     
-    // Clear errors when user starts typing
+    // Clear errors when user starts typing — only if there's an error to clear
+    if (contextError) clearError();
+    if (localError) setLocalError(null);
     clearError();
     setLocalError(null);
+
   };
 
   const evaluatePasswordStrength = (password) => {
@@ -107,7 +172,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
 
   const isValidPhoneNumber = (phone) => {
     const phoneRegex = /^\d{10,11}$/;
-    return phoneRegex.test(phone.replace(/\s+/g, ''));
+    return phoneRegex.test((phone || '').replace(/\s+/g, ''));
   };
 
   const isStep1Valid = () => {
@@ -123,14 +188,21 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
   };
 
   const isStep4Valid = () => {
-    return signupData.password.length >= 8 &&
-           signupData.confirmPassword.length >= 8 &&
-           signupData.password === signupData.confirmPassword &&
-           passwordStrength >= 5;
+    const pwd = signupStep === 4 ? localPassword : signupData.password;
+    const conf = signupStep === 4 ? localConfirmPassword : signupData.confirmPassword;
+    return pwd.length >= 8 && conf.length >= 8 && pwd === conf && passwordStrength >= 5;
   };
 
   const isStep5Valid = () => {
     return signupData.displayName.trim().length >= 2;
+  };
+
+  const getMaskedEmail = () => {
+    const email = signupData.email || '';
+    if (!email || !email.includes('@')) return email;
+    const [local, domain] = email.split('@');
+    if (local.length <= 2) return `${local[0]}***@${domain}`;
+    return `${local[0]}${'*'.repeat(Math.min(local.length - 2, 3))}${local[local.length - 1]}@${domain}`;
   };
 
   // OTP handling functions
@@ -156,45 +228,6 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     }
   };
 
-  // Password strength indicator component
-  const PasswordStrengthIndicator = () => {
-    const requirements = [
-      { met: signupData.password.length >= 8, text: "Minimum Of 8 Characters" },
-      { met: /[A-Z]/.test(signupData.password), text: "At least One Uppercase" },
-      { met: /[a-z]/.test(signupData.password), text: "At least One Lowercase" },
-      { met: /[!@#$%^&*(),.?":{}|<>]/.test(signupData.password), text: "At least One Special Character" },
-      { met: /[0-9]/.test(signupData.password), text: "At least One Number" }
-    ];
-
-    if (!signupData.password) return null;
-
-    const percentage = (passwordStrength / 5) * 100;
-
-    return (
-      <div className="mt-2">
-        <div className="w-full bg-black rounded-full h-2 mb-2 border-2 border-purple-600">     
-          <div
-            className={`h-1 rounded-full transition-all duration-300 ${
-              passwordStrength < 2 ? "bg-red-500" :
-              passwordStrength < 4 ? "bg-yellow-500" : "bg-green-500"
-            }`}
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-        <div className="space-y-1">
-          {requirements.map((req, index) => (
-            <div key={index} className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full ${req.met ? 'bg-green-500' : 'bg-gray-500'}`} />
-              <p className={`text-xs ${req.met ? 'text-green-400' : 'text-gray-400'}`}>        
-                {req.text}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   // Step handlers with actual API calls
   const handleSubmitStep1 = async (e) => {
     e.preventDefault();
@@ -202,9 +235,6 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
       setLocalError("Please enter a valid email and accept the terms");
       return;
     }
-    
-    // Move to next step immediately for email validation
-    // The actual account creation happens in the final step
     setSignupStep(2);
   };
 
@@ -216,13 +246,10 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     }
 
     try {
-      // Send OTP to the phone number
-      const fullPhoneNumber = signupData.countryCode + signupData.phoneNumber;
-      await sendOTP(fullPhoneNumber);
+      await sendOTPToEmail(signupData.email);
       setSignupStep(3);
     } catch (error) {
       console.error("Failed to send OTP:", error);
-      // Error is handled by context, but we can add additional handling if needed
     }
   };
 
@@ -234,20 +261,17 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     }
 
     try {
-      // Verify OTP
-      const fullPhoneNumber = signupData.countryCode + signupData.phoneNumber;
-      await verifyOTP(fullPhoneNumber, signupData.otp);
+      await verifyOTPToEmail(signupData.email, signupData.otp);
       setSignupStep(4);
     } catch (error) {
       console.error("Failed to verify OTP:", error);
-      // Error is handled by context
     }
   };
 
   const handleSubmitStep4 = async (e) => {
     e.preventDefault();
     if (!isStep4Valid()) {
-      if (signupData.password !== signupData.confirmPassword) {
+      if (localPassword !== localConfirmPassword) {
         setLocalError("Passwords do not match");
       } else if (passwordStrength < 5) {
         setLocalError("Please meet all password requirements");
@@ -256,7 +280,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
       }
       return;
     }
-    
+    updateSignupData({ password: localPassword, confirmPassword: localConfirmPassword });
     setSignupStep(5);
   };
 
@@ -268,13 +292,12 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     }
 
     try {
-      // Create the user account with all collected data
+      const fullPhone = signupData.countryCode + (signupData.phoneNumber || '').replace(/\s+/g, '');
       const userData = {
         email: signupData.email,
+        phoneNumber: fullPhone,
         password: signupData.password,
-        phoneNumber: signupData.countryCode + signupData.phoneNumber,
         displayName: signupData.displayName,
-        countryCode: signupData.countryCode,
         termsAccepted: signupData.termsAccepted,
       };
 
@@ -290,10 +313,8 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
         onClose();
       }
       
-      // Force navigation with window.location for guaranteed redirect
-      setTimeout(() => {
-        window.location.href = "/homepage";
-      }, 100);
+      // Replace history so back doesn't return to sign-up page
+      navigate("/homepage", { replace: true });
       
     } catch (error) {
       console.error("Failed to create user:", error);
@@ -306,7 +327,7 @@ const SignUp = ({ apiUrl, onClose, onShowSignIn }) => {
     if (onClose) {
       onClose();
     }
-    navigate("/homepage");
+    navigate("/homepage", { replace: true });
   };
   
 const handleSignIn = () => {
@@ -324,8 +345,7 @@ const handleSignIn = () => {
     if (!canResend) return;
     
     try {
-      const fullPhoneNumber = signupData.countryCode + signupData.phoneNumber;
-      await resendOTP(fullPhoneNumber);
+      await resendOTPToEmail(signupData.email);
       setCountdown(30);
       setCanResend(false);
     } catch (error) {
@@ -345,8 +365,8 @@ const handleSignIn = () => {
   const getStepTitle = () => {
     switch (signupStep) {
       case 1: return "Get Started with Soctral";
-      case 2: return "Verify Your Phone Number";
-      case 3: return "Enter OTP";
+      case 2: return "Enter Your Phone Number";
+      case 3: return "Verify Your Email";
       case 4: return "Set Your Password";
       case 5: return "Enter Your Display Name";
       default: return "";
@@ -356,8 +376,8 @@ const handleSignIn = () => {
   const getStepDescription = () => {
     switch (signupStep) {
       case 1: return "Create an Account to Buy and Sell Social Media Accounts Securely.";
-      case 2: return "Enter your phone number to receive a verification code.";
-      case 3: return `Enter The 6-Digit Code we Texted to +${getMaskedPhoneNumber()}`;
+      case 2: return "We’ll use this to stay in touch. OTP is sent to your email for verification.";
+      case 3: return `Enter the 6-digit code we emailed to ${getMaskedEmail()}`;
       case 4: return "Create a strong password for your account.";
       case 5: return "Enter a Display Name to Represent You on Soctral.";
       default: return "";
@@ -408,12 +428,37 @@ const handleSignIn = () => {
 
             <div className="text-center text-sm">Or Sign up with</div>
             <div className="flex justify-center gap-6">
-              <button type="button" className="text-white">
-                <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
-              </button>
-              <button type="button" className="text-white">
-                <img src={AppleIcon} alt="Apple" className="w-8 h-8" />
-              </button>
+              <GoogleLogin
+                onSuccess={async (credentialResponse) => {
+                  if (!credentialResponse?.credential) return;
+                  try {
+                    await signUpWithGoogle(credentialResponse.credential);
+                    navigate("/google-onboarding");
+                    if (onClose) onClose();
+                  } catch (err) {
+                    // Error already set in context
+                  }
+                }}
+                onError={() => {
+                  clearError();
+                  setLocalError("Google sign-in was cancelled or failed.");
+                }}
+                useOneTap={false}
+                theme="filled_black"
+                size="medium"
+                type="icon"
+                shape="circle"
+                customButton={(renderProps) => (
+                  <button
+                    type="button"
+                    onClick={renderProps.onClick}
+                    disabled={renderProps.disabled || isLoading}
+                    className="text-white disabled:opacity-50"
+                  >
+                    <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
+                  </button>
+                )}
+              />
             </div>
 
             <div className="flex items-start gap-2">
@@ -480,39 +525,39 @@ const handleSignIn = () => {
           >
             <div>
               <label className="block text-sm mb-2 font-medium">Phone Number</label>
-              <div className="flex items-center border border-gray-400 rounded-full bg-black overflow-hidden focus-within:border-white transition-colors">
+              <div className="flex gap-2">
                 <select
                   name="countryCode"
                   value={signupData.countryCode}
                   onChange={handleInputChange}
-                  className="bg-black text-white pl-3 pr-2 py-2 outline-none appearance-none text-sm"
+                  className="w-24 py-3 rounded-full border border-gray-400 bg-black text-white focus:border-white outline-none transition-colors"
                 >
-                  <option value="+234">🇳🇬 (+234)</option>
-                  <option value="+1">🇺🇸 (+1)</option>
-                  <option value="+44">🇬🇧 (+44)</option>
-                  <option value="+91">🇮🇳 (+91)</option>
-                  <option value="+27">🇿🇦 (+27)</option>
+                  {countryCodeOptions.map((opt) => (
+                    <option key={opt.code} value={opt.code}>
+                      {opt.flag} {opt.code}
+                    </option>
+                  ))}
                 </select>
-                <div className="h-4 w-px bg-white/30 mx-2" />
                 <input
                   type="tel"
                   name="phoneNumber"
                   value={signupData.phoneNumber}
                   onChange={handleInputChange}
                   placeholder="Phone number"
-                  className="bg-black text-white placeholder-gray-400 outline-none py-3 flex-1 text-sm"
+                  className="flex-1 py-3 rounded-full pl-4 border border-gray-400 bg-black text-white placeholder-gray-400 focus:border-white outline-none transition-colors"
                 />
               </div>
               {signupData.phoneNumber && !isValidPhoneNumber(signupData.phoneNumber) && (
-                <p className="text-red-400 text-xs mt-1">Please enter a valid phone number</p>
-              )}
-              {error && (
-                <div className="flex items-center p-2 bg-red-900/30 border border-red-500/50 rounded mt-2">
-                  <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-xs">!</div>
-                  <p className="text-red-400 text-xs ml-2">{error}</p>
-                </div>
+                <p className="text-red-400 text-xs mt-1">Please enter a valid 10–11 digit phone number</p>
               )}
             </div>
+
+            {error && (
+              <div className="flex items-center space-x-2 text-red-500">
+                <img src={Warning} alt="Warning" className="w-5 h-5" />
+                <p className="text-sm">{error}</p>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -525,10 +570,10 @@ const handleSignIn = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Sending OTP...
+                  Sending Code...
                 </>
               ) : (
-                "Send OTP"
+                "Continue"
               )}
             </button>
           </motion.form>
@@ -635,7 +680,7 @@ const handleSignIn = () => {
                 <input
                   type={showPassword ? "text" : "password"}
                   name="password"
-                  value={signupData.password}
+                  value={localPassword}
                   onChange={handleInputChange}
                   placeholder="Create a password"
                   className="w-full py-3 rounded-full pl-4 pr-10 border border-gray-400 bg-black text-white placeholder-gray-400 outline-none focus:border-white transition-colors"
@@ -651,7 +696,7 @@ const handleSignIn = () => {
                   }
                 </button>
               </div>
-              <PasswordStrengthIndicator />
+              <PasswordStrengthIndicator password={localPassword} passwordStrength={passwordStrength} />
             </div>
 
             <div>
@@ -660,7 +705,7 @@ const handleSignIn = () => {
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   name="confirmPassword"
-                  value={signupData.confirmPassword}
+                  value={localConfirmPassword}
                   onChange={handleInputChange}
                   placeholder="Confirm your password"
                   className="w-full py-3 rounded-full pl-4 pr-10 border border-gray-400 bg-black text-white placeholder-gray-400 outline-none focus:border-white transition-colors"
@@ -676,10 +721,10 @@ const handleSignIn = () => {
                   }
                 </button>
               </div>
-              {signupData.confirmPassword && signupData.password !== signupData.confirmPassword && (
+              {localConfirmPassword && localPassword !== localConfirmPassword && (
                 <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
               )}
-              {signupData.confirmPassword && signupData.password === signupData.confirmPassword && signupData.password && (
+              {localConfirmPassword && localPassword === localConfirmPassword && localPassword && (
                 <p className="text-green-400 text-xs mt-1">Passwords match</p>
               )}
             </div>

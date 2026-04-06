@@ -11,6 +11,7 @@ const COIN_ID_MAP = {
     'BTC': 'bitcoin',
     'ETH': 'ethereum',
     'USDT': 'tether',
+    'USDC': 'usd-coin',
     'SOL': 'solana',
     'BNB': 'binancecoin',
     'TRX': 'tron',

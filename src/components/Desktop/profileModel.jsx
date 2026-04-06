@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import countryCodeOptions from '../../data/countryCodeOptions';
 import { X, Eye, EyeOff } from 'lucide-react';
-import { useUser } from '../../context/userContext'; 
+import { useUser } from '../../context/userContext';
+import { API_BASE_URL } from '../../config.js'; 
 
 const ProfileUpdateModal = ({ 
   isOpen, 
@@ -344,7 +346,7 @@ const ProfileUpdateModal = ({
           newDisplayName: formData.newValue
         };
 
-        updateResponse = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/user/update-display-name', {
+        updateResponse = await fetch(`${API_BASE_URL}/user/update-display-name`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -361,7 +363,7 @@ const ProfileUpdateModal = ({
           newPassword: formData.newValue
         };
 
-        updateResponse = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/user/change-password', {
+        updateResponse = await fetch(`${API_BASE_URL}/user/change-password`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -378,7 +380,7 @@ const ProfileUpdateModal = ({
           newPhoneNumber: formData.newValue
         };
 
-        updateResponse = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/user/update-phone-number', {
+        updateResponse = await fetch(`${API_BASE_URL}/user/update-phone-number`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -582,7 +584,7 @@ const ProfileUpdateModal = ({
         purpose: purpose
       };
 
-      const response = await fetch('https://soctral-api-52c4e830bc6f.herokuapp.com/otp/send', {
+      const response = await fetch(`${API_BASE_URL}/otp/send`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -700,11 +702,11 @@ const ProfileUpdateModal = ({
                     className="bg-black text-white pl-3 pr-2 py-2 outline-none appearance-none text-sm"
                     disabled={isLoading || sendingOtp}
                   >
-                    <option value="+234">🇳🇬 (+234)</option>
-                    <option value="+1">🇺🇸 (+1)</option>
-                    <option value="+44">🇬🇧 (+44)</option>
-                    <option value="+91">🇮🇳 (+91)</option>
-                    <option value="+27">🇿🇦 (+27)</option>
+                    {countryCodeOptions.map((c) => (
+                      <option key={`${c.code}-${c.country}`} value={c.code}>
+                        {c.flag} ({c.code})
+                      </option>
+                    ))}
                   </select>
                   <div className="h-4 w-px bg-white/30 mx-2" />
                   <input

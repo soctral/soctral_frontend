@@ -1,7 +1,10 @@
 import { useState } from "react";
+import countryCodeOptions from "../data/countryCodeOptions";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
+import { GoogleLogin } from "@react-oauth/google";
 import Warning from "../assets/warning.png";
+import GoogleIcon from "../assets/google.png";
 import { X } from "lucide-react";
 import SignUp from "../layouts/SignUpDesktop";
 import { useUser } from "../context/userContext"; 
@@ -19,7 +22,7 @@ const SignIn = ({ apiUrl, onClose, onShowSignUp }) => {
   const [isSignInVisible, setIsSignInVisible] = useState(true);
 
   // Use the UserContext for authentication
-  const { signInUser, isLoading, error, clearError } = useUser();
+  const { signInUser, signUpWithGoogle, isLoading, error, clearError } = useUser();
   
   // Initialize navigate for redirection
   const navigate = useNavigate();
@@ -153,11 +156,11 @@ const SignIn = ({ apiUrl, onClose, onShowSignUp }) => {
                         className="bg-black text-base text-white pl-4 pr-2 py-4 outline-none"
                         disabled={isLoading}
                       >
-                        <option className="text-base" value="+234">🇳🇬 (+234)</option>
-                        <option className="text-base" value="+1">🇺🇸 (+1)</option>
-                        <option className="text-base" value="+44">🇬🇧 (+44)</option>
-                        <option className="text-base" value="+91">🇮🇳 (+91)</option>
-                        <option className="text-base" value="+27">🇿🇦 (+27)</option>
+                        {countryCodeOptions.map((c) => (
+                          <option key={`${c.code}-${c.country}`} className="text-base" value={c.code}>
+                            {c.flag} ({c.code})
+                          </option>
+                        ))}
                       </select>
                       <div className="h-6 w-px bg-white/30 mx-3" />
                       <input
@@ -233,6 +236,40 @@ const SignIn = ({ apiUrl, onClose, onShowSignUp }) => {
                 >
                   {isLoading ? "Signing In..." : isSignInVisible ? "Continue" : "Sign Up"}
                 </button>
+
+                {isSignInVisible && (
+                  <>
+                    <div className="text-center text-sm text-gray-400 mt-4">Or sign in with</div>
+                    <div className="flex justify-center gap-6 mt-2">
+                      <GoogleLogin
+                        onSuccess={async (credentialResponse) => {
+                          if (!credentialResponse?.credential) return;
+                          try {
+                            await signUpWithGoogle(credentialResponse.credential);
+                            navigate("/google-onboarding");
+                            if (onClose) onClose();
+                          } catch (err) {}
+                        }}
+                        onError={() => clearError()}
+                        useOneTap={false}
+                        theme="filled_black"
+                        size="medium"
+                        type="icon"
+                        shape="circle"
+                        customButton={(renderProps) => (
+                          <button
+                            type="button"
+                            onClick={renderProps.onClick}
+                            disabled={renderProps.disabled || isLoading}
+                            className="text-white disabled:opacity-50"
+                          >
+                            <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
+                          </button>
+                        )}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <p className="text-[rgba(255,255,255,0.5)] text-center text-base mt-6">
                   Don't have an account?

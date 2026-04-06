@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import marketplaceService from '../services/marketplaceService';
 import badge from "../assets/verifiedstar.svg";
 import ig2 from "../assets/socialicon.svg";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import dotmenu from "../assets/menu.svg"
 import gift from "../assets/gift.svg"
 import notification from "../assets/notifications.svg"
@@ -16,7 +16,7 @@ import frame0 from "../assets/slide11.svg"
 import frame00 from "../assets/slide1.svg"
 import frame000 from "../assets/slide0.svg"
 import shield from "../assets/Shield.svg"
-import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw } from "lucide-react";
+import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw, Upload } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -32,13 +32,17 @@ import Chat from '../components/Desktop/chat';
 import HistoryTable from '../components/Desktop/HistoryTable';
 import { useUser } from '../context/userContext';
 import WalletTransactionModal from '../components/Desktop/WalletTransaction';
+import ManageAccountModal from '../components/Desktop/AccountManagement';
 import authService from '../services/authService';
+import chatService from '../services/chatService';
+import pushNotificationService from '../services/pushNotificationService';
 import face from "../assets/face.svg";
 import twitter from "../assets/twitter.svg";
 import ig from "../assets/ig2.svg";
 import UploadAccountListed from '../components/Desktop/UploadAccountListed';
 import walletService from '../services/walletService';
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from '../config.js';
 
 import tiktok from "../assets/tiktok.svg";
 import linkedin2 from "../assets/linkedin2.svg";
@@ -68,10 +72,20 @@ import bnb from "../assets/bnb.svg";
 import solana from "../assets/sol.svg";
 
 
+const VALID_TABS = ['home', 'wallet', 'chat', 'history', 'trade', 'profile'];
+
 const MobileHomePage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const tabFromUrl = searchParams.get('tab') || 'home';
+  const initialTab = VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'home';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const tabFromUrlRef = useRef(false);
+  // Shareable order links: ?orderType=sell|buy&orderId=...
+  const highlightOrderId = searchParams.get('orderId') || undefined;
+  const highlightOrderType = (searchParams.get('orderType') === 'sell' || searchParams.get('orderType') === 'buy') ? searchParams.get('orderType') : undefined;
   const [showBalance, setShowBalance] = useState(true);
-  const [activeTab, setActiveTab] = useState('home');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [viewAccountData, setViewAccountData] = useState(null);
   const [selectedCurrency, setSelectedCurrency] = useState('USDT');
@@ -89,11 +103,13 @@ const MobileHomePage = () => {
   const [hasSeenBuySellOnboarding, setHasSeenBuySellOnboarding] = useState(false);
   const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [showWalletTransactionModal, setShowWalletTransactionModal] = useState(false);
+  const [showManageAccountModal, setShowManageAccountModal] = useState(false);
   const [pickOfWeekData, setPickOfWeekData] = useState([]);
 
   const [isLoadingPickOfWeek, setIsLoadingPickOfWeek] = useState(true);
   const [walletTransactionType, setWalletTransactionType] = useState(null);
   const [showChat, setShowChat] = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   // Wallet data states - SIMPLIFIED (matching Homepage.jsx)
   const [walletData, setWalletData] = useState({
@@ -117,7 +133,28 @@ const MobileHomePage = () => {
     logout
   } = useUser();
 
+  // Sync URL -> state when user hits back/forward (native back button support)
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'home';
+    const nextTab = VALID_TABS.includes(tab) ? tab : 'home';
+    if (nextTab !== activeTab) {
+      tabFromUrlRef.current = true;
+      setActiveTab(nextTab);
+      setActiveMenuSection(nextTab === 'history' ? 'wallet' : nextTab);
+    }
+  }, [location.pathname, location.search]);
 
+  // Push URL when tab changes from user interaction so back has in-app history
+  useEffect(() => {
+    if (tabFromUrlRef.current) {
+      tabFromUrlRef.current = false;
+      return;
+    }
+    const current = searchParams.get('tab') || 'home';
+    if (activeTab !== current) {
+      setSearchParams({ tab: activeTab }, { replace: false });
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const fetchUserDetails = async () => {
@@ -316,7 +353,7 @@ const MobileHomePage = () => {
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
-    const socketUrl = `${import.meta.env.VITE_API_BASE_URL || 'https://soctralapi-production.up.railway.app'}`;
+    const socketUrl = API_BASE_URL;
 
     if (!socketRef.current) {
       socketRef.current = io(socketUrl, {
@@ -507,6 +544,59 @@ const MobileHomePage = () => {
     };
   }, []);
 
+  // Chat unread badge (same pattern as desktop Homepage + Navbar)
+  useEffect(() => {
+    const handleChatUnreadUpdate = (event) => {
+      const { totalUnread } = event.detail || {};
+      if (typeof totalUnread === 'number') {
+        setChatUnreadCount(totalUnread);
+      }
+    };
+
+    window.addEventListener('chatUnreadCountUpdate', handleChatUnreadUpdate);
+    return () => {
+      window.removeEventListener('chatUnreadCountUpdate', handleChatUnreadUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !(user?._id || user?.id)) {
+      setChatUnreadCount(0);
+      return;
+    }
+
+    const fetchChatUnreadCount = async () => {
+      try {
+        await chatService.initializeChat(
+          user._id || user.id,
+          user.displayName || user.name || 'User',
+          user.avatarUrl || user.avatar
+        );
+        const channels = await chatService.getUserChannels();
+        const total = channels.reduce(
+          (sum, ch) => sum + (chatService.getUnreadCount(ch) || 0),
+          0
+        );
+        setChatUnreadCount(total);
+      } catch (err) {
+        console.warn('Could not fetch chat unread count (mobile):', err?.message);
+      }
+    };
+
+    let unsubscribeNewMessages = () => {};
+
+    const setup = async () => {
+      await fetchChatUnreadCount();
+      await pushNotificationService.initialize();
+      unsubscribeNewMessages = chatService.subscribeToNewMessages(fetchChatUnreadCount);
+    };
+
+    setup();
+
+    return () => {
+      unsubscribeNewMessages();
+    };
+  }, [isAuthenticated, user?._id, user?.id, user?.displayName, user?.name]);
 
   const handleViewAccountMetrics = (accountData) => {
     console.log('📱 MobileHomePage: Received view account request:', accountData);
@@ -1064,6 +1154,15 @@ const MobileHomePage = () => {
     setShowNotificationPanel(!showNotificationPanel);
   };
 
+  const handleManageAccountsClick = () => {
+    if (!isAuthenticated) {
+      setAuthModalType('manageAccounts');
+      setShowAuthModal(true);
+      return;
+    }
+    setShowManageAccountModal(true);
+  };
+
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) {
       setShowSlideMenu(false);
@@ -1149,6 +1248,8 @@ const MobileHomePage = () => {
               setActiveTab={setActiveTab}
               onSelectChatUser={handleChatUserSelect}
               onViewAccountMetrics={handleViewAccountMetrics}
+              highlightOrderId={highlightOrderId}
+              highlightOrderType={highlightOrderType}
             />
           </div>
         );
@@ -1183,13 +1284,20 @@ const MobileHomePage = () => {
             </div>
           </div>
         ) : showVerificationCard ? (
-          <div className="bg-[rgba(255,255,255,1)] p-5 rounded-lg text-[#fff] relative">
+          <div className="bg-[rgba(255,255,255,1)] p-5 rounded-lg text-[#fff] relative overflow-hidden">
             <button
               onClick={() => setShowVerificationCard(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10 transition-colors"
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-20 transition-colors"
             >
               <X className="text-black w-5 h-5" />
             </button>
+
+            {/* Coming Soon Overlay */}
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-lg">
+              <div className="bg-primary/90 text-white px-5 py-2 rounded-full text-sm font-semibold tracking-wide shadow-lg">
+                🚀 Coming Soon
+              </div>
+            </div>
 
             <div className="flex items-center text-black">
               <div className="max-w-[200px]">
@@ -1569,6 +1677,18 @@ const MobileHomePage = () => {
                   onClick={handleNotificationClick}
                   className="h-[20px] w-[20px] cursor-pointer hover:text-white transition-colors"
                 />
+                <button
+                  type="button"
+                  onClick={handleManageAccountsClick}
+                  className="flex flex-col items-center justify-center gap-0.5 min-w-[44px] rounded-lg bg-white/10 px-2 py-1 active:bg-white/20"
+                  aria-label="Upload or list an account for sale"
+                  title="Upload account to list for sale"
+                >
+                  <Upload className="h-[18px] w-[18px] text-gray-200 shrink-0" />
+                  <span className="text-[10px] font-medium leading-none text-gray-300">
+                    List
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -1629,15 +1749,22 @@ const MobileHomePage = () => {
 
               <button
                 onClick={() => handleTabClick('chat')}
-                className={`flex flex-col items-center py-2 px-3 rounded-lg transition-all duration-200 ${activeTab === 'chat'
+                className={`flex flex-col items-center py-2 px-3 rounded-lg transition-all duration-200 relative ${activeTab === 'chat'
                   ? 'text-primary '
                   : 'text-gray-400'
                   }`}
               >
-                <MessageCircle className={`w-5 h-5 mb-1 transition-colors duration-200 ${activeTab === 'chat'
-                  ? 'text-primary '
-                  : 'text-gray-400 hover:text-primary '
-                  }`} />
+                <span className="relative inline-flex mb-1">
+                  <MessageCircle className={`w-5 h-5 transition-colors duration-200 ${activeTab === 'chat'
+                    ? 'text-primary '
+                    : 'text-gray-400 hover:text-primary '
+                    }`} />
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 animate-pulse">
+                      {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                    </span>
+                  )}
+                </span>
                 <span className={`text-xs transition-colors duration-200 ${activeTab === 'chat'
                   ? 'text-primary '
                   : 'text-gray-400 hover:text-primary '
@@ -1705,6 +1832,11 @@ const MobileHomePage = () => {
           walletData={walletData}
         />
 
+        <ManageAccountModal
+          isOpen={showManageAccountModal}
+          onClose={() => setShowManageAccountModal(false)}
+        />
+
         {showAuthModal && (
           <>
             <div
@@ -1728,6 +1860,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && <TrendingUp className="w-8 h-8 text-primary" />}
                     {authModalType === 'chat' && <MessageCircle className="w-8 h-8 text-primary" />}
                     {authModalType === 'history' && <History className="w-8 h-8 text-primary" />}
+                    {authModalType === 'manageAccounts' && <Upload className="w-8 h-8 text-primary" />}
                   </div>
 
                   <h3 className="text-white font-semibold text-xl mb-2">Sign In Required</h3>
@@ -1738,6 +1871,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && "Please sign in to access the trading platform and buy/sell accounts safely."}
                     {authModalType === 'chat' && "Please sign in to access chat features and communicate with other users."}
                     {authModalType === 'history' && "Please sign in to view your transaction history and account activities."}
+                    {authModalType === 'manageAccounts' && "Please sign in to upload and list social accounts for sale, and manage your listings."}
                   </p>
 
                   <div className="flex gap-3 justify-center">

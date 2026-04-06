@@ -1,59 +1,44 @@
-import { useState, useMemo, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
 import {
-  Plus,
-  Eye,
-  EyeOff,
   ChevronLeft,
-  Star,
-  ArrowLeft,
-  X,
   ChevronRight,
-  ChevronDown,
-  Gift,
-  Bell,
+  Star
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Slider from "react-slick";
-import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
-import withdraw from "../../assets/withdrawal.svg";
-import btc from "../../assets/btc.svg";
-import usdt from "../../assets/usdt.svg";
-import eth from "../../assets/eth.svg";
+import "slick-carousel/slick/slick.css";
+import discord from "../../assets/discord.svg";
+import face from "../../assets/face.svg";
+import flickr from "../../assets/flickr.svg";
 import frame0 from "../../assets/frame1.svg";
 import frame00 from "../../assets/frame2.svg";
 import frame000 from "../../assets/frame3.svg";
-import badge from "../../assets/verifiedstar.svg";
 import ig from "../../assets/ig2.svg";
-import linkedin from "../../assets/linkedin.svg";
-import tik from "../../assets/tik.svg";
-import ig2 from "../../assets/socialicon.svg";
-import face from "../../assets/face.svg";
-import twitter from "../../assets/twitter.svg";
-import tiktok from "../../assets/tiktok.svg";
 import linkedin2 from "../../assets/linkedin2.svg";
-import snap from "../../assets/snapchat.svg";
-import youtube from "../../assets/youtube.svg";
-import telegram from "../../assets/telegram.svg";
-import discord from "../../assets/discord.svg";
-import pinterest from "../../assets/pinterest.svg";
-import reddit from "../../assets/reddit.svg";
-import wechat from "../../assets/wechat.svg";
 import onlyfans from "../../assets/onlyfans.svg";
-import flickr from "../../assets/flickr.svg";
-import vimeo from "../../assets/vimeo.svg";
-import steam from "../../assets/steam.png";
+import pinterest from "../../assets/pinterest.svg";
 import qoura from "../../assets/qoura.svg";
-import twitch from "../../assets/twitch.svg";
-import tumblr from "../../assets/tumblr.svg";
+import reddit from "../../assets/reddit.svg";
 import rumble from "../../assets/rumble.png";
-import ug1 from "../../assets/ug1.png";
-import { useAllSellOrders } from "../../hooks/useOrders";
-import { queryKeys } from "../../hooks/queryKeys";
-import { useUser } from "../../context/userContext";
+import snap from "../../assets/snapchat.svg";
+import ig2 from "../../assets/socialicon.svg";
 import logo from "../../assets/SoctralbgLogo.png";
-import apiService from "../../services/api"
+import steam from "../../assets/steam.png";
+import telegram from "../../assets/telegram.svg";
+import tiktok from "../../assets/tiktok.svg";
+import tumblr from "../../assets/tumblr.svg";
+import twitch from "../../assets/twitch.svg";
+import twitter from "../../assets/twitter.svg";
+import badge from "../../assets/verifiedstar.svg";
+import vimeo from "../../assets/vimeo.svg";
+import wechat from "../../assets/wechat.svg";
+import youtube from "../../assets/youtube.svg";
+import { API_BASE_URL } from "../../config.js";
+import { useUser } from "../../context/userContext";
+import { queryKeys } from "../../hooks/queryKeys";
+import { useAllSellOrders } from "../../hooks/useOrders";
+import apiService from "../../services/api";
 
 
 
@@ -111,6 +96,7 @@ const PLATFORM_ICONS = {
   flickr: flickr,
   vimeo: vimeo,
   qoura: qoura,
+  quora: qoura,
   twitch: twitch,
   tumblr: tumblr,
   steam: steam,
@@ -133,13 +119,16 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
   const [showRightScroll, setShowRightScroll] = useState(true);
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [loadingRowId, setLoadingRowId] = useState(null); // Track which row is loading
+  const [initiateConfirmPayload, setInitiateConfirmPayload] = useState(null); // { seller, accountData } for confirm dialog
+  const [showOwnSellOrderDialog, setShowOwnSellOrderDialog] = useState(false);
   // React Query handles fetching, caching, retry, and polling
+  const isAuthenticated = !!localStorage.getItem('token');
   const {
     data: ordersResponse,
     isLoading: isInitialLoad,
     error: queryError,
     isError
-  } = useAllSellOrders();
+  } = useAllSellOrders({ enabled: isAuthenticated });
 
   // Derive error message for display
   const error = isError ? (queryError?.message || 'Failed to load sell orders') : null;
@@ -190,7 +179,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
         return null;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -347,23 +336,14 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
 
 
 
-  const handleInitiateTrade = async (seller, accountData) => {
-    // Set loading state immediately for visual feedback
+  const proceedWithInitiateTrade = async (seller, accountData) => {
     setLoadingRowId(accountData?.id);
-
-    // Extract username from filters array
     const extractedUsername = accountData?.filters?.find(f => f.key === 'username')?.value ||
       accountData?.accountUsername ||
       accountData?.username ||
       accountData?.handle ||
       'N/A';
-
     const sellerImage = getSellerImage(seller);
-
-    // 🚀 OPTIMIZED: Build seller data immediately without waiting for wallet
-    // 🔥 Chat Tab Routing: table.jsx is for BUYERS browsing sell orders
-    //   - Clicking here means current user is BUYER, other user is SELLER
-    //   - Current user opens chat in Buy tab, seller sees it in Sell tab
     const sellerForChat = {
       id: seller.id,
       _id: seller.id,
@@ -375,13 +355,13 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       avatarUrl: sellerImage,
       image: sellerImage,
       status: 'online',
-      chatType: 'buy', // 🔥 FIXED: Current user is BUYER, so chatType is 'buy'
-      initiatorChatType: 'buy', // 🔥 Preserved for tab routing - initiator sees Buy tab
+      chatType: 'buy',
+      initiatorChatType: 'buy',
       price: accountData?.price || seller.price || 'N/A',
       accountId: accountData?.id || seller.accountId || seller.id,
       sellOrderId: accountData?.id || accountData?._id || seller.accountId,
       sellerId: seller.id || seller._id,
-      walletAddresses: {}, // Will be fetched in background
+      walletAddresses: {},
       platform: accountData?.platform || accountData?.item?.name?.toLowerCase() || 'Unknown',
       accountUsername: extractedUsername,
       username: extractedUsername,
@@ -389,42 +369,18 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       filters: accountData?.filters || [],
       metrics: accountData?.metrics || []
     };
-
-    // 🚀 IMMEDIATE: Store and navigate right away
     localStorage.setItem('selectedChatUser', JSON.stringify(sellerForChat));
-
-    // Call parent navigation handler immediately
-    if (setMenuSection) {
-      setMenuSection('chat');
-    }
-
-    // Call chat user selection handler immediately
-    if (onSelectChatUser) {
-      onSelectChatUser(sellerForChat);
-    }
-
-    // Dispatch events immediately
-    window.dispatchEvent(new CustomEvent('initiateTrade', {
-      detail: sellerForChat
-    }));
-
-    // 🔥 BACKGROUND: Fetch wallet addresses after navigation
+    if (setMenuSection) setMenuSection('chat');
+    if (onSelectChatUser) onSelectChatUser(sellerForChat);
+    window.dispatchEvent(new CustomEvent('initiateTrade', { detail: sellerForChat }));
     if (seller.id) {
       try {
-        let walletResponse = null;
-        try {
-          walletResponse = await apiService.get(`/user?id=${seller.id}`);
-        } catch (e) {
-          walletResponse = await apiService.get(`/api/users/${seller.id}`);
-        }
-
+        let walletResponse = await apiService.get(`/user?id=${seller.id}`).catch(() => apiService.get(`/api/users/${seller.id}`));
         if (walletResponse) {
           const sellerUser = walletResponse.user || walletResponse.data || walletResponse;
           if (sellerUser?.walletAddresses) {
-            // Update stored data with wallet addresses
             const updatedData = { ...sellerForChat, walletAddresses: sellerUser.walletAddresses };
             localStorage.setItem('selectedChatUser', JSON.stringify(updatedData));
-            // Dispatch update event
             window.dispatchEvent(new CustomEvent('initiateTrade', { detail: updatedData }));
           }
         }
@@ -432,9 +388,23 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
         console.warn('⚠️ Background wallet fetch failed:', error);
       }
     }
-
-    // Clear loading state
     setLoadingRowId(null);
+  };
+
+  const handleInitiateTrade = (seller, accountData) => {
+    const sellerId = seller?.id || seller?._id;
+    if (String(sellerId) === String(currentUser?._id || currentUser?.id)) {
+      setShowOwnSellOrderDialog(true);
+      return;
+    }
+    setInitiateConfirmPayload({ seller, accountData });
+  };
+
+  const handleConfirmInitiateTrade = async () => {
+    if (!initiateConfirmPayload) return;
+    const { seller, accountData } = initiateConfirmPayload;
+    setInitiateConfirmPayload(null);
+    await proceedWithInitiateTrade(seller, accountData);
   };
 
 
@@ -447,7 +417,9 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       platform: account.platform,
       metrics: account.metrics,
       filters: account.filters,
-      accountId: account.id
+      accountId: account.id,
+      price: account.price,
+      currency: account.currency
     };
 
 
@@ -751,7 +723,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
                               <button
                                 onClick={() => handleInitiateTrade(row.seller, row)}
                                 disabled={loadingRowId === row.id}
-                                className={`py-[12px] px-[30px] font-medium bg-primary hover:bg-primary text-xs text-white rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''}`}
+                                className={`py-[12px] px-[30px] font-medium bg-primary hover:bg-primary text-xs text-white rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''} ${String(row.seller?.id || row.seller?._id) === String(currentUser?._id || currentUser?.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 aria-label="Initiate trade"
                               >
                                 {loadingRowId === row.id ? (
@@ -783,6 +755,51 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
           </section>
         </div>
       </div>
+
+      {/* Own sell order dialog - cannot initiate trade on own sell orders */}
+      {showOwnSellOrderDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOwnSellOrderDialog(false)}>
+          <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-semibold text-lg mb-2">Cannot initiate trade</h3>
+            <p className="text-gray-400 text-sm">
+              You cannot initiate a trade on your own sell orders.
+            </p>
+            <div className="flex justify-end mt-4">
+              <button type="button" onClick={() => setShowOwnSellOrderDialog(false)} className="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-opacity">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Initiate Trade confirmation dialog (Pick of the Week / home) */}
+      {initiateConfirmPayload && (() => {
+        const { seller, accountData } = initiateConfirmPayload;
+        const name = seller?.name || seller?.displayName || 'this seller';
+        const platform = accountData?.platform || accountData?.item?.name || 'Unknown';
+        const username = accountData?.filters?.find(f => f.key === 'username')?.value ||
+          accountData?.accountUsername || accountData?.username || accountData?.handle || 'N/A';
+        const price = accountData?.price || seller?.price;
+        const currency = accountData?.currency || '';
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setInitiateConfirmPayload(null)}>
+            <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+              <h3 className="text-white font-semibold text-lg mb-2">Initiate trade?</h3>
+              <p className="text-gray-400 text-sm mb-4">
+                Are you sure you want to initiate a trade with <span className="text-white font-medium">{name}</span>?
+              </p>
+              <div className="bg-black/30 rounded-lg p-3 mb-5 text-sm">
+                <p className="text-gray-400"><span className="text-gray-500">Platform:</span> <span className="text-white capitalize">{platform}</span></p>
+                <p className="text-gray-400 mt-1"><span className="text-gray-500">Username:</span> <span className="text-white">{username}</span></p>
+                {price != null && price !== '' && <p className="text-gray-400 mt-1"><span className="text-gray-500">Price:</span> <span className="text-green-400">${price}{currency ? ` ${currency}` : ''}</span></p>}
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button type="button" onClick={() => setInitiateConfirmPayload(null)} className="px-4 py-2 rounded-lg text-gray-400 hover:bg-white/10 transition-colors">Cancel</button>
+                <button type="button" onClick={handleConfirmInitiateTrade} className="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-opacity">Confirm</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 };

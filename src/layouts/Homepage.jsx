@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import {
   Plus,
   Eye,
@@ -59,14 +59,26 @@ import WalletSetupModal from '../components/Desktop/WalletModal';
 import UploadAccountListed from '../components/Desktop/UploadAccountListed';
 import walletService from '../services/walletService';
 import chatService from '../services/chatService';
+import pushNotificationService from '../services/pushNotificationService';
 import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from '../config.js';
 
 
+
+const HOMEPAGE_VALID_TABS = ['home', 'wallet', 'chat', 'history', 'trade', 'profile'];
 
 const HomePage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const tabFromUrl = searchParams.get('tab') || 'home';
+  const initialTab = HOMEPAGE_VALID_TABS.includes(tabFromUrl) ? tabFromUrl : 'home';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  // Shareable order links: ?orderType=sell|buy&orderId=...
+  const highlightOrderId = searchParams.get('orderId') || undefined;
+  const highlightOrderType = (searchParams.get('orderType') === 'sell' || searchParams.get('orderType') === 'buy') ? searchParams.get('orderType') : undefined;
+  const tabFromUrlRef = useRef(false);
   const [showBalance, setShowBalance] = useState(true);
-  const [activeTab, setActiveTab] = useState("home");
   const [selectedCurrency, setSelectedCurrency] = useState("USDT");
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
   const [tableHeight, setTableHeight] = useState(320);
@@ -118,8 +130,28 @@ const HomePage = () => {
 
   const { logout } = useUser();
 
+  // Sync URL -> state when user hits back/forward (native back button support)
+  useEffect(() => {
+    const tab = searchParams.get('tab') || 'home';
+    const nextTab = HOMEPAGE_VALID_TABS.includes(tab) ? tab : 'home';
+    if (nextTab !== activeTab) {
+      tabFromUrlRef.current = true;
+      setActiveTab(nextTab);
+      setActiveMenuSection(nextTab === 'history' ? 'wallet' : nextTab);
+    }
+  }, [location.pathname, location.search]);
 
-
+  // Push URL when tab changes from user interaction so back has in-app history
+  useEffect(() => {
+    if (tabFromUrlRef.current) {
+      tabFromUrlRef.current = false;
+      return;
+    }
+    const current = searchParams.get('tab') || 'home';
+    if (activeTab !== current) {
+      setSearchParams({ tab: activeTab }, { replace: false });
+    }
+  }, [activeTab]);
 
   // Socket.IO connection setup
   useEffect(() => {
@@ -135,7 +167,7 @@ const HomePage = () => {
     if (!token) return;
 
     // Initialize socket connection
-    socketRef.current = io('https://soctra-api-6bcecb2e8189.herokuapp.com', {
+    socketRef.current = io(API_BASE_URL, {
       auth: { token },
       transports: ['websocket'],
       reconnection: true,
@@ -431,7 +463,7 @@ const HomePage = () => {
     };
   }, []);
 
-  // Listen for chat unread count updates from Chat component
+  // Listen for chat unread count updates from Chat component (when Chat is mounted)
   useEffect(() => {
     const handleChatUnreadUpdate = (event) => {
       const { totalUnread } = event.detail || {};
@@ -446,6 +478,43 @@ const HomePage = () => {
       window.removeEventListener('chatUnreadCountUpdate', handleChatUnreadUpdate);
     };
   }, []);
+
+  // Real-time chat unread count: init once, then update on every new message (no polling)
+  useEffect(() => {
+    if (!isAuthenticated || !userData?._id) {
+      setChatUnreadCount(0);
+      return;
+    }
+
+    const fetchChatUnreadCount = async () => {
+      try {
+        await chatService.initializeChat(
+          userData._id || userData.id,
+          userData.displayName || userData.name || 'User',
+          userData.avatarUrl || userData.avatar
+        );
+        const channels = await chatService.getUserChannels();
+        const total = channels.reduce((sum, ch) => sum + (chatService.getUnreadCount(ch) || 0), 0);
+        setChatUnreadCount(total);
+      } catch (err) {
+        console.warn('Could not fetch chat unread count:', err?.message);
+      }
+    };
+
+    let unsubscribeNewMessages = () => {};
+
+    const setup = async () => {
+      await fetchChatUnreadCount();
+      await pushNotificationService.initialize();
+      unsubscribeNewMessages = chatService.subscribeToNewMessages(fetchChatUnreadCount);
+    };
+
+    setup();
+
+    return () => {
+      unsubscribeNewMessages();
+    };
+  }, [isAuthenticated, userData?._id, userData?.id, userData?.displayName, userData?.name]);
 
   // Enhanced crypto image mapping with fallbacks
   const getCryptoImage = (currencyKey, currencyName) => {
@@ -1158,6 +1227,8 @@ const HomePage = () => {
               setActiveTab('chat');
             }}
             onViewAccountMetrics={handleViewAccountMetrics}
+            highlightOrderId={highlightOrderId}
+            highlightOrderType={highlightOrderType}
           />
         );
       case 'history':
@@ -1643,6 +1714,8 @@ const HomePage = () => {
                 setAuthModalType={setAuthModalType}
                 setActiveMenuSection={setActiveMenuSection}
                 setActiveTab={setActiveTab}
+                highlightOrderId={highlightOrderId}
+                highlightOrderType={highlightOrderType}
               />
             )}
 
@@ -1660,15 +1733,22 @@ const HomePage = () => {
             )}
 
             {showVerificationCard && activeTab !== 'trade' && activeTab !== 'history' && activeTab !== 'chat' && (
-              /* Complete Verification Card */
-              <div className="bg-[rgba(24,24,24,1)] p-5 rounded-lg text-[#fff] relative">
+              /* Complete Verification Card - Coming Soon */
+              <div className="bg-[rgba(24,24,24,1)] p-5 rounded-lg text-[#fff] relative overflow-hidden">
                 {/* Cancel Button */}
                 <button
                   onClick={() => setShowVerificationCard(false)}
-                  className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors"
+                  className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition-colors z-20"
                 >
                   <X className="text-white w-5 h-5" />
                 </button>
+
+                {/* Coming Soon Overlay */}
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-lg">
+                  <div className="bg-primary/90 text-white px-6 py-2 rounded-full text-sm font-semibold tracking-wide shadow-lg">
+                    🚀 Coming Soon
+                  </div>
+                </div>
 
                 <div className="flex gap-4 items-center">
                   <div>
@@ -1689,20 +1769,8 @@ const HomePage = () => {
 
                       <div className="mt-7">
                         <button
-                          className="text-sm bg-primary text-white py-3 px-6 rounded-full hover:bg-opacity-80 transition-colors"
-                          onClick={() => {
-                            // Check if user is authenticated before allowing access to verification
-                            if (!isAuthenticated) {
-                              // Show the same authentication modal as navbar
-                              setShowAuthModal(true);
-                              setAuthModalType('profile');
-                              return;
-                            }
-
-                            // If authenticated, proceed to profile section
-                            setActiveMenuSection('profile');
-                            setActiveTab('profile');
-                          }}
+                          className="text-sm bg-primary text-white py-3 px-6 rounded-full opacity-50 cursor-not-allowed"
+                          disabled
                         >
                           Verify Now
                         </button>

@@ -19,12 +19,14 @@ import sol from '../../assets/sol.svg';
 import bnb from '../../assets/bnb.svg';
 import trx from '../../assets/trx.svg';
 import base from '../../assets/base-logo.png';
+import usdc from '../../assets/usdc.svg';
 
 // Icon map for assets
 const ASSET_ICONS = {
     BTC: btc,
     ETH: eth,
     USDT: usdt,
+    USDC: usdc,
     BASE: base,
     SOL: sol,
     BNB: bnb,

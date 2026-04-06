@@ -106,7 +106,7 @@ const UserContext = createContext();
 export const UserProvider = ({ children }) => {
   const [state, dispatch] = useReducer(userReducer, initialState);
   const initializeRef = useRef(false);
-  const updateCountRef = useRef(0);
+
 
   // Initialize user from storage on app start - ONLY ONCE
   useEffect(() => {
@@ -255,6 +255,77 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  const signUpWithGoogle = async (idToken) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.signUpWithGoogle(idToken);
+      if (response?.pendingGoogle && response?.token) {
+        dispatch({ type: USER_ACTIONS.SET_USER, payload: null });
+        return {
+          status: true,
+          success: true,
+          pendingGoogle: true,
+          token: response.token,
+          message: response.message || "Enter your phone number to complete sign up",
+        };
+      }
+      if (!response?.user || !response?.token) {
+        throw new Error(response?.message || "Google sign-in failed");
+      }
+      dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
+      dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
+      return {
+        status: true,
+        success: true,
+        user: response.user,
+        token: response.token,
+        message: response.message || "Signed in with Google successfully",
+      };
+    } catch (error) {
+      const errorMessage = error.message || "Google sign-in failed";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setInitialPhone = async (phoneNumber) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.setInitialPhone(phoneNumber);
+      if (response?.user) {
+        dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
+      }
+      return response;
+    } catch (error) {
+      setError(error.message || "Failed to set phone number");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeGoogleSignup = async (phoneNumber) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.completeGoogleSignup(phoneNumber);
+      if (response?.user) {
+        dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
+        dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
+      }
+      return response;
+    } catch (error) {
+      setError(error.message || "Failed to complete sign up");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getUserByToken = async () => {
     try {
       setLoading(true);
@@ -358,6 +429,69 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  const sendOTPToEmail = async (email) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.sendOTPWithEmail(email, 'verification');
+      if (response.message && response.message.toLowerCase().includes('sent successfully')) {
+        return response;
+      } else if (response.success || response.status) {
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to send OTP');
+      }
+    } catch (error) {
+      console.error('UserContext: Send OTP to email error:', error);
+      setError(error.message || 'Failed to send OTP');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOTPToEmail = async (email, otp) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.verifyOTPWithEmail(email, otp, 'verification');
+      if (response.message && response.message.toLowerCase().includes('verified successfully')) {
+        return response;
+      } else if (response.success || response.status) {
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to verify OTP');
+      }
+    } catch (error) {
+      console.error('UserContext: Verify OTP error:', error);
+      setError(error.message || 'Failed to verify OTP');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendOTPToEmail = async (email) => {
+    try {
+      setLoading(true);
+      clearError();
+      const response = await authService.sendOTPWithEmail(email, 'verification');
+      if (response.message && response.message.toLowerCase().includes('sent successfully')) {
+        return response;
+      } else if (response.success || response.status) {
+        return response;
+      } else {
+        throw new Error(response.message || 'Failed to resend OTP');
+      }
+    } catch (error) {
+      console.error('UserContext: Resend OTP error:', error);
+      setError(error.message || 'Failed to resend OTP');
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateUserProfile = async (newUserData) => {
     try {
       // Merge with existing user data to get complete user object
@@ -397,7 +531,7 @@ export const UserProvider = ({ children }) => {
     }
   };
 
-  // Signup flow functions with anti-loop protection
+  // Signup flow functions
   const setSignupStep = (step) => {
     if (state.signupStep !== step) {
       dispatch({ type: USER_ACTIONS.SET_SIGNUP_STEP, payload: step });
@@ -405,38 +539,17 @@ export const UserProvider = ({ children }) => {
   };
 
   const updateSignupData = (data) => {
-    updateCountRef.current += 1;
-
-    if (updateCountRef.current > 50) {
-      console.error('INFINITE LOOP DETECTED in updateSignupData!');
-      console.trace('Stack trace:');
-      return;
-    }
-
     if (!data || typeof data !== 'object') {
       console.warn('updateSignupData called with invalid data:', data);
       return;
     }
 
-    const hasActualChanges = Object.keys(data).some(key => {
-      const currentValue = state.signupData[key];
-      const newValue = data[key];
-
-      if (typeof currentValue === 'object' && typeof newValue === 'object') {
-        return JSON.stringify(currentValue) !== JSON.stringify(newValue);
-      }
-      return currentValue !== newValue;
-    });
-
-    if (hasActualChanges) {
-      dispatch({ type: USER_ACTIONS.UPDATE_SIGNUP_DATA, payload: data });
-    } else {
-    }
+    // Simply dispatch the update — the reducer handles the merge
+    dispatch({ type: USER_ACTIONS.UPDATE_SIGNUP_DATA, payload: data });
   };
 
   const clearSignupData = () => {
     console.log('UserContext: Clearing signup data');
-    updateCountRef.current = 0;
     dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
   };
 
@@ -450,9 +563,15 @@ export const UserProvider = ({ children }) => {
     signupData: state.signupData,
     createUser,
     signInUser,
+    signUpWithGoogle,
+    setInitialPhone,
+    completeGoogleSignup,
     sendOTP,
     verifyOTP,
     resendOTP,
+    sendOTPToEmail,
+    verifyOTPToEmail,
+    resendOTPToEmail,
     updateUserProfile,
     logout,
     setSignupStep,

@@ -1,15 +1,20 @@
 import { StreamChat } from 'stream-chat';
+import apiService from './api';
+import pushNotificationService from './pushNotificationService';
 
 class ChatService {
   constructor() {
     this.client = null;
     this.currentUser = null;
     this.apiKey = '39h4m4hmwswh';
+    this.outgoingMessageUnsubscribe = null;
   }
 
   async initializeChat(userId, userName, userImage) {
     try {
       if (this.client && this.currentUser?.id === userId) {
+        this.setupOutgoingPushForwarder();
+        await pushNotificationService.initialize();
         console.log('✅ Chat already initialized for user:', userId);
         return this.client;
       }
@@ -29,6 +34,8 @@ class ChatService {
       );
 
       this.currentUser = { id: userId, name: userName, image: userImage };
+      this.setupOutgoingPushForwarder();
+      await pushNotificationService.initialize();
       // console.log('✅ Stream Chat initialized successfully');
 
       return this.client;
@@ -68,6 +75,10 @@ class ChatService {
 
   async disconnect() {
     try {
+      if (this.outgoingMessageUnsubscribe) {
+        this.outgoingMessageUnsubscribe();
+        this.outgoingMessageUnsubscribe = null;
+      }
       if (this.client) {
         await this.client.disconnectUser();
         this.client = null;
@@ -77,6 +88,45 @@ class ChatService {
     } catch (error) {
       console.error('❌ Error disconnecting chat:', error);
     }
+  }
+
+  setupOutgoingPushForwarder() {
+    if (!this.client || !this.currentUser) return;
+    if (this.outgoingMessageUnsubscribe) {
+      this.outgoingMessageUnsubscribe();
+      this.outgoingMessageUnsubscribe = null;
+    }
+
+    const handler = async (event) => {
+      try {
+        const message = event?.message;
+        if (!message) return;
+        if (message.user?.id !== this.currentUser.id) return;
+        if (message.silent === true) return;
+
+        const channelType = event?.channel_type || event?.cid?.split(':')?.[0] || 'messaging';
+        const channelId = event?.channel_id || event?.cid?.split(':')?.[1];
+        if (!channelType || !channelId) return;
+
+        await apiService.post('/web-push/chat-notify', {
+          channelType,
+          channelId,
+          messageText: message.text || '',
+          senderName: this.currentUser.name || 'New message',
+        });
+      } catch (error) {
+        console.warn('Push relay failed:', error?.message || error);
+      }
+    };
+
+    this.client.on('message.new', handler);
+    this.outgoingMessageUnsubscribe = () => {
+      try {
+        this.client?.off('message.new', handler);
+      } catch (error) {
+        // no-op
+      }
+    };
   }
 
 
@@ -99,36 +149,23 @@ class ChatService {
       const userIds = [this.currentUser.id, otherUserId].sort();
       const userId = this.currentUser.id;
 
-      // 🔥 CRITICAL: Include chatType AND orderId in channelId to create separate channels per trade
-      // 🔥 FIX: Stream Chat has a 64-char max for channel IDs
-      // Full MongoDB ObjectIds are 24 chars each, so we truncate userIds to last 12 chars
-      // Format: {last12ofUser1}_{last12ofUser2}_{chatType}_{orderId} ≈ 54 chars max
-      const orderId = additionalData.sellOrderId || additionalData.buyOrderId || additionalData.accountId || '';
+      // 🔥 STABLE CHANNEL ID: One channel per (user1, user2, tradeType). No orderId.
+      // Stream Chat 64-char max: truncate userIds to last 12 chars.
+      // Format: {last12ofUser1}_{last12ofUser2}_{chatType} — reused for all trades between this pair + type.
       const shortUser1 = userIds[0].slice(-12);
       const shortUser2 = userIds[1].slice(-12);
-      const baseChannelId = orderId
-        ? `${shortUser1}_${shortUser2}_${chatType}_${orderId}`
-        : `${shortUser1}_${shortUser2}_${chatType}`;
+      const baseChannelId = `${shortUser1}_${shortUser2}_${chatType}`;
       const uniqueMembers = [...new Set([this.currentUser.id, otherUserId])];
 
-      // 🔥 NEW: Check if this channel was previously deleted by current user
+      // When user had "deleted" this chat, reuse the same channel (don't create a new one).
       const deletionKey = `deletedChannel_${userId}_${baseChannelId}`;
-      const deletedTimestamp = localStorage.getItem(deletionKey);
+      if (localStorage.getItem(deletionKey)) {
+        localStorage.removeItem(deletionKey);
+        const otherUserDeletionKey = `deletedChannel_${otherUserId}_${baseChannelId}`;
+        localStorage.removeItem(otherUserDeletionKey);
+      }
 
       let channelId = baseChannelId;
-      let forceNewChannel = false;
-
-      if (deletedTimestamp) {
-        // 🔥 Create a NEW channel with timestamp suffix to avoid old history
-        channelId = `${baseChannelId}_${Date.now()}`;
-        forceNewChannel = true;
-        console.log('🆕 Creating FRESH channel (previous was deleted):', channelId);
-
-        // 🔥 FIXED: Clear deletion markers for BOTH users
-        const otherUserDeletionKey = `deletedChannel_${otherUserId}_${baseChannelId}`;
-        console.log('📝 Clearing deletion markers for both users:', deletionKey, otherUserDeletionKey);
-        localStorage.removeItem(deletionKey);
-      }
 
       // 🔥 CRITICAL: Extract ALL possible metadata sources with priority order
       const requestedAccountId = additionalData.accountId || additionalData.account_id;
@@ -151,38 +188,29 @@ class ChatService {
         'N/A';
 
       console.log('🔧 ========== CREATE/GET CHANNEL ==========');
-      console.log('📋 Input Data:', { channelId, baseChannelId, forceNewChannel, members: uniqueMembers, chatType });
+      console.log('📋 Input Data:', { channelId, members: uniqueMembers, chatType });
 
-      // Query for existing channel - only if not forcing new channel
-      let existingChannels = [];
-      if (!forceNewChannel) {
-        existingChannels = await this.client.queryChannels({
-          type: channelTypeStr,
-          id: channelId
-        });
+      // Query for existing channel (stable ID only; legacy lookup for backward compat)
+      let existingChannels = await this.client.queryChannels({
+        type: channelTypeStr,
+        id: channelId
+      });
 
-        // 🔥 BACKWARD COMPAT: If no channel found with new short ID format,
-        // try the old full-length userId format for existing channels
-        if (existingChannels.length === 0) {
-          const legacyChannelId = orderId
-            ? `${userIds[0]}_${userIds[1]}_${chatType}_${orderId}`
-            : `${userIds[0]}_${userIds[1]}_${chatType}`;
-          if (legacyChannelId !== channelId) {
-            console.log('🔄 Trying legacy channel ID format:', legacyChannelId);
-            const legacyChannels = await this.client.queryChannels({
-              type: channelTypeStr,
-              id: legacyChannelId
-            });
-            if (legacyChannels.length > 0) {
-              console.log('✅ Found existing channel with legacy ID format');
-              existingChannels = legacyChannels;
-              channelId = legacyChannelId;
-            }
+      if (existingChannels.length === 0) {
+        const legacyChannelId = `${userIds[0]}_${userIds[1]}_${chatType}`;
+        if (legacyChannelId !== channelId) {
+          const legacyChannels = await this.client.queryChannels({
+            type: channelTypeStr,
+            id: legacyChannelId
+          });
+          if (legacyChannels.length > 0) {
+            existingChannels = legacyChannels;
+            channelId = legacyChannelId;
           }
         }
       }
 
-      let isNewChannel = existingChannels.length === 0 || forceNewChannel;
+      let isNewChannel = existingChannels.length === 0;
       let isNewTradeRequest = false;
       let channel;
 
@@ -347,8 +375,22 @@ class ChatService {
     }
   }
 
-
-
+  /**
+   * Watch and return a support (appeal) channel. Call after backend created it via POST /support/channel.
+   */
+  async watchSupportChannel(channelType, channelId) {
+    try {
+      if (!this.client || !this.currentUser) {
+        throw new Error('Chat client not initialized');
+      }
+      const channel = this.client.channel(channelType, channelId);
+      await channel.watch();
+      return channel;
+    } catch (error) {
+      console.error('❌ watchSupportChannel error:', error.message);
+      throw error;
+    }
+  }
 
   async getUserChannels() {
     try {
@@ -496,6 +538,25 @@ class ChatService {
       console.error('❌ Error getting unread count:', error);
       return 0;
     }
+  }
+
+  /**
+   * Subscribe to real-time new message events (for unread badge etc.).
+   * Call after initializeChat(). Returns unsubscribe function.
+   */
+  subscribeToNewMessages(callback) {
+    if (!this.client) return () => {};
+    const handler = () => {
+      if (typeof callback === 'function') callback();
+    };
+    this.client.on('message.new', handler);
+    return () => {
+      try {
+        this.client.off('message.new', handler);
+      } catch (e) {
+        // no-op if client disconnected
+      }
+    };
   }
 
   async searchUsers(searchTerm) {

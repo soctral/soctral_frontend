@@ -2,7 +2,15 @@
 // services/authService.js - Improved Auth Service
 // ========================================
 
-import apiService from './api.js';
+// Lazy-load api to avoid "Cannot access before initialization" (bundle init order)
+let _apiService = null;
+async function getApiService() {
+  if (!_apiService) {
+    const mod = await import('./api.js');
+    _apiService = mod.default;
+  }
+  return _apiService;
+}
 
 class AuthService {
   constructor() {
@@ -46,13 +54,14 @@ class AuthService {
     // });
   }
 
-  // Unified token storage method
+  // Unified token storage method (replaces any existing token)
   async ensureTokenStorage(token, userData) {
     try {
       if (!token || !userData) {
         throw new Error('Token and user data are required');
       }
 
+      this.storage.removeItem('authToken');
       this.storage.setItem('authToken', token);
       this.storage.setItem('userData', JSON.stringify(userData));
       this.storage.setItem('hasCompletedSignup', 'true');
@@ -83,7 +92,8 @@ class AuthService {
           await new Promise(resolve => setTimeout(resolve, 1000 * i));
         }
 
-        return await apiService.request(endpoint, options);
+        const api = await getApiService();
+        return await api.request(endpoint, options);
       } catch (error) {
         lastError = error;
         console.warn(`❌ Attempt ${i + 1} failed:`, error.message);
@@ -203,6 +213,67 @@ class AuthService {
 
     } catch (error) {
       console.error('❌ Create user failed:', error.message);
+      throw error;
+    }
+  }
+
+  // Sign up or sign in with Google (uses same backend endpoint)
+  async signUpWithGoogle(idToken) {
+    try {
+      if (!idToken || typeof idToken !== "string") {
+        throw new Error("Google credential is required");
+      }
+      const response = await this.requestWithRetry("/auth/signupWithGoogle", {
+        method: "POST",
+        body: JSON.stringify({ idToken }),
+      });
+      let processedResponse = response;
+      if (
+        response &&
+        typeof response === "object" &&
+        response.data &&
+        typeof response.data === "string"
+      ) {
+        try {
+          const encryptionService = (await import("./encryption.service.js")).default;
+          processedResponse = encryptionService.decrypt(response.data);
+        } catch {
+          processedResponse = response;
+        }
+      }
+      if (processedResponse?.status && processedResponse?.pendingGoogle && processedResponse?.token) {
+        this.storage.removeItem('authToken');
+        this.storage.setItem('authToken', processedResponse.token);
+        this.storage.removeItem('userData');
+        return {
+          status: true,
+          success: true,
+          pendingGoogle: true,
+          token: processedResponse.token,
+          message: processedResponse.message || "Enter your phone number to complete sign up",
+        };
+      }
+      if (
+        processedResponse?.status &&
+        processedResponse?.token &&
+        processedResponse?.user
+      ) {
+        await this.ensureTokenStorage(processedResponse.token, processedResponse.user);
+        return {
+          status: true,
+          success: true,
+          token: processedResponse.token,
+          user: processedResponse.user,
+          message: processedResponse.message || "Signed in with Google successfully",
+        };
+      }
+      const errorMessage =
+        processedResponse?.message ||
+        processedResponse?.error ||
+        "Google sign-in failed";
+      throw new Error(errorMessage);
+    } catch (error) {
+      console.error("❌ Google sign-in failed:", error.message);
       throw error;
     }
   }
@@ -761,27 +832,47 @@ class AuthService {
     }
   }
 
-  // NEW METHOD: Get user wallet info
+  // NEW METHOD: Get user wallet info (decrypt on frontend if backend sent encrypted payload)
   async getUserWalletInfo() {
     try {
       if (!this.isAuthenticated()) {
         throw new Error('User not authenticated');
       }
 
-      const response = await this.requestWithRetry('/user/wallet-info');
+      let response = await this.requestWithRetry('/user/wallet-info');
 
-      if (response.walletAddresses && response.walletBalances) {
+      // Decrypt on frontend if response is still encrypted (same pattern as login/create)
+      if (
+        response &&
+        typeof response === 'object' &&
+        response.data &&
+        typeof response.data === 'string' &&
+        !response.walletAddresses
+      ) {
+        try {
+          const encryptionService = (await import('./encryption.service.js')).default;
+          response = encryptionService.decrypt(response.data);
+        } catch (decryptError) {
+          console.warn('⚠️ Wallet info response was encrypted but decryption failed:', decryptError.message);
+        }
+      }
+
+      // Normalize: accept top-level or nested (response.data.walletAddresses)
+      const walletAddresses = response?.walletAddresses ?? response?.data?.walletAddresses;
+      const walletBalances = response?.walletBalances ?? response?.data?.walletBalances;
+
+      if (walletAddresses && walletBalances) {
         // Store wallet info in localStorage for caching
         this.storage.setItem('walletInfo', JSON.stringify({
-          walletAddresses: response.walletAddresses,
-          walletBalances: response.walletBalances,
+          walletAddresses,
+          walletBalances,
           lastUpdated: new Date().toISOString()
         }));
 
         return {
           status: true,
-          walletAddresses: response.walletAddresses,
-          walletBalances: response.walletBalances,
+          walletAddresses,
+          walletBalances,
           message: 'Wallet info retrieved successfully'
         };
       }
@@ -833,15 +924,34 @@ class AuthService {
         throw new Error('Invalid user ID format');
       }
 
-      const response = await this.requestWithRetry(`/user/wallet-info?userId=${userId}`);
+      let response = await this.requestWithRetry(`/user/wallet-info?userId=${userId}`);
 
-      if (response.walletAddresses && response.walletBalances) {
+      // Decrypt on frontend if response is still encrypted
+      if (
+        response &&
+        typeof response === 'object' &&
+        response.data &&
+        typeof response.data === 'string' &&
+        !response.walletAddresses
+      ) {
+        try {
+          const encryptionService = (await import('./encryption.service.js')).default;
+          response = encryptionService.decrypt(response.data);
+        } catch (decryptError) {
+          console.warn('⚠️ Wallet info (by id) response was encrypted but decryption failed:', decryptError.message);
+        }
+      }
+
+      const walletAddresses = response?.walletAddresses ?? response?.data?.walletAddresses;
+      const walletBalances = response?.walletBalances ?? response?.data?.walletBalances;
+
+      if (walletAddresses && walletBalances) {
         console.log('✅ Wallet info retrieved successfully for user:', userId);
 
         return {
           status: true,
-          walletAddresses: response.walletAddresses,
-          walletBalances: response.walletBalances,
+          walletAddresses,
+          walletBalances,
           message: 'Wallet info retrieved successfully'
         };
       }
@@ -1086,6 +1196,59 @@ class AuthService {
     }
   }
 
+  // Complete Google sign-up: create profile with phone (only when we have a pending Google token)
+  async completeGoogleSignup(phoneNumber) {
+    try {
+      if (!this.getAuthToken()) {
+        throw new Error('Session expired. Please sign in with Google again.');
+      }
+      const normalized = String(phoneNumber).replace(/[\s\-\(\)]/g, '').trim();
+      if (!normalized || normalized.length < 7) {
+        throw new Error('Valid phone number is required');
+      }
+      const response = await this.requestWithRetry('/auth/complete-google-signup', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: normalized }),
+      });
+      if (response?.status && response?.token && response?.user) {
+        await this.ensureTokenStorage(response.token, response.user);
+        return { ...response, user: response.user };
+      }
+      throw new Error(response?.message || 'Failed to complete sign up');
+    } catch (error) {
+      console.error('❌ Complete Google signup failed:', error.message);
+      throw error;
+    }
+  }
+
+  // Set initial phone (for existing Google users who don't have a phone yet)
+  async setInitialPhone(phoneNumber) {
+    try {
+      if (!this.isAuthenticated()) {
+        throw new Error('User not authenticated');
+      }
+      const normalized = String(phoneNumber).replace(/[\s\-\(\)]/g, '').trim();
+      if (!normalized || normalized.length < 7) {
+        throw new Error('Valid phone number is required');
+      }
+      const response = await this.requestWithRetry('/user/set-initial-phone', {
+        method: 'PUT',
+        body: JSON.stringify({ phoneNumber: normalized }),
+      });
+      if (response.status) {
+        const latest = await this.getCurrentUser();
+        if (latest?.user) {
+          this.storage.setItem('userData', JSON.stringify(latest.user));
+          return { ...response, user: latest.user };
+        }
+      }
+      return response;
+    } catch (error) {
+      console.error('❌ Set initial phone failed:', error.message);
+      throw error;
+    }
+  }
+
   // Get user verification status (NEW METHOD)
   getUserVerificationStatus() {
     try {
@@ -1237,6 +1400,7 @@ class AuthService {
       });
 
       if (response.token) {
+        this.storage.removeItem('authToken');
         this.storage.setItem('authToken', response.token);
         // console.log('✅ Token refreshed successfully');
         return response.token;
@@ -1425,7 +1589,8 @@ class AuthService {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await apiService.request('/user/upload-bitmoji', {
+      const api = await getApiService();
+      const response = await api.request('/user/upload-bitmoji', {
         method: 'POST',
         body: formData,
         headers

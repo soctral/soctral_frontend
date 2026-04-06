@@ -24,6 +24,8 @@ import flickr from "../../assets/flickr.svg";
 import vimeo from "../../assets/vimeo.svg";
 import steam from "../../assets/steam.png";
 import qoura from "../../assets/qoura.svg";
+import usdc from "../../assets/usdc.svg";
+
 import twitch from "../../assets/twitch.svg";
 import tumblr from "../../assets/tumblr.svg";
 import btc from "../../assets/btc.svg";
@@ -35,10 +37,13 @@ import bnb from "../../assets/bnb.svg";
 import solana from "../../assets/sol.svg";
 import rumble from "../../assets/rumble.png";
 import Filters from "../../components/Desktop/Filter";
+import { useQuery } from "@tanstack/react-query";
+import { useUser } from "../../context/userContext";
 import { useAllSellOrders, useAllBuyOrders } from "../../hooks/useOrders";
 import { queryKeys } from "../../hooks/queryKeys";
 import logo from "../../assets/SoctralbgLogo.png";
-import apiService from "../../services/api"
+import apiService from "../../services/api";
+import marketplaceService from "../../services/marketplaceService";
 
 
 const LoadingSpinner = () => (
@@ -97,6 +102,7 @@ const PLATFORM_ICONS = {
   steam: steam,
   rumble: rumble,
   qoura: qoura,
+  quora: qoura,
   twitch: twitch,
   tumblr: tumblr,
 };
@@ -107,6 +113,7 @@ const CURRENCY_ICONS = {
   BITCOIN: btcs,
   USDT: usdt,
   TETHER: usdt,
+  USDC: usdc,
   ETH: eth,
   ETHEREUM: eth,
   BASE: base,
@@ -130,16 +137,24 @@ const BuySellTable = ({
   setActiveMenuSection,
   setActiveTab,
   onSelectChatUser,
-  onViewAccountMetrics
+  onViewAccountMetrics,
+  highlightOrderId,
+  highlightOrderType
 }) => {
   const [showLeftScroll, setShowLeftScroll] = useState(false);
   const [showRightScroll, setShowRightScroll] = useState(true);
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [activeTab, setActiveTabState] = useState('buy');
+  // Shareable link: show correct tab (sell order → "buy" tab, buy order → "sell" tab)
+  const initialTab = highlightOrderType === 'sell' ? 'buy' : highlightOrderType === 'buy' ? 'sell' : 'buy';
+  const [activeTab, setActiveTabState] = useState(initialTab);
   const [tableHeight, setTableHeight] = useState(530);
   const [activeFilters, setActiveFilters] = useState([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [loadingRowId, setLoadingRowId] = useState(null); // Track which row is loading
+  const [initiateConfirmPayload, setInitiateConfirmPayload] = useState(null); // { user, accountData } for confirm dialog
+  const [showOwnOrderDialog, setShowOwnOrderDialog] = useState(null); // 'sell' | 'buy' when user clicked own order
+  const { user: currentUser } = useUser();
+  const currentUserId = currentUser?._id || currentUser?.id;
   const queryClient = useQueryClient();
 
   // 🔥 Invalidate order caches when a trade completes
@@ -168,6 +183,33 @@ const BuySellTable = ({
   const tableContainerRef = useRef(null);
   const bodyRef = useRef(null);
   const tableBodyRef = useRef(null);
+  const highlightRowRef = useRef(null);
+  const hasOpenedHighlightOrderRef = useRef(false);
+
+  // Fetch single order for shareable link so we can open the same details dialog
+  const highlightOrderQuery = useQuery({
+    queryKey: ['order', highlightOrderType, highlightOrderId],
+    queryFn: async () => {
+      const res = highlightOrderType === 'sell'
+        ? await marketplaceService.getSellOrderById(highlightOrderId)
+        : await marketplaceService.getBuyOrderById(highlightOrderId);
+      return res?.data ?? res;
+    },
+    enabled: !!(highlightOrderId && highlightOrderType),
+    staleTime: 60 * 1000,
+  });
+  const highlightOrderData = highlightOrderQuery.data;
+
+  // When user opens a share link: fetch order and open the same order-details dialog as "View Metrics"
+  useEffect(() => {
+    if (!highlightOrderData || !onViewAccountMetrics || hasOpenedHighlightOrderRef.current) return;
+    const isSellOrder = highlightOrderType === 'sell';
+    const row = transformOrderToRow(highlightOrderData, isSellOrder);
+    if (row) {
+      hasOpenedHighlightOrderRef.current = true;
+      handleViewAccountMetrics(row);
+    }
+  }, [highlightOrderData, highlightOrderType, onViewAccountMetrics]);
 
   // Helper function to get seller/buyer image
   const getUserImage = (user) => {
@@ -184,20 +226,40 @@ const BuySellTable = ({
 
 
   const handleViewAccountMetrics = (account) => {
-    // console.log('👁️ BuySellTable: View Account Metrics clicked for:', account);
-
     const accountData = {
       platform: account.platform,
       metrics: account.metrics,
       filters: account.filters,
-      accountId: account.id
+      accountId: account.id,
+      shortCode: account.shortCode || undefined
     };
 
-    // console.log('📦 BuySellTable: Prepared account data:', accountData);
+    // For sell tab (buy orders), include all extra details
+    if (activeTab === 'sell') {
+      accountData.buyer = account.buyer;
+      accountData.maxPrice = account.maxPrice;
+      accountData.currency = account.currency;
+      accountData.description = account.description;
+      accountData.isUrgent = account.isUrgent;
+      accountData.requirements = account.requirements;
+      accountData.followers = account.followers;
+      accountData.rating = account.rating;
+      accountData.accountUsername = account.accountUsername;
+      accountData.isBuyOrder = true;
+    } else {
+      // For buy tab (sell orders), include seller details
+      accountData.seller = account.seller;
+      accountData.price = account.price;
+      accountData.currency = account.currency;
+      accountData.description = account.description;
+      accountData.followers = account.followers;
+      accountData.rating = account.rating;
+      accountData.accountUsername = account.accountUsername;
+      accountData.accountType = account.accountType;
+      accountData.isBuyOrder = false;
+    }
 
-    // Primary method: Use callback if provided
     if (onViewAccountMetrics) {
-      // console.log('✅ BuySellTable: Calling onViewAccountMetrics callback');
       onViewAccountMetrics(accountData);
     } else {
       console.warn('⚠️ onViewAccountMetrics callback not available');
@@ -283,6 +345,78 @@ const BuySellTable = ({
     return 5; // Default 5 stars
   };
 
+  // Transform a single API order to table row shape (for share link → open details dialog)
+  const transformOrderToRow = (order, isSellOrder) => {
+    if (!order || !order._id) return null;
+    try {
+      if (isSellOrder) {
+        const seller = order.seller || {};
+        let sellerImage = seller.bitmojiUrl || seller.avatar || seller.avatarUrl || seller.profileImage || seller.profile_image || seller.picture || seller.image;
+        if (!sellerImage) {
+          try {
+            const currentUserData = JSON.parse(localStorage.getItem('userData') || '{}');
+            if (currentUserData._id === seller._id) sellerImage = currentUserData.bitmojiUrl || currentUserData.avatar || currentUserData.avatarUrl || currentUserData.profileImage;
+          } catch (e) {}
+        }
+        const accountUsername = order.accountUsername || order.username || order.handle || order.accountHandle || 'N/A';
+        return {
+          id: order._id,
+          shortCode: order.shortCode,
+          seller: { id: seller._id, _id: seller._id, image: sellerImage || ug1, name: seller.displayName || seller.email?.split('@')[0] || 'Anonymous', displayName: seller.displayName || seller.email?.split('@')[0] || 'Anonymous', verified: seller.emailVerified || false, bitmojiUrl: sellerImage, avatar: sellerImage, avatarUrl: sellerImage, profileImage: sellerImage, averageRating: seller.averageRating, totalRatings: seller.totalRatings || 0 },
+          item: { image: PLATFORM_ICONS[order.platform?.toLowerCase()] || ig, name: order.platform ? (order.platform.charAt(0).toUpperCase() + order.platform.slice(1)) : 'Unknown' },
+          platform: order.platform?.toLowerCase(),
+          followers: getFollowerCount(order.metrics, order.filters),
+          rating: calculateRating(seller),
+          price: order.price || 0,
+          currency: order.currency || 'USD',
+          description: order.description || '',
+          accountType: order.accountType || '0',
+          metrics: order.metrics || [],
+          filters: order.filters || [],
+          accountUsername,
+          username: accountUsername,
+          handle: accountUsername,
+        };
+      } else {
+        const buyerData = order.buyer || order.user || order.userId || {};
+        let buyerImage = buyerData.bitmojiUrl || buyerData.avatar || buyerData.avatarUrl || buyerData.profileImage || buyerData.profile_image || buyerData.picture || buyerData.image;
+        if (!buyerImage && order.user) buyerImage = order.user.bitmojiUrl || order.user.avatar || order.user.avatarUrl || order.user.profileImage;
+        if (!buyerImage && order.userId && typeof order.userId === 'object') buyerImage = order.userId.bitmojiUrl || order.userId.avatar || order.userId.avatarUrl || order.userId.profileImage;
+        if (!buyerImage) buyerImage = order.buyerImage || order.userImage || order.profileImage;
+        if (!buyerImage) {
+          try {
+            const currentUserData = JSON.parse(localStorage.getItem('userData') || '{}');
+            const buyerId = buyerData._id || buyerData.id || order.userId;
+            if (currentUserData._id === buyerId || currentUserData.id === buyerId) buyerImage = currentUserData.bitmojiUrl || currentUserData.avatar || currentUserData.avatarUrl || currentUserData.profileImage;
+          } catch (e) {}
+        }
+        const accountUsername = order.accountUsername || order.username || order.handle || order.accountHandle || 'N/A';
+        return {
+          id: order._id,
+          shortCode: order.shortCode,
+          buyer: { id: buyerData._id || order.userId, _id: buyerData._id || order.userId, image: buyerImage || ug1, name: buyerData.displayName || buyerData.username || buyerData.email?.split('@')[0] || 'Anonymous', displayName: buyerData.displayName || buyerData.username || buyerData.email?.split('@')[0] || 'Anonymous', verified: buyerData.emailVerified || buyerData.verified || false, bitmojiUrl: buyerImage, avatar: buyerImage, avatarUrl: buyerImage, profileImage: buyerImage },
+          item: { image: PLATFORM_ICONS[order.platform?.toLowerCase()] || ig, name: order.platform ? (order.platform.charAt(0).toUpperCase() + order.platform.slice(1)) : 'Unknown' },
+          platform: order.platform?.toLowerCase(),
+          requirements: getRequirementCount(order.requirements),
+          followers: getFollowerCount(order.metrics, order.filters) || getRequirementCount(order.requirements),
+          rating: calculateRating(buyerData),
+          maxPrice: order.maxPrice || 0,
+          currency: order.currency || 'USD',
+          description: order.description || '',
+          isUrgent: order.isUrgent || false,
+          metrics: order.metrics || [],
+          filters: order.filters || [],
+          accountUsername,
+          username: accountUsername,
+          handle: accountUsername,
+        };
+      }
+    } catch (e) {
+      console.error('Transform order for share link:', e);
+      return null;
+    }
+  };
+
   // Transform API response data using useMemo for performance
   // React Query handles fetching, caching, retry, and polling automatically
   const tableData = useMemo(() => {
@@ -336,6 +470,7 @@ const BuySellTable = ({
 
             return {
               id: order._id,
+              shortCode: order.shortCode,
               seller: {
                 id: seller._id,
                 _id: seller._id,
@@ -429,6 +564,7 @@ const BuySellTable = ({
 
             return {
               id: order._id,
+              shortCode: order.shortCode,
               buyer: {
                 id: buyerData._id || order.userId,
                 _id: buyerData._id || order.userId,
@@ -533,37 +669,27 @@ const BuySellTable = ({
     return filtered;
   }, [activeFilters, tableData, activeTab]);
 
+  // Scroll to shared order when data has loaded (must be after filteredTableData is defined)
+  useEffect(() => {
+    if (!highlightOrderId || isLoading) return;
+    const hasRow = filteredTableData.some(
+      (r) => String(r.id) === String(highlightOrderId) || String(r.shortCode) === String(highlightOrderId)
+    );
+    if (hasRow) highlightRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [highlightOrderId, isLoading, filteredTableData]);
 
-
-  const handleInitiateTrade = async (user, accountData) => {
-    // Set loading state immediately for visual feedback
+  const proceedWithInitiateTrade = async (user, accountData) => {
     setLoadingRowId(accountData?.id);
-
-    console.log('🔍 DEBUG handleInitiateTrade accountData:', {
-      accountData,
-      accountUsername: accountData?.accountUsername,
-      username: accountData?.username,
-      handle: accountData?.handle,
-      filters: accountData?.filters
-    });
-
     const extractedUsername = accountData?.filters?.find(f => f.key === 'username')?.value ||
       accountData?.accountUsername ||
       accountData?.username ||
       accountData?.handle ||
       'N/A';
-
     const userImage = getUserImage(user);
     const chatType = activeTab === 'buy' ? 'buy' : 'sell';
-
     const isSellTab = activeTab === 'sell';
     const buyOrderId = isSellTab ? (accountData?.id || accountData?._id) : null;
     const sellOrderId = !isSellTab ? (accountData?.id || accountData?._id) : null;
-
-    // 🚀 OPTIMIZED: Build user data immediately without waiting for wallet
-    // 🔥 Chat Tab Routing: 
-    //   - Buy tab click: chatType='buy', User A sees Buy tab, User B (receiver) sees Sell tab
-    //   - Sell tab click: chatType='sell', User A sees Sell tab, User B (receiver) sees Buy tab
     const userForChat = {
       id: user.id || user._id,
       _id: user.id || user._id,
@@ -576,14 +702,14 @@ const BuySellTable = ({
       image: userImage,
       status: 'online',
       chatType: chatType,
-      initiatorChatType: chatType, // 🔥 Preserved for tab routing - determines which tab opens for initiator
+      initiatorChatType: chatType,
       price: activeTab === 'buy' ? accountData?.price : accountData?.maxPrice,
       accountId: accountData?.id || accountData?.accountId || user.id,
       buyOrderId: buyOrderId,
       sellOrderId: sellOrderId,
       sellerId: activeTab === 'buy' ? (user.id || user._id) : null,
       buyerId: activeTab === 'sell' ? (user.id || user._id) : null,
-      walletAddresses: {}, // Will be fetched in background
+      walletAddresses: {},
       platform: accountData?.platform || user.platform || 'Unknown',
       accountUsername: extractedUsername,
       username: extractedUsername,
@@ -591,32 +717,13 @@ const BuySellTable = ({
       filters: accountData?.filters || [],
       metrics: accountData?.metrics || []
     };
-
-    // 🚀 IMMEDIATE: Store and navigate right away
     localStorage.setItem('selectedChatUser', JSON.stringify(userForChat));
-
-    if (setActiveMenuSection) {
-      setActiveMenuSection('chat');
-    }
-
-    if (onSelectChatUser) {
-      onSelectChatUser(userForChat);
-    }
-
-    window.dispatchEvent(new CustomEvent('initiateTrade', {
-      detail: userForChat
-    }));
-
-    // 🔥 BACKGROUND: Fetch wallet addresses after navigation
+    if (setActiveMenuSection) setActiveMenuSection('chat');
+    if (onSelectChatUser) onSelectChatUser(userForChat);
+    window.dispatchEvent(new CustomEvent('initiateTrade', { detail: userForChat }));
     if (activeTab === 'buy' && user.id) {
       try {
-        let walletResponse = null;
-        try {
-          walletResponse = await apiService.get(`/user?id=${user.id}`);
-        } catch (e) {
-          walletResponse = await apiService.get(`/api/users/${user.id}`);
-        }
-
+        let walletResponse = await apiService.get(`/user?id=${user.id}`).catch(() => apiService.get(`/api/users/${user.id}`));
         if (walletResponse) {
           const sellerUser = walletResponse.user || walletResponse.data || walletResponse;
           if (sellerUser?.walletAddresses) {
@@ -625,13 +732,31 @@ const BuySellTable = ({
             window.dispatchEvent(new CustomEvent('initiateTrade', { detail: updatedData }));
           }
         }
-      } catch (error) {
-        console.warn('⚠️ Background wallet fetch failed:', error);
+      } catch (e) {
+        console.warn('⚠️ Background wallet fetch failed:', e);
       }
     }
-
-    // Clear loading state
     setLoadingRowId(null);
+  };
+
+  const handleInitiateTrade = (user, accountData) => {
+    const otherId = user?.id || user?._id;
+    if (activeTab === 'buy' && String(otherId) === String(currentUserId)) {
+      setShowOwnOrderDialog('sell');
+      return;
+    }
+    if (activeTab === 'sell' && String(otherId) === String(currentUserId)) {
+      setShowOwnOrderDialog('buy');
+      return;
+    }
+    setInitiateConfirmPayload({ user, accountData });
+  };
+
+  const handleConfirmInitiateTrade = async () => {
+    if (!initiateConfirmPayload) return;
+    const { user, accountData } = initiateConfirmPayload;
+    setInitiateConfirmPayload(null);
+    await proceedWithInitiateTrade(user, accountData);
   };
 
 
@@ -1104,7 +1229,7 @@ const BuySellTable = ({
                                 <button
                                   onClick={() => handleInitiateTrade(activeTab === 'buy' ? row.seller : row.buyer, row)}
                                   disabled={loadingRowId === row.id}
-                                  className={`py-[12px] px-[30px] font-medium bg-[#DCD0FF] hover:opacity-60 text-xs text-primary rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''}`}
+                                  className={`py-[12px] px-[30px] font-medium bg-[#DCD0FF] hover:opacity-60 text-xs text-primary rounded-full transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105 ${loadingRowId === row.id ? 'opacity-70 cursor-wait' : ''} ${((activeTab === 'buy' && String(row.seller?.id || row.seller?._id) === String(currentUserId)) || (activeTab === 'sell' && String(row.buyer?.id || row.buyer?._id) === String(currentUserId))) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   aria-label="View item"
                                 >
                                   {loadingRowId === row.id ? (
@@ -1117,15 +1242,13 @@ const BuySellTable = ({
                                     </span>
                                   ) : 'Initiate Trade'}
                                 </button>
-                                {activeTab === 'buy' && (
-                                  <button
+                                <button
                                     className="py-[12px] px-[30px] font-medium bg-[#2c2a2f] hover:bg-[#3c3a3f] text-white rounded-full text-xs transition-all duration-200 flex-shrink-0 hover:shadow-lg transform hover:scale-105"
                                     onClick={() => handleViewAccountMetrics(row)}
                                     aria-label="View metrics"
                                   >
                                     View Metrics
                                   </button>
-                                )}
                               </div>
                             </td>
                           </tr>
@@ -1222,28 +1345,17 @@ const BuySellTable = ({
                       </div>
 
                       <div className="flex flex-col pt-[6px] justify-between items-end ml-2">
-                        {activeTab === 'buy' && (
-                          <button
+                        <button
                             onClick={() => handleViewAccountMetrics(row)}
                             className="w-full py-2 px-3 font-medium bg-[#2c2a2f] hover:bg-[#3c3a3f] text-white rounded-full text-[10px] transition-all duration-200 mb-2 whitespace-nowrap"
                             aria-label="View metrics"
                           >
                             View Metrics
                           </button>
-                        )}
-
-                        {/* {activeTab === 'sell' && (
-            <button
-              className="w-full py-2 px-3 font-medium bg-[#2c2a2f] hover:bg-[#3c3a3f] text-white rounded-full text-[10px] transition-all duration-200 mb-2 whitespace-nowrap"
-              aria-label="View details"
-            >
-              View Details
-            </button>
-          )} */}
 
                         <button
                           onClick={() => handleInitiateTrade(activeTab === 'buy' ? row.seller : row.buyer, row)}
-                          className="w-full py-2 px-3 font-medium bg-[#DCD0FF] hover:opacity-80 text-[10px] text-primary rounded-full transition-all duration-200 whitespace-nowrap"
+                          className={`w-full py-2 px-3 font-medium bg-[#DCD0FF] hover:opacity-80 text-[10px] text-primary rounded-full transition-all duration-200 whitespace-nowrap ${((activeTab === 'buy' && String(row.seller?.id || row.seller?._id) === String(currentUserId)) || (activeTab === 'sell' && String(row.buyer?.id || row.buyer?._id) === String(currentUserId))) ? 'opacity-50 cursor-not-allowed' : ''}`}
                           aria-label="Initiate trade"
                         >
                           {activeTab === 'buy' ? 'Initiate Trade' : 'Initiate Trade'}
@@ -1255,6 +1367,51 @@ const BuySellTable = ({
               </div>
             </div>
           </div>
+
+          {/* Own order dialog - cannot initiate trade on own sell/buy orders */}
+          {showOwnOrderDialog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowOwnOrderDialog(null)}>
+              <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-semibold text-lg mb-2">Cannot initiate trade</h3>
+                <p className="text-gray-400 text-sm">
+                  You cannot initiate a trade on your own {showOwnOrderDialog === 'sell' ? 'sell orders' : 'buy orders'}.
+                </p>
+                <div className="flex justify-end mt-4">
+                  <button type="button" onClick={() => setShowOwnOrderDialog(null)} className="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-opacity">OK</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Initiate Trade confirmation dialog */}
+          {initiateConfirmPayload && (() => {
+            const { user, accountData } = initiateConfirmPayload;
+            const name = user?.name || user?.displayName || 'this user';
+            const platform = accountData?.platform || accountData?.item?.name || 'Unknown';
+            const username = accountData?.filters?.find(f => f.key === 'username')?.value ||
+              accountData?.accountUsername || accountData?.username || accountData?.handle || 'N/A';
+            const price = activeTab === 'buy' ? accountData?.price : accountData?.maxPrice;
+            const currency = accountData?.currency || '';
+            return (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setInitiateConfirmPayload(null)}>
+                <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-white font-semibold text-lg mb-2">Initiate trade?</h3>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Are you sure you want to initiate a trade with <span className="text-white font-medium">{name}</span>?
+                  </p>
+                  <div className="bg-black/30 rounded-lg p-3 mb-5 text-sm">
+                    <p className="text-gray-400"><span className="text-gray-500">Platform:</span> <span className="text-white capitalize">{platform}</span></p>
+                    <p className="text-gray-400 mt-1"><span className="text-gray-500">Username:</span> <span className="text-white">{username}</span></p>
+                    {price != null && price !== '' && <p className="text-gray-400 mt-1"><span className="text-gray-500">Price:</span> <span className="text-green-400">${price}{currency ? ` ${currency}` : ''}</span></p>}
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                    <button type="button" onClick={() => setInitiateConfirmPayload(null)} className="px-4 py-2 rounded-lg text-gray-400 hover:bg-white/10 transition-colors">Cancel</button>
+                    <button type="button" onClick={handleConfirmInitiateTrade} className="px-4 py-2 rounded-lg bg-primary text-white hover:opacity-90 transition-opacity">Confirm</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Filter Modal */}
           {showFilterModal && (

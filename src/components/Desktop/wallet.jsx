@@ -16,6 +16,7 @@ import solana from "../../assets/sol.svg";
 import authService from "../../services/authService";
 import { useUser } from "../../context/userContext";
 import { io } from 'socket.io-client';
+import { API_BASE_URL } from '../../config.js';
 
 const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
   const [showBalance, setShowBalance] = useState(true);
@@ -49,7 +50,7 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
     if (!token) return;
 
     // Initialize socket connection
-    socketRef.current = io('https://soctra-api-6bcecb2e8189.herokuapp.com', {
+    socketRef.current = io(API_BASE_URL, {
       path: '/wallet-balance/socket.io',
       auth: { token },
       transports: ['websocket', 'polling'],

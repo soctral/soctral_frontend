@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, Star, ArrowLeft, Filter, Calendar, Copy, 
 import btc from "../../assets/btc.svg";
 import usdt from "../../assets/usdt.svg";
 import eth from "../../assets/eth.svg";
+import usdc from "../../assets/usdc.svg";
 import filter2 from "../../assets/filter2.svg";
 import shield from "../../assets/Shield.svg";
 import notice from "../../assets/notice.svg";
@@ -59,6 +60,8 @@ const HistoryTable = ({
     ETH: eth,
     Tether: usdt,
     USDT: usdt,
+    USDC: usdc,
+    "USD Coin": usdc,
     Solana: solana,
     SOL: solana,
     "Binance Coin": bnb,
@@ -103,11 +106,11 @@ const HistoryTable = ({
         amount: transaction.amount?.toString() || '0',
         status: status.charAt(0).toUpperCase() + status.slice(1), // Capitalize
         description: description,
-        date: transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt 
-          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toISOString().split('T')[0] 
+        date: transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt
+          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toISOString().split('T')[0]
           : new Date().toISOString().split('T')[0],
         time: transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt
-          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toTimeString().split(' ')[0].substring(0, 5) 
+          ? new Date(transaction.confirmedAt || transaction.blockTimestamp || transaction.createdAt).toTimeString().split(' ')[0].substring(0, 5)
           : '00:00',
         icon: getCryptoImage(transaction.currency),
         hash: transaction.transactionHash || transaction.hash || 'N/A',
@@ -119,7 +122,7 @@ const HistoryTable = ({
         label: transaction.label || type,
         isNativeTransfer: transaction.isNativeTransfer || false,
         source: transaction.source || 'blockchain',
-        usdValue: transaction.usdValue?.toString() || transaction.amount?.toString() || '0',
+        usdValue: transaction.amountUsd?.toString() || transaction.tradeTransactionId?.amountUSD?.toString() || transaction.usdValue?.toString() || '0',
         notes: transaction.notes || ''
       };
     });
@@ -739,7 +742,7 @@ const fetchTransactions = async () => {
               onClick={() => setShowTransactionModal(false)}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center lg:p-4">
-              <div className="bg-[#000000] rounded-lg max-w-md w-full px-3 lg:mx-4 relative max-h-[100vh] lg:max-h-[90vh] overflow-y-auto">
+              <div className="bg-[#000000] rounded-lg max-w-md w-full px-3 pt-10 lg:pt-3 lg:mx-4 relative max-h-[100vh] lg:max-h-[90vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
                 <button
                   onClick={() => setShowTransactionModal(false)}
                   className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition-colors z-10"
@@ -750,8 +753,10 @@ const fetchTransactions = async () => {
                 {/* Transaction Summary */}
                 <div className="p-3 border-gray-700">
                   {/* Header */}
-                  <div className="flex items-center justify-center p-3 lg:p-6 border-gray-700">
+                  <div className="flex items-center justify-center gap-3 lg:p-6 border-gray-700">
                     <h3 className="text-white font-semibold text-lg">Transaction Details</h3>
+
+                                      <X className="flex md:hidden w-5 h-5" />
                   </div>
 
                   <div className="text-center">
@@ -938,7 +943,7 @@ const fetchTransactions = async () => {
               onClick={() => setShowFilterModal(false)}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center lg:p-4">
-              <div className="bg-[#000000] h-screen lg:h-[31rem] rounded-lg p-3 lg:p-6 lg:max-w-lg w-full lg:mx-4 relative">
+              <div className="bg-[#000000] h-screen lg:h-[31rem] rounded-lg p-3 pt-10 lg:pt-6 lg:p-6 lg:max-w-lg w-full lg:mx-4 relative overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
                 {/* Header with Back Arrow */}
                 <div className="flex items-center justify-between mb-6">
                   <button

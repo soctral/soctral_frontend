@@ -1,18 +1,26 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import logo from "../assets/SoctralbgLogo.png";
-import Card from "../components/OnboardingDesktopCard";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import one from "../assets/1.svg";
 import two from "../assets/2.svg";
 import three from "../assets/3.svg";
+import logo from "../assets/SoctralbgLogo.png";
+import Card from "../components/OnboardingDesktopCard";
 import SignIn from "../layouts/SignInDesktop";
 import SignUp from "../layouts/SignUpDesktop";
 import authService from "../services/authService";
 
-export default function DesktopOnboardingSteps() {
+const LOGIN_TITLE = "Login – Soctral";
+const LOGIN_DESCRIPTION = "Sign in to your Soctral account. Access your wallet, listings, and trade social media accounts securely with escrow protection.";
+const SIGNUP_TITLE = "Sign up – Soctral";
+const SIGNUP_DESCRIPTION = "Create a Soctral account to buy and sell social media accounts securely. Wallet, escrow, and verified trading.";
+const DEFAULT_TITLE = "Soctral – Secure Social Media Trading";
+const DEFAULT_DESCRIPTION = "Soctral is a secure platform for buying and selling social media accounts. Fund your wallet, browse listings, and trade with escrow protection.";
+
+export default function DesktopOnboardingSteps({ openModal }) {
   const [showSignIn, setShowSignIn] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Check if user is already authenticated on component mount
   useEffect(() => {
@@ -26,6 +34,51 @@ export default function DesktopOnboardingSteps() {
 
     checkAuthentication();
   }, [navigate]);
+
+  // Sitelinks: /login and /signup are real URLs – set modal and distinct title/description immediately
+  useEffect(() => {
+    if (openModal === "login") {
+      setShowSignIn(true);
+      setShowSignUp(false);
+      document.title = LOGIN_TITLE;
+      const meta = document.querySelector('meta[name="description"]');
+      if (meta) meta.setAttribute("content", LOGIN_DESCRIPTION);
+    } else if (openModal === "signup") {
+      setShowSignUp(true);
+      setShowSignIn(false);
+      document.title = SIGNUP_TITLE;
+      const meta = document.querySelector('meta[name="description"]');
+      if (meta) meta.setAttribute("content", SIGNUP_DESCRIPTION);
+    }
+  }, [openModal]);
+
+  // Backwards compatibility: ?open=login and ?open=signup still work
+  useEffect(() => {
+    if (openModal) return;
+    const open = searchParams.get("open");
+    if (open === "login") {
+      setShowSignIn(true);
+      setShowSignUp(false);
+    } else if (open === "signup") {
+      setShowSignUp(true);
+      setShowSignIn(false);
+    }
+  }, [searchParams, openModal]);
+
+  // Keep document title and meta in sync when modal state changes (e.g. user closes modal)
+  useEffect(() => {
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (showSignIn) {
+      document.title = LOGIN_TITLE;
+      if (metaDesc) metaDesc.setAttribute("content", LOGIN_DESCRIPTION);
+    } else if (showSignUp) {
+      document.title = SIGNUP_TITLE;
+      if (metaDesc) metaDesc.setAttribute("content", SIGNUP_DESCRIPTION);
+    } else if (!openModal) {
+      document.title = DEFAULT_TITLE;
+      if (metaDesc) metaDesc.setAttribute("content", DEFAULT_DESCRIPTION);
+    }
+  }, [showSignIn, showSignUp, openModal]);
 
   const openSignIn = () => {
     setShowSignIn(true);
@@ -63,10 +116,14 @@ export default function DesktopOnboardingSteps() {
     <>
       <div className="bg-tertiary relative w-screen h-screen overflow-visible">
         <div className="flex flex-col justify-between h-full max-w-screen-xl mx-auto px-4 py-4">
-          {/* Top Row */}
+          {/* Top Row: logo, sitelink-friendly Login/Sign up (crawlable), Skip */}
           <div className="flex justify-between items-center w-full mb-2">
-            <img src={logo} alt="Soctra Logo" className="w-8 h-8 object-contain" />
-            <p className="text-white cursor-pointer text-xs font-normal" onClick={handleSkip}>Skip</p>
+            <img src={logo} alt="Soctral Logo" className="w-8 h-8 object-contain" />
+            <nav className="flex items-center gap-3" aria-label="Account">
+              <Link to="/login" className="text-white text-xs font-medium hover:underline" title="Sign in to your Soctral account" aria-label="Sign in to your Soctral account">Login</Link>
+              <Link to="/signup" className="text-white text-xs font-medium hover:underline" title="Create a Soctral account to buy and sell social media securely" aria-label="Create a Soctral account">Sign up</Link>
+              <p className="text-white cursor-pointer text-xs font-normal" onClick={handleSkip}>Skip</p>
+            </nav>
           </div>
 
           {/* Welcome Text */}

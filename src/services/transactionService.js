@@ -76,6 +76,53 @@ class TransactionService {
   // ========================================
 
   /**
+   * Get active item (invoice or transaction) between two users.
+   * Use this when opening a chat to show current trade context and timer.
+   * GET /invoices/active-between-users?user1=id&user2=id
+   * @param {string} user1 - First user ID
+   * @param {string} user2 - Second user ID
+   * @returns {Promise<{ type: 'invoice'|'transaction'|null, data: object|null }>}
+   */
+  async getActiveBetweenUsers(user1, user2) {
+    try {
+      if (!this.isAuthenticated()) {
+        console.log('🔍 [active-between-users] skip: not authenticated');
+        return { type: null, data: null };
+      }
+      if (!user1 || !user2) {
+        console.log('🔍 [active-between-users] skip: missing user1 or user2', { user1: !!user1, user2: !!user2 });
+        return { type: null, data: null };
+      }
+      const params = new URLSearchParams({ user1, user2 });
+      const url = `/invoices/active-between-users?${params.toString()}`;
+      const response = await this.requestWithRetry(url);
+      const payload = response?.data ?? response;
+      const rawType = payload?.type ?? null;
+      const type = rawType != null ? String(rawType).toLowerCase() : null;
+      const data = payload?.data ?? null;
+      console.log('🔍 [active-between-users] response', {
+        url,
+        user1,
+        user2,
+        rawType,
+        type,
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        buyerId: data?.buyer?.userId ?? data?.buyer?._id ?? data?.buyerId,
+        sellerId: data?.seller?.userId ?? data?.seller?._id ?? data?.sellerId,
+        status: data?.status
+      });
+      return { type, data };
+    } catch (error) {
+      console.warn('🔍 [active-between-users] error', { message: error?.message, user1, user2 });
+      if (error.message?.includes('401') || error.message?.includes('403')) {
+        throw error;
+      }
+      return { type: null, data: null };
+    }
+  }
+
+  /**
    * 🔥 NEW: Get current active transaction
    * @returns {Promise<Object>} Current transaction or null
    */
@@ -530,6 +577,40 @@ class TransactionService {
    */
   async getOutgoingWalletTransactions(filters = {}) {
     return this.getWalletTransactionHistory({ ...filters, type: 'withdrawal' });
+  }
+
+  /**
+   * Get withdrawal fee estimate (gas fee in native token) for a currency/network.
+   * Used to show "Network Fee" on withdraw screen as the gas we charge in that token.
+   * @param {string} currency - API currency code (btc, eth, usdt, sol, usdc, bnb, trx)
+   * @param {string} network - API network (bitcoin, ethereum, base, binance, solana, tron)
+   * @returns {Promise<{ gasFeeUSD: number, gasFeeInNative: number, nativeCurrency: string }>}
+   */
+  async getWithdrawalFeeEstimate(currency, network) {
+    try {
+      if (!this.isAuthenticated()) {
+        return { gasFeeUSD: 0, gasFeeInNative: 0, nativeCurrency: '' };
+      }
+      if (!currency || !network) {
+        return { gasFeeUSD: 0, gasFeeInNative: 0, nativeCurrency: '' };
+      }
+      const params = new URLSearchParams({
+        currency: String(currency).toLowerCase(),
+        network: String(network).toLowerCase(),
+      });
+      const response = await this.requestWithRetry(
+        `/transaction/withdrawal-fee-estimate?${params.toString()}`
+      );
+      const data = response?.data ?? response;
+      return {
+        gasFeeUSD: data.gasFeeUSD ?? 0,
+        gasFeeInNative: data.gasFeeInNative ?? 0,
+        nativeCurrency: data.nativeCurrency ?? '',
+      };
+    } catch (error) {
+      console.warn('Withdrawal fee estimate failed:', error?.message);
+      return { gasFeeUSD: 0, gasFeeInNative: 0, nativeCurrency: '' };
+    }
   }
 }
 

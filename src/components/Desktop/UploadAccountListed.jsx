@@ -7,39 +7,39 @@
  * No PIN verification step.
  */
 
-import { X } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { Check, Copy, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 // Platform icons
-import face from "../../assets/face.svg";
-import twitter from "../../assets/twitter.svg";
-import ig from "../../assets/ig2.svg";
-import tiktok from "../../assets/tiktok.svg";
-import linkedin from "../../assets/linkedin2.svg";
-import snap from "../../assets/snapchat.svg";
-import youtube from "../../assets/youtube.svg";
-import telegram from "../../assets/telegram.svg";
-import discord from "../../assets/discord.svg";
-import pinterest from "../../assets/pinterest.svg";
-import reddit from "../../assets/reddit.svg";
-import wechat from "../../assets/wechat.svg";
-import onlyfans from "../../assets/onlyfans.svg";
-import flickr from "../../assets/flickr.svg";
-import vimeo from "../../assets/vimeo.svg";
-import qoura from "../../assets/qoura.svg";
-import twitch from "../../assets/twitch.svg";
-import tumblr from "../../assets/tumblr.svg";
-import rumble from "../../assets/rumble.png";
-import steam from "../../assets/steam.png";
 import arr from "../../assets/ar.svg";
+import discord from "../../assets/discord.svg";
+import face from "../../assets/face.svg";
+import flickr from "../../assets/flickr.svg";
+import ig from "../../assets/ig2.svg";
+import linkedin from "../../assets/linkedin2.svg";
 import star from "../../assets/newstar.svg";
+import onlyfans from "../../assets/onlyfans.svg";
+import pinterest from "../../assets/pinterest.svg";
+import qoura from "../../assets/qoura.svg";
+import reddit from "../../assets/reddit.svg";
+import rumble from "../../assets/rumble.png";
+import snap from "../../assets/snapchat.svg";
+import steam from "../../assets/steam.png";
+import telegram from "../../assets/telegram.svg";
+import tiktok from "../../assets/tiktok.svg";
+import tumblr from "../../assets/tumblr.svg";
+import twitch from "../../assets/twitch.svg";
+import twitter from "../../assets/twitter.svg";
+import vimeo from "../../assets/vimeo.svg";
+import wechat from "../../assets/wechat.svg";
+import youtube from "../../assets/youtube.svg";
 
 // Unified Form Components (replaces 40+ individual imports)
-import { UnifiedMetricForm, UnifiedFilterForm } from '../forms';
+import { UnifiedFilterForm, UnifiedMetricForm } from '../forms';
 
 // Services
-import marketplaceService from "../../services/marketplaceService";
 import authService from "../../services/authService";
+import marketplaceService from "../../services/marketplaceService";
 import walletService from "../../services/walletService";
 import WalletSetupModal from '../Desktop/WalletModal';
 import TransactionResultModal from './TransactionResultModal';
@@ -48,7 +48,6 @@ import TransactionResultModal from './TransactionResultModal';
 import { useCurrencyOptions } from "../../hooks/useCurrencyOptions";
 
 // Platform Configuration
-import { getSupportedPlatforms } from "../../config/platformConfig";
 
 // Platform button configuration with icons
 const PLATFORM_BUTTONS = [
@@ -114,6 +113,9 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
 
   // View mode state
   const [viewMode, setViewMode] = useState(false);
+
+  // Copy share link state
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Dynamic currency options from wallet data
   const { currencies, defaultCurrency } = useCurrencyOptions(walletData);
@@ -536,6 +538,16 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
             {viewMode ? 'Account Platform' : 'Select Social Account'}
           </p>
 
+          {viewMode && selectedButton && (() => {
+            const platformBtn = PLATFORM_BUTTONS.find(p => p.id === selectedButton?.toLowerCase());
+            return platformBtn ? (
+              <div className="flex items-center gap-3  p-3 rounded-lg">
+                <img src={platformBtn.icon} alt={selectedButton} className="w-8 h-8 object-contain" />
+                <span className="text-white text-sm font-semibold capitalize">{selectedButton}</span>
+              </div>
+            ) : null;
+          })()}
+
           <div className="rounded-lg p-2">
             <div>
               {selectedButton && (
@@ -626,6 +638,172 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                   <h3 className="text-sm font-semibold mt-5">
                     {viewMode ? `${selectedButton.charAt(0).toUpperCase() + selectedButton.slice(1)} Account Details` : `Specify ${selectedButton.charAt(0).toUpperCase() + selectedButton.slice(1)} Account Requirements`}
                   </h3>
+
+                  {/* Full Account Details Section (View Mode) */}
+                  {viewMode && viewAccountData && (
+                    <div className="mt-4 p-4 bg-[rgba(255,255,255,0.05)] rounded-lg space-y-3">
+                      {/* Share link - Copy button (uses shortCode when available for shorter URLs) */}
+                      {(viewAccountData.shortCode || viewAccountData.accountId) && (
+                        <div className="flex items-center justify-between gap-3 pb-3 border-b border-gray-700/50">
+                          <span className="text-gray-400 text-sm">Share this order</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              let idOrCode = viewAccountData.shortCode || viewAccountData.accountId;
+                              if (!viewAccountData.shortCode && viewAccountData.accountId) {
+                                try {
+                                  const res = viewAccountData.isBuyOrder
+                                    ? await marketplaceService.getBuyOrderById(viewAccountData.accountId)
+                                    : await marketplaceService.getSellOrderById(viewAccountData.accountId);
+                                  const data = res?.data ?? res;
+                                  if (data?.shortCode) idOrCode = data.shortCode;
+                                } catch (e) {
+                                  // keep idOrCode as accountId
+                                }
+                              }
+                              const path = `/order/${viewAccountData.isBuyOrder ? 'buy' : 'sell'}/${idOrCode}`;
+                              const url = `${window.location.origin}${path}`;
+                              try {
+                                await navigator.clipboard.writeText(url);
+                                setCopiedLink(true);
+                                setTimeout(() => setCopiedLink(false), 2000);
+                              } catch (err) {
+                                console.warn('Copy failed:', err);
+                              }
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.12)] text-white text-sm font-medium transition-colors"
+                          >
+                            {copiedLink ? (
+                              <>
+                                <Check className="w-4 h-4 text-green-400" />
+                                Copied!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                Copy link
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                      {/* Buyer / Seller Info */}
+                      {viewAccountData.buyer && (
+                        <div className="flex items-center gap-3 pb-3 border-b border-gray-700/50">
+                          <img
+                            src={viewAccountData.buyer.image}
+                            alt={viewAccountData.buyer.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          <div>
+                            <p className="text-white text-sm font-semibold flex items-center gap-1">
+                              {viewAccountData.buyer.name || 'Anonymous'}
+                              {viewAccountData.buyer.verified && (
+                                <span className="text-purple-400 text-xs">✓</span>
+                              )}
+                            </p>
+                            <p className="text-gray-400 text-xs">Buyer</p>
+                          </div>
+                        </div>
+                      )}
+                      {viewAccountData.seller && (
+                        <div className="flex items-center gap-3 pb-3 border-b border-gray-700/50">
+                          <img
+                            src={viewAccountData.seller.image}
+                            alt={viewAccountData.seller.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          <div>
+                            <p className="text-white text-sm font-semibold flex items-center gap-1">
+                              {viewAccountData.seller.name || 'Anonymous'}
+                              {viewAccountData.seller.verified && (
+                                <span className="text-purple-400 text-xs">✓</span>
+                              )}
+                            </p>
+                            <p className="text-gray-400 text-xs">Seller</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Account Details Grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Username */}
+                        {viewAccountData.accountUsername && viewAccountData.accountUsername !== 'N/A' && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Username</p>
+                            <p className="text-white text-sm font-medium">@{viewAccountData.accountUsername}</p>
+                          </div>
+                        )}
+
+                        {/* Max Budget / Price */}
+                        {(viewAccountData.maxPrice || viewAccountData.price) && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">
+                              {viewAccountData.isBuyOrder ? 'Max Budget' : 'Price'}
+                            </p>
+                            <p className="text-white text-sm font-semibold">
+                              ${viewAccountData.isBuyOrder ? viewAccountData.maxPrice : viewAccountData.price}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Token */}
+                        {viewAccountData.currency && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Token</p>
+                            <p className="text-white text-sm font-semibold">{viewAccountData.currency.toUpperCase()}</p>
+                          </div>
+                        )}
+
+                        {/* Followers */}
+                        {viewAccountData.followers && viewAccountData.followers !== '0' && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Followers</p>
+                            <p className="text-white text-sm font-medium">{viewAccountData.followers}</p>
+                          </div>
+                        )}
+
+                        {/* Platform */}
+                        <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Platform</p>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const platformBtn = PLATFORM_BUTTONS.find(p => p.id === viewAccountData.platform?.toLowerCase());
+                              return platformBtn ? <img src={platformBtn.icon} alt={viewAccountData.platform} className="w-5 h-5 object-contain" /> : null;
+                            })()}
+                            <p className="text-white text-sm font-medium capitalize">{viewAccountData.platform}</p>
+                          </div>
+                        </div>
+
+                        {/* Urgency */}
+                        {viewAccountData.isUrgent && (
+                          <div className="bg-[rgba(255,100,100,0.08)] rounded-lg p-3 border border-red-500/20">
+                            <p className="text-red-400 text-[10px] uppercase tracking-wider mb-1">Priority</p>
+                            <p className="text-red-300 text-sm font-semibold">🔥 Urgent</p>
+                          </div>
+                        )}
+
+                        {/* Account Type */}
+                        {viewAccountData.accountType && viewAccountData.accountType !== '0' && (
+                          <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                            <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Account Type</p>
+                            <p className="text-white text-sm font-medium capitalize">{viewAccountData.accountType}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Description */}
+                      {viewAccountData.description && (
+                        <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-1">Description</p>
+                          <p className="text-white text-sm leading-relaxed">{viewAccountData.description}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mt-4 p-3 bg-[rgba(255,255,255,0.05)] rounded-lg">
                     {/* Metrics Section */}
                     <div className={`${viewMode ? '' : 'border-b border-gray-500'}`}>
@@ -650,11 +828,11 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
 
                       {/* Display Metrics Data in View Mode */}
                       {viewMode && currentAccountId && platformData[currentAccountId]?.metrics && (
-                        <div className="grid grid-cols-3 gap-1 px-3 space-y-2 rounded-lg ">
+                        <div className="flex flex-wrap gap-2 px-3 rounded-lg">
                           {platformData[currentAccountId].metrics.map((metric, index) => (
-                            <div key={index} className="flex items-center whitespace-nowrap w-fit bg-[rgba(255,255,255,0.05)] rounded-full p-2 gap-2 justify-between items-left py-2 last:border-b-0">
-                              <div className="flex w-fit items-center gap-1">
-                                <img src={star} className="h-4 w-4" alt="" />
+                            <div key={index} className="flex items-center bg-[rgba(255,255,255,0.05)] rounded-full px-3 py-2 gap-2">
+                              <div className="flex items-center gap-1">
+                                <img src={star} className="h-4 w-4 shrink-0" alt="" />
 
                                 <div className="flex gap-1">
                                   <span className="text-xs text-gray-300 capitalize font-medium">
@@ -698,11 +876,11 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
 
                       {/* Display Filters Data in View Mode */}
                       {viewMode && currentAccountId && platformData[currentAccountId]?.filters && (
-                        <div className="grid grid-cols-3 gap-1 px-3 space-y-2 rounded-lg mt-2">
+                        <div className="flex flex-wrap gap-2 px-3 rounded-lg mt-2">
                           {platformData[currentAccountId].filters.map((filter, index) => (
-                            <div key={index} className="flex items-center whitespace-nowrap w-fit bg-[rgba(255,255,255,0.05)] rounded-full p-2 gap-2 justify-between items-left py-2 last:border-b-0">
-                              <div className="flex w-fit items-center whitespace-nowrap gap-1">
-                                <img src={star} className="h-4 w-4" alt="" />
+                            <div key={index} className="flex items-center bg-[rgba(255,255,255,0.05)] rounded-full px-3 py-2 gap-2">
+                              <div className="flex items-center gap-1">
+                                <img src={star} className="h-4 w-4 shrink-0" alt="" />
 
                                 <div className="flex gap-1">
                                   <span className="text-xs text-gray-300 capitalize font-medium">

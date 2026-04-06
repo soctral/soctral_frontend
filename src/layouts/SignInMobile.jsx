@@ -1,13 +1,16 @@
 import { useState } from "react";
+import countryCodeOptions from "../data/countryCodeOptions";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
-import Warning from "../assets/warning.png"
+import { GoogleLogin } from "@react-oauth/google";
+import Warning from "../assets/warning.png";
+import GoogleIcon from "../assets/google.png";
 import { Link, useNavigate } from 'react-router-dom';
 import { useUser } from '../context/userContext'; // Use the context instead of direct service
 
 const SignIn = () => {
   const navigate = useNavigate();
-  const { signInUser, isLoading, error, clearError } = useUser(); // Use context methods
+  const { signInUser, signUpWithGoogle, isLoading, error, clearError } = useUser(); // Use context methods
   
   const [method, setMethod] = useState("phone");
   const [formData, setFormData] = useState({
@@ -117,11 +120,11 @@ const SignIn = () => {
                         onChange={handleInputChange}
                         className="bg-black text-white pl-4 pr-2 py-5 outline-none appearance-none"
                       >
-                        <option value="+234">🇳🇬 (+234)</option>
-                        <option value="+1">🇺🇸 (+1)</option>
-                        <option value="+44">🇬🇧 (+44)</option>
-                        <option value="+91">🇮🇳 (+91)</option>
-                        <option value="+27">🇿🇦 (+27)</option>
+                        {countryCodeOptions.map((c) => (
+                          <option key={`${c.code}-${c.country}`} value={c.code}>
+                            {c.flag} ({c.code})
+                          </option>
+                        ))}
                       </select>
                       <div className="h-8 w-px bg-white/30 mx-3" />
                       <input
@@ -204,6 +207,35 @@ const SignIn = () => {
                 >
                   {isLoading ? "Signing In..." : "Continue"}
                 </button>
+
+                <div className="text-center text-sm text-gray-400 mt-2">Or sign in with</div>
+                <div className="flex justify-center mt-2">
+                  <GoogleLogin
+                    onSuccess={async (credentialResponse) => {
+                      if (!credentialResponse?.credential) return;
+                      try {
+                        await signUpWithGoogle(credentialResponse.credential);
+                        navigate("/google-onboarding");
+                      } catch (err) {}
+                    }}
+                    onError={() => clearError()}
+                    useOneTap={false}
+                    theme="filled_black"
+                    size="medium"
+                    type="icon"
+                    shape="circle"
+                    customButton={(renderProps) => (
+                      <button
+                        type="button"
+                        onClick={renderProps.onClick}
+                        disabled={renderProps.disabled || isLoading}
+                        className="disabled:opacity-50"
+                      >
+                        <img src={GoogleIcon} alt="Google" className="w-8 h-8" />
+                      </button>
+                    )}
+                  />
+                </div>
                 
                 <p className="text-[rgba(255,255,255,0.5)] text-center mx-auto">
                   Don't have an account? 
