@@ -16,7 +16,7 @@ import frame0 from "../assets/slide11.svg"
 import frame00 from "../assets/slide1.svg"
 import frame000 from "../assets/slide0.svg"
 import shield from "../assets/Shield.svg"
-import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw } from "lucide-react";
+import { Gift, Bell, Home, Wallet, MessageCircle, History, Plus, Eye, EyeOff, TrendingUp, Star, Users, Instagram, Twitter, Facebook, ChevronRight, ChevronDown, X, RefreshCw, Upload } from "lucide-react";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -32,6 +32,8 @@ import Chat from '../components/Desktop/chat';
 import HistoryTable from '../components/Desktop/HistoryTable';
 import { useUser } from '../context/userContext';
 import WalletTransactionModal from '../components/Desktop/WalletTransaction';
+import ManageAccountModal from '../components/Desktop/AccountManagement';
+import PostAuthGetStartedModal from "../components/PostAuthGetStartedModal";
 import authService from '../services/authService';
 import chatService from '../services/chatService';
 import pushNotificationService from '../services/pushNotificationService';
@@ -102,6 +104,9 @@ const MobileHomePage = () => {
   const [hasSeenBuySellOnboarding, setHasSeenBuySellOnboarding] = useState(false);
   const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [showWalletTransactionModal, setShowWalletTransactionModal] = useState(false);
+  const [showManageAccountModal, setShowManageAccountModal] = useState(false);
+  const [showPostAuthGetStarted, setShowPostAuthGetStarted] = useState(false);
+  const [manageAccountInitialModal, setManageAccountInitialModal] = useState(null);
   const [pickOfWeekData, setPickOfWeekData] = useState([]);
 
   const [isLoadingPickOfWeek, setIsLoadingPickOfWeek] = useState(true);
@@ -130,6 +135,33 @@ const MobileHomePage = () => {
     getUserTier,
     logout
   } = useUser();
+
+  // Show a one-time "get started" prompt after auth success.
+  useEffect(() => {
+    if (!isAuthenticated || !user?._id) return;
+    const userId = user._id || user.id;
+    const key = `soctra_post_auth_prompt_seen_${userId}`;
+    if (localStorage.getItem(key) === 'true') return;
+
+    const t = setTimeout(() => {
+      setShowPostAuthGetStarted(true);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [isAuthenticated, user?._id, user?.id]);
+
+  const closePostAuthPrompt = () => {
+    const userId = user?._id || user?.id;
+    if (userId) {
+      localStorage.setItem(`soctra_post_auth_prompt_seen_${userId}`, 'true');
+    }
+    setShowPostAuthGetStarted(false);
+  };
+
+  const openManageAccountsDeepLink = (initial) => {
+    closePostAuthPrompt();
+    setManageAccountInitialModal(initial);
+    setShowManageAccountModal(true);
+  };
 
   // Sync URL -> state when user hits back/forward (native back button support)
   useEffect(() => {
@@ -1152,6 +1184,15 @@ const MobileHomePage = () => {
     setShowNotificationPanel(!showNotificationPanel);
   };
 
+  const handleManageAccountsClick = () => {
+    if (!isAuthenticated) {
+      setAuthModalType('manageAccounts');
+      setShowAuthModal(true);
+      return;
+    }
+    setShowManageAccountModal(true);
+  };
+
   const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) {
       setShowSlideMenu(false);
@@ -1603,6 +1644,13 @@ const MobileHomePage = () => {
   return (
     <>
       <div className="bg-black text-white min-h-screen relative">
+        <PostAuthGetStartedModal
+          isOpen={showPostAuthGetStarted}
+          onClose={closePostAuthPrompt}
+          onListAccount={() => openManageAccountsDeepLink('upload')}
+          onRequestAccount={() => openManageAccountsDeepLink('uploadRequest')}
+        />
+
         {/* Overlay for slide menu */}
         {showSlideMenu && (
           <div
@@ -1666,6 +1714,18 @@ const MobileHomePage = () => {
                   onClick={handleNotificationClick}
                   className="h-[20px] w-[20px] cursor-pointer hover:text-white transition-colors"
                 />
+                <button
+                  type="button"
+                  onClick={handleManageAccountsClick}
+                  className="flex flex-col items-center justify-center gap-0.5 min-w-[44px] rounded-lg bg-white/10 px-2 py-1 active:bg-white/20"
+                  aria-label="Upload or list an account for sale"
+                  title="Upload account to list for sale"
+                >
+                  <Upload className="h-[18px] w-[18px] text-gray-200 shrink-0" />
+                  <span className="text-[10px] font-medium leading-none text-gray-300">
+                    List
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -1809,6 +1869,12 @@ const MobileHomePage = () => {
           walletData={walletData}
         />
 
+        <ManageAccountModal
+          isOpen={showManageAccountModal}
+          onClose={() => setShowManageAccountModal(false)}
+          initialActiveModal={manageAccountInitialModal}
+        />
+
         {showAuthModal && (
           <>
             <div
@@ -1832,6 +1898,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && <TrendingUp className="w-8 h-8 text-primary" />}
                     {authModalType === 'chat' && <MessageCircle className="w-8 h-8 text-primary" />}
                     {authModalType === 'history' && <History className="w-8 h-8 text-primary" />}
+                    {authModalType === 'manageAccounts' && <Upload className="w-8 h-8 text-primary" />}
                   </div>
 
                   <h3 className="text-white font-semibold text-xl mb-2">Sign In Required</h3>
@@ -1842,6 +1909,7 @@ const MobileHomePage = () => {
                     {authModalType === 'trade' && "Please sign in to access the trading platform and buy/sell accounts safely."}
                     {authModalType === 'chat' && "Please sign in to access chat features and communicate with other users."}
                     {authModalType === 'history' && "Please sign in to view your transaction history and account activities."}
+                    {authModalType === 'manageAccounts' && "Please sign in to upload and list social accounts for sale, and manage your listings."}
                   </p>
 
                   <div className="flex gap-3 justify-center">
