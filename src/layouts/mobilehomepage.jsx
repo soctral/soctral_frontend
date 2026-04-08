@@ -136,24 +136,30 @@ const MobileHomePage = () => {
     logout
   } = useUser();
 
-  // Show a one-time "get started" prompt after auth success.
+  // Show "get started" prompt after real login/signup events (not on refresh).
   useEffect(() => {
-    if (!isAuthenticated || !user?._id) return;
-    const userId = user._id || user.id;
-    const key = `soctra_post_auth_prompt_seen_${userId}`;
-    if (localStorage.getItem(key) === 'true') return;
+    if (!isAuthenticated) return;
+    const userId = user?._id || user?.id;
+    if (!userId) return;
 
-    const t = setTimeout(() => {
-      setShowPostAuthGetStarted(true);
-    }, 350);
+    let payload = null;
+    try {
+      payload = JSON.parse(localStorage.getItem('soctra_post_auth_prompt_event') || 'null');
+    } catch {
+      payload = null;
+    }
+    if (!payload?.userId || payload.userId !== userId) return;
+
+    // Consume event so refresh doesn't re-trigger.
+    try {
+      localStorage.removeItem('soctra_post_auth_prompt_event');
+    } catch { }
+
+    const t = setTimeout(() => setShowPostAuthGetStarted(true), 350);
     return () => clearTimeout(t);
   }, [isAuthenticated, user?._id, user?.id]);
 
   const closePostAuthPrompt = () => {
-    const userId = user?._id || user?.id;
-    if (userId) {
-      localStorage.setItem(`soctra_post_auth_prompt_seen_${userId}`, 'true');
-    }
     setShowPostAuthGetStarted(false);
   };
 

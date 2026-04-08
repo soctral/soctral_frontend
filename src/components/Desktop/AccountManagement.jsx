@@ -9,14 +9,14 @@ import ManageAccountRequests from "../../components/Desktop/ManageAccountRequest
 const ManageAccountModal = ({ isOpen, onClose, initialActiveModal = null }) => {
   const [activeModal, setActiveModal] = useState(null);
 
-  if (!isOpen) return null;
-
   // Allow callers to deep-link into a specific sub-modal.
   useEffect(() => {
     if (isOpen && initialActiveModal) {
       setActiveModal(initialActiveModal);
     }
   }, [isOpen, initialActiveModal]);
+
+  if (!isOpen) return null;
 
   const handleModalOpen = (modalType) => {
     setActiveModal(modalType);
