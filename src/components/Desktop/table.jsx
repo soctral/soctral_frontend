@@ -223,7 +223,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       'followers', 'followers_count', 'follower_count',
       'subscribers', 'subscribers_count', 'subscriber_count',
       'member_count', 'members', 'connections',
-      'fans', 'fans_count', 'likes', 'likes_count'
+      'fans', 'fans_count'
     ];
 
     // First check metrics array
