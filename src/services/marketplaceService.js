@@ -270,6 +270,37 @@ class MarketplaceService {
   // SELL ORDERS
   // ========================================
 
+  // Upload up to 3 photos for a sell order listing
+  async uploadSellOrderPhotos(files = []) {
+    try {
+      if (!this.isAuthenticated()) {
+        throw new Error('User not authenticated');
+      }
+
+      if (!Array.isArray(files) || files.length === 0) {
+        throw new Error('No photos selected');
+      }
+
+      if (files.length > 3) {
+        throw new Error('Maximum of 3 photos allowed');
+      }
+
+      const formData = new FormData();
+      files.forEach((file) => formData.append('photos', file));
+
+      const response = await apiService.request('/sell-orders/upload-photos', {
+        method: 'POST',
+        body: formData,
+      });
+
+      // API returns { status: true, data: { photos: [] } }
+      return response;
+    } catch (error) {
+      console.error('❌ Upload sell order photos failed:', error.message);
+      throw error;
+    }
+  }
+
   async createSellOrder(sellOrderData) {
     try {
 

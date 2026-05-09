@@ -7,7 +7,7 @@
  * No PIN verification step.
  */
 
-import { Check, Copy, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 // Platform icons
@@ -116,6 +116,11 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
 
   // Copy share link state
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Photos may be missing from list views; fetch on demand in view mode.
+  const [resolvedPhotos, setResolvedPhotos] = useState([]);
+  const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+  const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
 
   // Dynamic currency options from wallet data
   const { currencies, defaultCurrency } = useCurrencyOptions(walletData);
@@ -227,6 +232,78 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
       console.log('✅ UploadAccountListed: View mode setup complete with accountId:', tempAccountId);
     }
   }, [viewAccountData, isOpen]);
+
+  // If photos aren't present in the list row, fetch full order to get them.
+  useEffect(() => {
+    const maybeFetchPhotos = async () => {
+      if (!isOpen || !viewMode || !viewAccountData) return;
+      if (viewAccountData.isBuyOrder) return;
+
+      const directPhotos = Array.isArray(viewAccountData.photos)
+        ? viewAccountData.photos
+        : [];
+      if (directPhotos.length > 0) {
+        setResolvedPhotos(directPhotos);
+        return;
+      }
+
+      const id = viewAccountData.accountId;
+      if (!id) return;
+
+      try {
+        const res = await marketplaceService.getSellOrderById(id);
+        const data = res?.data ?? res;
+        const photos = Array.isArray(data?.photos) ? data.photos : [];
+        setResolvedPhotos(photos);
+      } catch (e) {
+        setResolvedPhotos([]);
+      }
+    };
+
+    maybeFetchPhotos();
+  }, [isOpen, viewMode, viewAccountData]);
+
+  const getAllPhotosForViewer = useCallback(() => {
+    const direct = Array.isArray(viewAccountData?.photos) ? viewAccountData.photos : [];
+    const fallback = Array.isArray(resolvedPhotos) ? resolvedPhotos : [];
+    return direct.length > 0 ? direct : fallback;
+  }, [viewAccountData?.photos, resolvedPhotos]);
+
+  const openPhotoViewer = useCallback((index) => {
+    const photos = getAllPhotosForViewer();
+    if (!photos.length) return;
+    const safeIndex = Math.max(0, Math.min(index, photos.length - 1));
+    setPhotoViewerIndex(safeIndex);
+    setIsPhotoViewerOpen(true);
+  }, [getAllPhotosForViewer]);
+
+  const closePhotoViewer = useCallback(() => {
+    setIsPhotoViewerOpen(false);
+  }, []);
+
+  const goPrevPhoto = useCallback(() => {
+    const photos = getAllPhotosForViewer();
+    if (!photos.length) return;
+    setPhotoViewerIndex((i) => (i - 1 + photos.length) % photos.length);
+  }, [getAllPhotosForViewer]);
+
+  const goNextPhoto = useCallback(() => {
+    const photos = getAllPhotosForViewer();
+    if (!photos.length) return;
+    setPhotoViewerIndex((i) => (i + 1) % photos.length);
+  }, [getAllPhotosForViewer]);
+
+  // Keyboard support for viewer
+  useEffect(() => {
+    if (!isPhotoViewerOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') closePhotoViewer();
+      if (e.key === 'ArrowLeft') goPrevPhoto();
+      if (e.key === 'ArrowRight') goNextPhoto();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isPhotoViewerOpen, closePhotoViewer, goPrevPhoto, goNextPhoto]);
 
   // Listen for viewAccountMetrics event
   useEffect(() => {
@@ -801,6 +878,47 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
                           <p className="text-white text-sm leading-relaxed">{viewAccountData.description}</p>
                         </div>
                       )}
+
+                      {/* Photos */}
+                      {(() => {
+                        const photos =
+                          (Array.isArray(viewAccountData.photos) && viewAccountData.photos.length > 0
+                            ? viewAccountData.photos
+                            : resolvedPhotos) || [];
+                        if (!Array.isArray(photos) || photos.length === 0) return null;
+                        return (
+                        <div className="bg-[rgba(255,255,255,0.03)] rounded-lg p-3">
+                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-2">Photos</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {photos.slice(0, 3).map((url, idx) => (
+                              <button
+                                key={`${url}-${idx}`}
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  openPhotoViewer(idx);
+                                }}
+                                className="block rounded-lg overflow-hidden border border-gray-700/50 bg-[rgba(255,255,255,0.02)] text-left"
+                                title="View photo"
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Account photo ${idx + 1}`}
+                                  className="w-full h-20 object-cover"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    // Avoid broken-image icon; keep a clean placeholder.
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -1079,6 +1197,108 @@ const UploadAccountListed = ({ isOpen, onClose, viewAccountData, walletData = nu
           setShowWalletSetup(false);
         }}
       />
+
+      {/* Photo viewer (lightbox) */}
+      {isPhotoViewerOpen && (() => {
+        const photos = getAllPhotosForViewer();
+        const current = photos[photoViewerIndex];
+        if (!current) {
+          return (
+            <>
+              <div className="fixed inset-0 bg-black/70 z-[10050]" onClick={closePhotoViewer} />
+              <div className="fixed inset-0 z-[10051] flex items-center justify-center p-4">
+                <div className="w-full max-w-xl bg-[#0D0D0D] border border-white/10 rounded-xl p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="text-white font-semibold">Photo viewer</div>
+                    <button
+                      type="button"
+                      onClick={closePhotoViewer}
+                      className="p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+                      aria-label="Close photo viewer"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
+                  <p className="mt-4 text-gray-400 text-sm">No photo to display.</p>
+                </div>
+              </div>
+            </>
+          );
+        }
+        return (
+          <>
+            <div
+              className="fixed inset-0 bg-black/70 z-[10050]"
+              onClick={closePhotoViewer}
+            />
+            <div className="fixed inset-0 z-[10051] flex items-center justify-center p-4">
+              <div
+                className="relative w-full max-w-3xl bg-[#0D0D0D] border border-white/10 rounded-xl overflow-hidden shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={closePhotoViewer}
+                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+                  aria-label="Close photo viewer"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+
+                <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                  <div className="text-white text-sm font-medium">
+                    Photo {photoViewerIndex + 1} of {photos.length}
+                  </div>
+                  <div className="text-gray-400 text-xs">Use ← / → keys</div>
+                </div>
+
+                <div className="relative flex items-center justify-center bg-black">
+                  <img
+                    src={current}
+                    alt={`Account photo ${photoViewerIndex + 1}`}
+                    className="max-h-[70vh] w-auto object-contain"
+                    referrerPolicy="no-referrer"
+                    draggable={false}
+                    onError={(e) => {
+                      // If the image fails in the viewer, show a simple message instead of a blank panel.
+                      e.currentTarget.style.display = 'none';
+                      const parent = e.currentTarget.parentElement;
+                      if (parent && !parent.querySelector('[data-photo-error]')) {
+                        const div = document.createElement('div');
+                        div.setAttribute('data-photo-error', 'true');
+                        div.className = 'text-gray-300 text-sm p-8';
+                        div.textContent = 'Failed to load image.';
+                        parent.appendChild(div);
+                      }
+                    }}
+                  />
+
+                  {photos.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={goPrevPhoto}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+                        aria-label="Previous photo"
+                      >
+                        <ChevronLeft className="w-6 h-6 text-white" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={goNextPhoto}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+                        aria-label="Next photo"
+                      >
+                        <ChevronRight className="w-6 h-6 text-white" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </>
   );
 };
