@@ -108,20 +108,6 @@ const isMinimalSellerInvoicePlatform = (platformLabel) => {
   return p === 'twitter' || p === 'x' || p === 'youtube' || p === 'tiktok';
 };
 
-/** Mirrors API default network-from-currency for invoice payloads when network UI is skipped */
-const paymentNetworkDefaultFromTokenUiSymbol = (tokenSymbolUpper) => {
-  const m = {
-    BTC: 'bitcoin',
-    ETH: 'ethereum',
-    USDT: 'ethereum',
-    USDC: 'base',
-    SOL: 'solana',
-    TRX: 'tron',
-    BNB: 'binance'
-  };
-  return m[tokenSymbolUpper] || 'ethereum';
-};
-
 const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToList, showChat, walletData }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -4014,7 +4000,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       if (!isMinimalSocialInvoice && !tradeData.accountPassword?.trim()) missingFields.push('accountPassword');
       if (!tradeData.accountUsername?.trim()) missingFields.push('accountUsername');
       if (!tradeData.paymentMethod) missingFields.push('paymentMethod');
-      if (!isMinimalSocialInvoice && !tradeData.paymentNetwork?.trim()) missingFields.push('paymentNetwork');
+      if (!tradeData.paymentNetwork?.trim()) missingFields.push('paymentNetwork');
       if (!tradeData.offerPrice || parseFloat(tradeData.offerPrice) <= 0) missingFields.push('offerPrice');
 
       if (missingFields.length > 0) {
@@ -4121,10 +4107,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         return;
       }
 
-      const paymentNetwork = isMinimalSocialInvoice
-        ? paymentNetworkDefaultFromTokenUiSymbol(tradeData.paymentMethod)
-        : (networkMap[tradeData.paymentNetwork] ||
-            String(tradeData.paymentNetwork || '').toLowerCase());
+      const paymentNetwork = networkMap[tradeData.paymentNetwork] ||
+        String(tradeData.paymentNetwork || '').toLowerCase();
 
       console.log('💳 Payment details - Currency:', currency, 'Network:', paymentNetwork, 'offerUSD:', offerUsdForInvoice);
 
@@ -7874,6 +7858,7 @@ const SellerInitiateModal = React.memo(({
     if (isMinimalSocialInvoice) {
       if (!localFormData.accountUsername?.trim()) errors.accountUsername = 'Username is required';
       if (!localFormData.paymentMethod?.trim()) errors.paymentMethod = 'Payment token is required';
+      if (!localFormData.paymentNetwork?.trim()) errors.paymentNetwork = 'Payment network is required';
       if (!localFormData.offerPrice || parseFloat(localFormData.offerPrice) <= 0) {
         errors.offerPrice = 'Amount is required';
       }
@@ -8124,7 +8109,6 @@ const SellerInitiateModal = React.memo(({
                 )}
               </div>
 
-              {!isMinimalSocialInvoice && (
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
                 <label className="text-gray-400 text-sm">Select Payment Network</label>
                 <select
@@ -8221,7 +8205,6 @@ const SellerInitiateModal = React.memo(({
                 </select>
                 {fieldErrors.paymentNetwork && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.paymentNetwork}</p>}
               </div>
-              )}
 
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
                 <label className="text-gray-400 text-sm">
