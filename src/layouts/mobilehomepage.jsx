@@ -33,6 +33,7 @@ import HistoryTable from '../components/Desktop/HistoryTable';
 import { useUser } from '../context/userContext';
 import WalletTransactionModal from '../components/Desktop/WalletTransaction';
 import ManageAccountModal from '../components/Desktop/AccountManagement';
+import PostAuthGetStartedModal from "../components/PostAuthGetStartedModal";
 import authService from '../services/authService';
 import chatService from '../services/chatService';
 import pushNotificationService from '../services/pushNotificationService';
@@ -104,6 +105,8 @@ const MobileHomePage = () => {
   const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [showWalletTransactionModal, setShowWalletTransactionModal] = useState(false);
   const [showManageAccountModal, setShowManageAccountModal] = useState(false);
+  const [showPostAuthGetStarted, setShowPostAuthGetStarted] = useState(false);
+  const [manageAccountInitialModal, setManageAccountInitialModal] = useState(null);
   const [pickOfWeekData, setPickOfWeekData] = useState([]);
 
   const [isLoadingPickOfWeek, setIsLoadingPickOfWeek] = useState(true);
@@ -132,6 +135,39 @@ const MobileHomePage = () => {
     getUserTier,
     logout
   } = useUser();
+
+  // Show "get started" prompt after real login/signup events (not on refresh).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const userId = user?._id || user?.id;
+    if (!userId) return;
+
+    let payload = null;
+    try {
+      payload = JSON.parse(localStorage.getItem('soctra_post_auth_prompt_event') || 'null');
+    } catch {
+      payload = null;
+    }
+    if (!payload?.userId || payload.userId !== userId) return;
+
+    // Consume event so refresh doesn't re-trigger.
+    try {
+      localStorage.removeItem('soctra_post_auth_prompt_event');
+    } catch { }
+
+    const t = setTimeout(() => setShowPostAuthGetStarted(true), 350);
+    return () => clearTimeout(t);
+  }, [isAuthenticated, user?._id, user?.id]);
+
+  const closePostAuthPrompt = () => {
+    setShowPostAuthGetStarted(false);
+  };
+
+  const openManageAccountsDeepLink = (initial) => {
+    closePostAuthPrompt();
+    setManageAccountInitialModal(initial);
+    setShowManageAccountModal(true);
+  };
 
   // Sync URL -> state when user hits back/forward (native back button support)
   useEffect(() => {
@@ -1614,6 +1650,13 @@ const MobileHomePage = () => {
   return (
     <>
       <div className="bg-black text-white min-h-screen relative">
+        <PostAuthGetStartedModal
+          isOpen={showPostAuthGetStarted}
+          onClose={closePostAuthPrompt}
+          onListAccount={() => openManageAccountsDeepLink('upload')}
+          onRequestAccount={() => openManageAccountsDeepLink('uploadRequest')}
+        />
+
         {/* Overlay for slide menu */}
         {showSlideMenu && (
           <div
@@ -1835,6 +1878,7 @@ const MobileHomePage = () => {
         <ManageAccountModal
           isOpen={showManageAccountModal}
           onClose={() => setShowManageAccountModal(false)}
+          initialActiveModal={manageAccountInitialModal}
         />
 
         {showAuthModal && (

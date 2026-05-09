@@ -1,13 +1,20 @@
 import { X, Star, Info, LogOut, HelpCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import manageLogo from "../../assets/manageLogo.svg";
 import UploadSocialAccount from "../../components/Desktop/UploadSocialAccount";
 import ManageListedAccounts from "../../components/Desktop/ManageListedAccount";
 import UploadAccountRequest from "../../components/Desktop/UploadAccountListed";
 import ManageAccountRequests from "../../components/Desktop/ManageAccountRequest";
 
-const ManageAccountModal = ({ isOpen, onClose }) => {
+const ManageAccountModal = ({ isOpen, onClose, initialActiveModal = null }) => {
   const [activeModal, setActiveModal] = useState(null);
+
+  // Allow callers to deep-link into a specific sub-modal.
+  useEffect(() => {
+    if (isOpen && initialActiveModal) {
+      setActiveModal(initialActiveModal);
+    }
+  }, [isOpen, initialActiveModal]);
 
   if (!isOpen) return null;
 

@@ -57,6 +57,8 @@ import WalletTransactionModal from '../components/Desktop/WalletTransaction';
 import HistoryTable from '../components/Desktop/HistoryTable';
 import WalletSetupModal from '../components/Desktop/WalletModal';
 import UploadAccountListed from '../components/Desktop/UploadAccountListed';
+import ManageAccountModal from "../components/Desktop/AccountManagement";
+import PostAuthGetStartedModal from "../components/PostAuthGetStartedModal";
 import walletService from '../services/walletService';
 import chatService from '../services/chatService';
 import pushNotificationService from '../services/pushNotificationService';
@@ -94,6 +96,9 @@ const HomePage = () => {
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalType, setAuthModalType] = useState('');
+  const [showPostAuthGetStarted, setShowPostAuthGetStarted] = useState(false);
+  const [showManageAccountModal, setShowManageAccountModal] = useState(false);
+  const [manageAccountInitialModal, setManageAccountInitialModal] = useState(null);
   const [walletModalType, setWalletModalType] = useState(null);
   const [selectedChatUser, setSelectedChatUser] = useState(null);
   const [showWalletSetupModal, setShowWalletSetupModal] = useState(false);
@@ -129,6 +134,39 @@ const HomePage = () => {
   } = useUser();
 
   const { logout } = useUser();
+
+  // Show "get started" prompt after real login/signup events (not on refresh).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const userId = userData?._id || userData?.id;
+    if (!userId) return;
+
+    let payload = null;
+    try {
+      payload = JSON.parse(localStorage.getItem('soctra_post_auth_prompt_event') || 'null');
+    } catch {
+      payload = null;
+    }
+    if (!payload?.userId || payload.userId !== userId) return;
+
+    // Consume event so refresh doesn't re-trigger.
+    try {
+      localStorage.removeItem('soctra_post_auth_prompt_event');
+    } catch { }
+
+    const t = setTimeout(() => setShowPostAuthGetStarted(true), 350);
+    return () => clearTimeout(t);
+  }, [isAuthenticated, userData?._id, userData?.id]);
+
+  const closePostAuthPrompt = () => {
+    setShowPostAuthGetStarted(false);
+  };
+
+  const openManageAccountsDeepLink = (initial) => {
+    closePostAuthPrompt();
+    setManageAccountInitialModal(initial);
+    setShowManageAccountModal(true);
+  };
 
   // Sync URL -> state when user hits back/forward (native back button support)
   useEffect(() => {
@@ -1654,6 +1692,18 @@ const HomePage = () => {
   return (
     <>
       <div className="bg-black text-white min-h-screen relative">
+        <PostAuthGetStartedModal
+          isOpen={showPostAuthGetStarted}
+          onClose={closePostAuthPrompt}
+          onListAccount={() => openManageAccountsDeepLink('upload')}
+          onRequestAccount={() => openManageAccountsDeepLink('uploadRequest')}
+        />
+
+        <ManageAccountModal
+          isOpen={showManageAccountModal}
+          onClose={() => setShowManageAccountModal(false)}
+          initialActiveModal={manageAccountInitialModal}
+        />
 
         {/* Overlay for slide menu */}
         {showSlideMenu && (

@@ -33,6 +33,8 @@ const initialState = {
   },
 };
 
+const AUTH_PROMPT_EVENT_KEY = 'soctra_post_auth_prompt_event';
+
 // User reducer
 const userReducer = (state, action) => {
   switch (action.type) {
@@ -180,6 +182,14 @@ export const UserProvider = ({ children }) => {
       dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
       dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
 
+      // Signal homepage to show post-auth prompt (consumed once)
+      try {
+        localStorage.setItem(
+          AUTH_PROMPT_EVENT_KEY,
+          JSON.stringify({ userId: response.user?._id || response.user?.id, at: Date.now() }),
+        );
+      } catch { }
+
 
       return {
         status: true,
@@ -236,6 +246,14 @@ export const UserProvider = ({ children }) => {
       // Update context state
       dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
 
+      // Signal homepage to show post-auth prompt (consumed once)
+      try {
+        localStorage.setItem(
+          AUTH_PROMPT_EVENT_KEY,
+          JSON.stringify({ userId: response.user?._id || response.user?.id, at: Date.now() }),
+        );
+      } catch { }
+
 
       return {
         status: true,
@@ -275,6 +293,15 @@ export const UserProvider = ({ children }) => {
       }
       dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
       dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
+
+      // Signal homepage to show post-auth prompt (consumed once)
+      try {
+        localStorage.setItem(
+          AUTH_PROMPT_EVENT_KEY,
+          JSON.stringify({ userId: response.user?._id || response.user?.id, at: Date.now() }),
+        );
+      } catch { }
+
       return {
         status: true,
         success: true,
@@ -316,6 +343,14 @@ export const UserProvider = ({ children }) => {
       if (response?.user) {
         dispatch({ type: USER_ACTIONS.SET_USER, payload: response.user });
         dispatch({ type: USER_ACTIONS.CLEAR_SIGNUP_DATA });
+
+        // Signal homepage to show post-auth prompt (consumed once)
+        try {
+          localStorage.setItem(
+            AUTH_PROMPT_EVENT_KEY,
+            JSON.stringify({ userId: response.user?._id || response.user?.id, at: Date.now() }),
+          );
+        } catch { }
       }
       return response;
     } catch (error) {

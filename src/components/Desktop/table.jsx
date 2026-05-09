@@ -303,6 +303,7 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
         platform: order.platform?.toLowerCase(),
         metrics: order.metrics,
         filters: order.filters,
+        photos: Array.isArray(order.photos) ? order.photos : [],
         // Add these fields for complete metadata
         accountUsername: accountUsername,
         username: accountUsername,
@@ -417,7 +418,8 @@ const Tables = ({ onSelectChatUser, setActiveMenuSection: setMenuSection, onView
       platform: account.platform,
       metrics: account.metrics,
       filters: account.filters,
-      accountId: account.id,
+      photos: Array.isArray(account.photos) ? account.photos : [],
+      accountId: account.id || account._id,
       price: account.price,
       currency: account.currency
     };

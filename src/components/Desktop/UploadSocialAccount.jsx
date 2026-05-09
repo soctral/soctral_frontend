@@ -95,6 +95,9 @@ const UploadSocialAccount = ({ isOpen, onClose, walletData = null }) => {
     accountType: ''
   });
 
+  // Photos (max 3)
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
+
   // Submission state
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -327,6 +330,13 @@ const UploadSocialAccount = ({ isOpen, onClose, walletData = null }) => {
         throw new Error('Wallet address not found. Please set up your wallet first.');
       }
 
+      // Upload photos (if any) before creating sell order
+      let uploadedPhotoUrls = [];
+      if (selectedPhotos.length > 0) {
+        const uploadRes = await marketplaceService.uploadSellOrderPhotos(selectedPhotos);
+        uploadedPhotoUrls = uploadRes?.data?.photos || uploadRes?.photos || [];
+      }
+
       const sellOrderPayload = {
         platform: selectedButton,
         accountType: priceData.accountType,
@@ -337,7 +347,8 @@ const UploadSocialAccount = ({ isOpen, onClose, walletData = null }) => {
         isFeatured: priceData.isFeatured,
         metrics: currentPlatformData.metrics,
         filters: currentPlatformData.filters,
-        walletAddress: walletAddress
+        walletAddress: walletAddress,
+        photos: uploadedPhotoUrls
       };
 
       console.log('📤 Submitting sell order:', sellOrderPayload);
@@ -367,6 +378,7 @@ const UploadSocialAccount = ({ isOpen, onClose, walletData = null }) => {
         isFeatured: false,
         accountType: ''
       });
+      setSelectedPhotos([]);
 
       setCurrentAccountId(null);
       setSelectedButton(null);
@@ -686,6 +698,50 @@ const UploadSocialAccount = ({ isOpen, onClose, walletData = null }) => {
                     className="w-full px-3 py-4 bg-[rgba(255,255,255,0.1)] text-xs rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#613cd0] resize-none"
                     placeholder="Describe your account..."
                   />
+                </div>
+
+                {/* Photos (optional, max 3) */}
+                <div>
+                  <label className="block text-sm font-semibold mb-2">
+                    Account Photos <span className="text-gray-400 text-xs font-normal">(optional, max 3)</span>
+                  </label>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      const next = files.slice(0, 3);
+                      setSelectedPhotos(next);
+                      // allow re-selecting same files
+                      e.target.value = '';
+                    }}
+                    className="w-full text-xs text-gray-300"
+                  />
+
+                  {selectedPhotos.length > 0 && (
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {selectedPhotos.map((file, idx) => (
+                        <div key={`${file.name}-${idx}`} className="relative rounded-lg overflow-hidden bg-[rgba(255,255,255,0.05)] border border-gray-700/50">
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={`Selected ${idx + 1}`}
+                            className="w-full h-20 object-cover"
+                            onLoad={(e) => URL.revokeObjectURL(e.target.src)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPhotos(prev => prev.filter((_, i) => i !== idx))}
+                            className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1"
+                            aria-label="Remove photo"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Quantity */}
