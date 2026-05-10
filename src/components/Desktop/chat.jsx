@@ -96,6 +96,18 @@ const extractChatTypeFromChannelId = (channelId) => {
   return 'buy';
 };
 
+/** Platform shown on invoice; X / YouTube / TikTok collect only username + payment token */
+const getSellerInvoicePlatformLabel = (channelMeta, selUser) => {
+  const fromMeta = channelMeta?.platform;
+  if (fromMeta && String(fromMeta).trim() !== '' && fromMeta !== 'Unknown') return String(fromMeta);
+  return selUser?.platform ? String(selUser.platform) : '';
+};
+
+const isMinimalSellerInvoicePlatform = (platformLabel) => {
+  const p = String(platformLabel || '').toLowerCase().trim();
+  return p === 'twitter' || p === 'x' || p === 'youtube' || p === 'tiktok';
+};
+
 const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToList, showChat, walletData }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -3979,14 +3991,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         return emailFilter.value === true || emailFilter.value === 'yes';
       })();
 
+      const invoicePlatformLabel = getSellerInvoicePlatformLabel(channelMetadata, selectedUser);
+      const isMinimalSocialInvoice = isMinimalSellerInvoicePlatform(invoicePlatformLabel);
+
       const missingFields = [];
-      if (hasOriginalEmail && !tradeData.accountEmail) missingFields.push('accountEmail');
-      if (hasOriginalEmail && !tradeData.emailPassword) missingFields.push('emailPassword');
-      if (!tradeData.accountPassword) missingFields.push('accountPassword');
+      if (!isMinimalSocialInvoice && hasOriginalEmail && !tradeData.accountEmail) missingFields.push('accountEmail');
+      if (!isMinimalSocialInvoice && hasOriginalEmail && !tradeData.emailPassword) missingFields.push('emailPassword');
+      if (!isMinimalSocialInvoice && !tradeData.accountPassword?.trim()) missingFields.push('accountPassword');
       if (!tradeData.accountUsername?.trim()) missingFields.push('accountUsername');
       if (!tradeData.paymentMethod) missingFields.push('paymentMethod');
-      if (!tradeData.paymentNetwork) missingFields.push('paymentNetwork');
-      if (!tradeData.offerPrice) missingFields.push('offerPrice');
+      if (!tradeData.paymentNetwork?.trim()) missingFields.push('paymentNetwork');
+      if (!tradeData.offerPrice || parseFloat(tradeData.offerPrice) <= 0) missingFields.push('offerPrice');
 
       if (missingFields.length > 0) {
         setErrorModalData({
@@ -4072,7 +4087,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
       const currency = currencyMap[tradeData.paymentMethod] ||
         tradeData.paymentMethod.toLowerCase();
 
-      // Step 6: Convert payment network to API-compatible format
+      // Step 6: Amount + network for API
       const networkMap = {
         'Bitcoin': 'bitcoin',
         'Ethereum (ERC20)': 'ethereum',
@@ -4081,10 +4096,21 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         'Solana': 'solana',
         'BNB Smart Chain': 'binance'
       };
-      const paymentNetwork = networkMap[tradeData.paymentNetwork] ||
-        tradeData.paymentNetwork.toLowerCase();
 
-      console.log('💳 Payment details - Currency:', currency, 'Network:', paymentNetwork);
+      const offerUsdForInvoice = parseFloat(tradeData.offerPrice);
+      if (!Number.isFinite(offerUsdForInvoice) || offerUsdForInvoice <= 0) {
+        setIsProcessingTrade(false);
+        setErrorModalData({
+          message: 'Enter a valid trade amount and try again.'
+        });
+        setShowErrorModal(true);
+        return;
+      }
+
+      const paymentNetwork = networkMap[tradeData.paymentNetwork] ||
+        String(tradeData.paymentNetwork || '').toLowerCase();
+
+      console.log('💳 Payment details - Currency:', currency, 'Network:', paymentNetwork, 'offerUSD:', offerUsdForInvoice);
 
       // ========================================
       // 🔥 FIXED: Only fetch CURRENT USER's wallet address
@@ -4206,18 +4232,24 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         buyOrderId: chatType === 'sell' ? invoiceOrderId : undefined,
         buyerId: buyerId,
         sellerId: sellerId,
-        accountOriginalEmail: tradeData.accountEmail,
-        originalEmailPassword: tradeData.emailPassword,
-        socialAccountPassword: tradeData.accountPassword,
+        socialAccountPassword: isMinimalSocialInvoice ? '' : tradeData.accountPassword,
         ...(tradeData.accountUsername?.trim() && { accountUsername: tradeData.accountUsername.trim() }),
         sellerWalletAddress: sellerAddress,
         buyerWalletAddress: buyerAddress,
-        offerAmount: parseFloat(tradeData.offerPrice),
-        amountUSD: parseFloat(tradeData.offerPrice),
+        offerAmount: offerUsdForInvoice,
+        amountUSD: offerUsdForInvoice,
         paymentMethod: currency,
         paymentNetwork: paymentNetwork,
         ...(channelIdForInvoice && { channelId: channelIdForInvoice })
       };
+      if (!isMinimalSocialInvoice) {
+        if (tradeData.accountEmail?.trim()) {
+          invoicePayload.accountOriginalEmail = tradeData.accountEmail.trim();
+        }
+        if (tradeData.emailPassword?.trim()) {
+          invoicePayload.originalEmailPassword = tradeData.emailPassword;
+        }
+      }
 
       // Remove undefined keys
       Object.keys(invoicePayload).forEach(key => invoicePayload[key] === undefined && delete invoicePayload[key]);
@@ -4294,7 +4326,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           // 🔥 Fee and total from invoice response (backend: transactionFeeUSD = gas + company, totalAmountUSD = amount + transactionFee)
           const inv = response.transaction || response.data || {};
           const transactionFeeUSD = inv.transactionFeeUSD ?? inv.companyFeeUSD ?? inv.feeUSD ?? 0;
-          const totalAmountUSD = inv.totalAmountUSD ?? (parseFloat(tradeData.offerPrice) || 0) + transactionFeeUSD;
+          const totalAmountUSD = inv.totalAmountUSD ?? offerUsdForInvoice + transactionFeeUSD;
           const companyFeeUSD = inv.companyFeeUSD ?? 0;
           const gasFeeUSD = inv.gasFeeUSD ?? 0;
 
@@ -4304,7 +4336,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             transaction_id: inv._id || inv.id,
             seller_id: sellerId,
             buyer_id: buyerId,
-            offer_amount: parseFloat(tradeData.offerPrice),
+            offer_amount: offerUsdForInvoice,
             fee_usd: transactionFeeUSD,
             transaction_fee_usd: transactionFeeUSD,
             company_fee_usd: companyFeeUSD,
@@ -4313,10 +4345,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             payment_method: currency,
             payment_network: paymentNetwork,
             initiated_at: new Date().toISOString(),
-            // 🔥 NEW: Include credentials for buyer
-            account_original_email: tradeData.accountEmail,
-            original_email_password: tradeData.emailPassword,
-            social_account_password: tradeData.accountPassword,
+            // 🔥 NEW: Include credentials for buyer (X/YT/TikTok minimal invoices omit passwords)
+            account_original_email: isMinimalSocialInvoice ? '' : tradeData.accountEmail,
+            original_email_password: isMinimalSocialInvoice ? '' : tradeData.emailPassword,
+            social_account_password: isMinimalSocialInvoice ? '' : tradeData.accountPassword,
             // 🔥 NEW: Include platform info 
             platform: channelMetadata?.platform || currentChannel?.data?.metadata?.platform || 'Unknown',
             account_username: channelMetadata?.accountUsername || currentChannel?.data?.metadata?.accountUsername || 'N/A',
@@ -4329,7 +4361,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           console.log('📦 Trade init data (stringified):', tradeInitDataString);
           
           const messageData = {
-            text: `🎉 Trade initiated! Seller has made an offer of $${tradeData.offerPrice} in ${tradeData.paymentMethod.toUpperCase()}`,
+            text: `🎉 Trade initiated! Seller has made an offer of $${offerUsdForInvoice} in ${tradeData.paymentMethod.toUpperCase()}`,
             // 🔥 Store custom data in a custom field that Stream Chat preserves
             trade_init_data: tradeInitDataString
           };
@@ -4349,8 +4381,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             await currentChannel.update({
               metadata: {
                 ...existingMetadata,
-                trade_price: String(tradeData.offerPrice),
-                offer_amount: String(tradeData.offerPrice)
+                trade_price: String(offerUsdForInvoice),
+                offer_amount: String(offerUsdForInvoice)
               }
             });
             console.log('✅ Channel trade_price updated to:', tradeData.offerPrice);
@@ -7804,8 +7836,11 @@ const SellerInitiateModal = React.memo(({
     return null;
   }
 
+  const invoicePlatformLabel = getSellerInvoicePlatformLabel(channelMetadata, selectedUser);
+  const isMinimalSocialInvoice = isMinimalSellerInvoicePlatform(invoicePlatformLabel);
+
   // 🔥 Show original email fields only when sell order filter original_email is true; hide when false or missing
-  const hasOriginalEmail = (() => {
+  const hasOriginalEmail = !isMinimalSocialInvoice && (() => {
     const filters = selectedUser?.filters || [];
     const metrics = selectedUser?.metrics || [];
     const allData = [...filters, ...metrics];
@@ -7820,15 +7855,24 @@ const SellerInitiateModal = React.memo(({
 
     // Validate required fields
     const errors = {};
-    // Only validate email fields if original email was available during upload
-    if (hasOriginalEmail) {
-      if (!localFormData.accountEmail?.trim()) errors.accountEmail = 'Account email is required';
-      if (!localFormData.emailPassword?.trim()) errors.emailPassword = 'Email password is required';
+    if (isMinimalSocialInvoice) {
+      if (!localFormData.accountUsername?.trim()) errors.accountUsername = 'Username is required';
+      if (!localFormData.paymentMethod?.trim()) errors.paymentMethod = 'Payment token is required';
+      if (!localFormData.paymentNetwork?.trim()) errors.paymentNetwork = 'Payment network is required';
+      if (!localFormData.offerPrice || parseFloat(localFormData.offerPrice) <= 0) {
+        errors.offerPrice = 'Amount is required';
+      }
+    } else {
+      // Only validate email fields if original email was available during upload
+      if (hasOriginalEmail) {
+        if (!localFormData.accountEmail?.trim()) errors.accountEmail = 'Account email is required';
+        if (!localFormData.emailPassword?.trim()) errors.emailPassword = 'Email password is required';
+      }
+      if (!localFormData.accountPassword?.trim()) errors.accountPassword = 'Account password is required';
+      if (!localFormData.accountUsername?.trim()) errors.accountUsername = 'Account username is required';
+      if (!localFormData.paymentNetwork?.trim()) errors.paymentNetwork = 'Payment network is required';
+      if (!localFormData.offerPrice || parseFloat(localFormData.offerPrice) <= 0) errors.offerPrice = 'Offer amount is required';
     }
-    if (!localFormData.accountPassword?.trim()) errors.accountPassword = 'Account password is required';
-    if (!localFormData.accountUsername?.trim()) errors.accountUsername = 'Account username is required';
-    if (!localFormData.paymentNetwork?.trim()) errors.paymentNetwork = 'Payment network is required';
-    if (!localFormData.offerPrice || parseFloat(localFormData.offerPrice) <= 0) errors.offerPrice = 'Offer amount is required';
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -7909,7 +7953,7 @@ const SellerInitiateModal = React.memo(({
               </div>
 
               {/* Show original email fields only when sell order filter original_email is true */}
-              {hasOriginalEmail && (
+              {hasOriginalEmail && !isMinimalSocialInvoice && (
                 <>
                   <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
                     <label className="text-gray-400 text-sm">Account Original Email</label>
@@ -7945,6 +7989,7 @@ const SellerInitiateModal = React.memo(({
                 </>
               )}
 
+              {!isMinimalSocialInvoice && (
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
                 <label className="text-gray-400 text-sm">Social Account Password</label>
                 <input
@@ -7960,9 +8005,12 @@ const SellerInitiateModal = React.memo(({
                 />
                 {fieldErrors.accountPassword && <p className="text-red-500 text-xs mt-1 ml-2">{fieldErrors.accountPassword}</p>}
               </div>
+              )}
 
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
-                <label className="text-gray-400 text-sm mb-3 block">Select Payment Method</label>
+                <label className="text-gray-400 text-sm mb-3 block">
+                  {isMinimalSocialInvoice ? 'Payment token for this trade' : 'Select Payment Method'}
+                </label>
                 <div className="flex overflow-x-auto items-center gap-2">
                   {(() => {
                     // Build unique tokens from walletData.balances.currencies (new structure)
@@ -8041,7 +8089,10 @@ const SellerInitiateModal = React.memo(({
                       <button
                         key={option.token}
                         type="button"
-                        onClick={() => setLocalFormData(prev => ({ ...prev, paymentMethod: option.token, paymentNetwork: '' }))}
+                        onClick={() => {
+                          setLocalFormData(prev => ({ ...prev, paymentMethod: option.token, paymentNetwork: '' }));
+                          if (fieldErrors.paymentMethod) setFieldErrors(prev => ({ ...prev, paymentMethod: '' }));
+                        }}
                         className={`px-3 py-2 rounded-full text-xs font-medium transition-colors flex items-center gap-1 ${localFormData.paymentMethod === option.token
                           ? 'bg-primary text-white'
                           : 'bg-[#1a1a1a] text-gray-400 hover:text-white'
@@ -8053,6 +8104,9 @@ const SellerInitiateModal = React.memo(({
                     ));
                   })()}
                 </div>
+                {fieldErrors.paymentMethod && (
+                  <p className="text-red-500 text-xs mt-2 ml-2">{fieldErrors.paymentMethod}</p>
+                )}
               </div>
 
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
@@ -8153,7 +8207,9 @@ const SellerInitiateModal = React.memo(({
               </div>
 
               <div className='bg-[rgba(24,24,24,1)] rounded-xl p-5'>
-                <label className="text-gray-400 text-sm">Make an Offer</label>
+                <label className="text-gray-400 text-sm">
+                  {isMinimalSocialInvoice ? 'Amount (USD)' : 'Make an Offer'}
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -8187,7 +8243,9 @@ const SellerInitiateModal = React.memo(({
   // Excluded walletData - it changes frequently from parent and we use ref instead
   return (
     prevProps.show === nextProps.show &&
-    prevProps.isProcessingTrade === nextProps.isProcessingTrade
+    prevProps.isProcessingTrade === nextProps.isProcessingTrade &&
+    getSellerInvoicePlatformLabel(prevProps.channelMetadata, prevProps.selectedUser) ===
+      getSellerInvoicePlatformLabel(nextProps.channelMetadata, nextProps.selectedUser)
   );
 });
 
