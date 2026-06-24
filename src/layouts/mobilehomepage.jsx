@@ -44,6 +44,7 @@ import UploadAccountListed from '../components/Desktop/UploadAccountListed';
 import walletService from '../services/walletService';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../config.js';
+import MobileEscrowFlow from '../components/Mobile/MobileEscrowFlow';
 
 import tiktok from "../assets/tiktok.svg";
 import linkedin2 from "../assets/linkedin2.svg";
@@ -113,6 +114,7 @@ const MobileHomePage = () => {
   const [walletTransactionType, setWalletTransactionType] = useState(null);
   const [showChat, setShowChat] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [showMobileEscrowFlow, setShowMobileEscrowFlow] = useState(false);
 
   // Wallet data states - SIMPLIFIED (matching Homepage.jsx)
   const [walletData, setWalletData] = useState({
@@ -162,6 +164,8 @@ const MobileHomePage = () => {
   const closePostAuthPrompt = () => {
     setShowPostAuthGetStarted(false);
   };
+
+  // Escrow flow is now triggered by the trade tab button, not auto-shown
 
   const openManageAccountsDeepLink = (initial) => {
     closePostAuthPrompt();
@@ -1124,13 +1128,8 @@ const MobileHomePage = () => {
     if (tabName === 'trade') {
       setActiveTab("trade");
       setActiveMenuSection("wallet");
-
-      if (!hasSeenBuySellOnboarding) {
-        setShowBuySellOnboarding(true);
-        setHasSeenBuySellOnboarding(true);
-      } else {
-        setShowBuySellModal(true);
-      }
+      // Show the escrow flow picker (Buy/Sell vs Create Escrow)
+      setShowMobileEscrowFlow(true);
       return;
     }
 
@@ -1953,6 +1952,20 @@ const MobileHomePage = () => {
           viewAccountData={viewAccountData}
           walletData={walletData}
         />
+        {showMobileEscrowFlow && (
+          <MobileEscrowFlow
+            onClose={() => setShowMobileEscrowFlow(false)}
+            onBuySell={() => {
+              // User chose Buy/Sell from the picker — open existing buy/sell flow
+              if (!hasSeenBuySellOnboarding) {
+                setShowBuySellOnboarding(true);
+                setHasSeenBuySellOnboarding(true);
+              } else {
+                setShowBuySellModal(true);
+              }
+            }}
+          />
+        )}
       </div>
 
     </>
