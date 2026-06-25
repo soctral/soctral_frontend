@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Info, Search, DollarSign, Calendar, Plus, Minus, X, Loader2, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Info, Search, DollarSign, Calendar, Plus, Minus, X, Loader2, ChevronDown, Check } from 'lucide-react';
 import btc from '../../assets/btc.svg';
 import eth from '../../assets/eth.svg';
 import usdt from '../../assets/usdt.svg';
@@ -263,23 +263,26 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
           <div className="flex-1 overflow-y-auto px-6 py-2 custom-scrollbar">
             {/* Progress Tracker */}
             <div className="py-6 px-4">
-              <div className="flex items-center justify-between relative">
-                <div className="absolute left-4 right-4 top-2.5 h-[2px] bg-white/10 -z-10"></div>
+              <div className="flex items-center justify-between relative z-0">
+                {/* Progress Line */}
+                <div className="absolute left-[10px] right-[10px] top-[10px] h-[2px] bg-white/10 -z-10">
+                  <div className="h-full bg-primary transition-all duration-300" style={{ width: '0%' }}></div> {/* Width becomes 50% on Review, 100% on Confirm */}
+                </div>
                 
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-[#181818] border-4 border-primary flex items-center justify-center relative">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                  <div className="w-5 h-5 rounded-full bg-[#181818] border-[3px] border-primary flex items-center justify-center relative z-10">
+                    <Check className="w-3 h-3 text-white" strokeWidth={4} />
                   </div>
                   <span className="text-white text-xs font-medium">Details</span>
                 </div>
                 
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-[#0D0D0D] border-2 border-white/20"></div>
+                  <div className="w-5 h-5 rounded-full bg-[#0D0D0D] border-2 border-white/20 relative z-10"></div>
                   <span className="text-gray-500 text-xs font-medium">Review</span>
                 </div>
                 
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-[#0D0D0D] border-2 border-white/20"></div>
+                  <div className="w-5 h-5 rounded-full bg-[#0D0D0D] border-2 border-white/20 relative z-10"></div>
                   <span className="text-gray-500 text-xs font-medium">Confirm</span>
                 </div>
               </div>
@@ -403,9 +406,19 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
                       </div>
                       <input 
                         type="number" 
+                        min="0"
+                        onKeyDown={(e) => {
+                          if (e.key === '-' || e.key === 'e' || e.key === '+') {
+                            e.preventDefault();
+                          }
+                        }}
                         placeholder="Enter Amount"
                         value={localData.amount}
-                        onChange={(e) => handleChange('amount', e.target.value)}
+                        onChange={(e) => {
+                          if (e.target.value === '' || Number(e.target.value) >= 0) {
+                            handleChange('amount', e.target.value);
+                          }
+                        }}
                         className={`w-full bg-[#181818] border ${errors.amount ? 'border-red-500' : 'border-white/10'} rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors`}
                       />
                     </div>
@@ -464,7 +477,12 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
                   <label className="block text-gray-400 text-sm mb-2">Select Deal Duration</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <div className={`bg-[#181818] border ${errors.startDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 px-4 flex justify-between items-center relative transition-colors`}>
+                      <div 
+                        onClick={(e) => {
+                          try { e.currentTarget.querySelector('input')?.showPicker?.(); } catch (err) {}
+                        }}
+                        className={`bg-[#181818] border ${errors.startDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 px-4 flex justify-between items-center relative transition-colors cursor-pointer`}
+                      >
                         <div className="flex-1">
                           <span className="block text-gray-500 text-[10px] mb-1">Start Date</span>
                           <input 
@@ -480,7 +498,12 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
                     </div>
 
                     <div>
-                      <div className={`bg-[#181818] border ${errors.endDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 px-4 flex justify-between items-center relative transition-colors`}>
+                      <div 
+                        onClick={(e) => {
+                          try { e.currentTarget.querySelector('input')?.showPicker?.(); } catch (err) {}
+                        }}
+                        className={`bg-[#181818] border ${errors.endDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 px-4 flex justify-between items-center relative transition-colors cursor-pointer`}
+                      >
                         <div className="flex-1">
                           <span className="block text-gray-500 text-[10px] mb-1">End Date</span>
                           <input 
