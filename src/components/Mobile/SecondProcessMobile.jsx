@@ -7,7 +7,7 @@ import sol from '../../assets/sol.svg';
 import bnb from '../../assets/bnb.svg';
 import trx from '../../assets/trx.svg';
 import usdc from '../../assets/usdc.svg';
-import escrowService, { PAYMENT_NETWORK_MAP } from '../../services/escrowService';
+import escrowService, { PAYMENT_NETWORK_MAP, TOKEN_NETWORKS, NETWORK_LABELS } from '../../services/escrowService';
 
 const PAYMENT_METHODS = [
   { id: 'btc', icon: btc, label: 'BTC' },
@@ -31,6 +31,10 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
   // --- Payment dropdown state ---
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
   const paymentDropdownRef = useRef(null);
+
+  // --- Network dropdown state ---
+  const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
+  const networkDropdownRef = useRef(null);
 
   // --- User search state ---
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,6 +116,9 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
       }
       if (paymentDropdownRef.current && !paymentDropdownRef.current.contains(e.target)) {
         setShowPaymentDropdown(false);
+      }
+      if (networkDropdownRef.current && !networkDropdownRef.current.contains(e.target)) {
+        setShowNetworkDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -230,6 +237,7 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
     if (!localData.description.trim()) newErrors.description = 'Description is required';
     if (!localData.partnerId) newErrors.dealPartner = 'Please select a deal partner from the search results';
     if (!localData.amount || isNaN(localData.amount) || Number(localData.amount) <= 0) newErrors.amount = 'Valid amount is required';
+    if (!localData.network) newErrors.network = 'Network is required';
     if (!localData.startDate) newErrors.startDate = 'Start Date is required';
     if (!localData.endDate) newErrors.endDate = 'End Date is required';
     
@@ -473,6 +481,47 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Network Dropdown */}
+            <div ref={networkDropdownRef} className="relative">
+              <label className="block text-gray-400 text-xs mb-2">Select Network</label>
+              <button
+                type="button"
+                onClick={() => setShowNetworkDropdown(prev => !prev)}
+                className="w-full bg-[#181818] border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-left hover:border-white/20 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-white text-sm font-medium">
+                    {NETWORK_LABELS[localData.network] || localData.network || 'Select Network'}
+                  </span>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showNetworkDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showNetworkDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-10 max-h-56 overflow-y-auto shadow-xl">
+                  {(TOKEN_NETWORKS[localData.paymentMethod] || []).map((net) => (
+                    <button
+                      key={net}
+                      onClick={() => {
+                        handleChange('network', net);
+                        setShowNetworkDropdown(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
+                        localData.network === net
+                          ? 'bg-primary/10 border-l-2 border-primary'
+                          : 'hover:bg-white/5 border-l-2 border-transparent'
+                      }`}
+                    >
+                      <span className={`text-sm font-medium ${
+                        localData.network === net ? 'text-white' : 'text-gray-300'
+                      }`}>{NETWORK_LABELS[net] || net}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {errors.network && <p className="text-red-500 text-[10px] mt-1">{errors.network}</p>}
             </div>
 
             {/* Deal Duration */}

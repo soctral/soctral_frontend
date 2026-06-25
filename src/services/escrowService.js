@@ -17,6 +17,25 @@ export const PAYMENT_NETWORK_MAP = {
   usdc: "ethereum",
 };
 
+export const TOKEN_NETWORKS = {
+  btc: ['bitcoin'],
+  eth: ['ethereum', 'base', 'binance'],
+  usdt: ['ethereum', 'tron', 'solana', 'binance'],
+  sol: ['solana'],
+  bnb: ['binance'],
+  trx: ['tron'],
+  usdc: ['ethereum', 'base', 'solana']
+};
+
+export const NETWORK_LABELS = {
+  ethereum: 'Ethereum (ERC20)',
+  bitcoin: 'Bitcoin',
+  binance: 'Binance Smart Chain (BEP20)',
+  base: 'Base',
+  tron: 'Tron (TRC20)',
+  solana: 'Solana'
+};
+
 const escrowService = {
   // ──────────────────────────────────────
   // 1. Search Users (partner autocomplete)
