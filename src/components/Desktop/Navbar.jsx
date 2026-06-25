@@ -25,7 +25,8 @@ const Navbar = ({
   onNavigateHome,
   setActiveMenuSection,
   chatUnreadCount = 0,
-  walletData = null  // 🔥 NEW: Receive wallet data for WalletTransactionModal
+  walletData = null,  // 🔥 NEW: Receive wallet data for WalletTransactionModal
+  onTradeClick         // Callback for showing the trade option picker (Buy/Sell vs Escrow)
 }) => {
   const { user } = useUser();
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -87,7 +88,10 @@ const Navbar = ({
       setActiveTab("trade");
       setActiveMenuSection("wallet");
 
-      if (!hasSeenBuySellOnboarding) {
+      // Delegate to parent to show the option picker (Buy/Sell vs Create Escrow)
+      if (typeof onTradeClick === 'function') {
+        onTradeClick();
+      } else if (!hasSeenBuySellOnboarding) {
         setShowBuySellOnboarding(true);
         setHasSeenBuySellOnboarding(true);
       } else {
