@@ -26,6 +26,7 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
   const [localData, setLocalData] = useState(formData);
   const [errors, setErrors] = useState({});
+  const todayString = new Date().toISOString().split('T')[0];
 
   // --- Payment dropdown state ---
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
@@ -487,6 +488,7 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
                           <span className="block text-gray-500 text-[10px] mb-1">Start Date</span>
                           <input 
                             type="date" 
+                            min={todayString}
                             value={localData.startDate}
                             onChange={(e) => handleChange('startDate', e.target.value)}
                             className="bg-transparent text-white text-sm w-full focus:outline-none [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
@@ -508,6 +510,7 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
                           <span className="block text-gray-500 text-[10px] mb-1">End Date</span>
                           <input 
                             type="date" 
+                            min={localData.startDate || todayString}
                             value={localData.endDate}
                             onChange={(e) => handleChange('endDate', e.target.value)}
                             className="bg-transparent text-white text-sm w-full focus:outline-none [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
