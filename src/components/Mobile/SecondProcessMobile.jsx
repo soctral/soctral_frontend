@@ -528,43 +528,39 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
             <div>
               <label className="block text-gray-400 text-xs mb-2">Select Deal Duration</label>
               <div className="space-y-3">
-                <div 
-                  onClick={(e) => {
-                    try { e.currentTarget.querySelector('input')?.showPicker?.(); } catch (err) {}
-                  }}
-                  className={`bg-[#181818] border ${errors.startDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 flex justify-between items-center relative cursor-pointer`}
-                >
-                  <div className="flex-1">
+                <div className={`bg-[#181818] border ${errors.startDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 flex justify-between items-center relative cursor-pointer overflow-hidden`}>
+                  <div className="flex-1 pointer-events-none">
                     <span className="block text-gray-500 text-[10px] mb-1">Start Date</span>
-                    <input 
-                      type="date" 
-                      min={todayString}
-                      value={localData.startDate}
-                      onChange={(e) => handleChange('startDate', e.target.value)}
-                      className="bg-transparent text-white text-sm w-full focus:outline-none [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                    />
+                    <span className={`block text-sm ${localData.startDate ? 'text-white' : 'text-gray-500'}`}>
+                      {localData.startDate || 'YYYY-MM-DD'}
+                    </span>
                   </div>
                   <Calendar className="w-4 h-4 text-gray-400 pointer-events-none" />
+                  <input 
+                    type="date" 
+                    min={todayString}
+                    value={localData.startDate}
+                    onChange={(e) => handleChange('startDate', e.target.value)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer m-0 p-0"
+                  />
                 </div>
                 {errors.startDate && <p className="text-red-500 text-[10px] mt-1">{errors.startDate}</p>}
 
-                <div 
-                  onClick={(e) => {
-                    try { e.currentTarget.querySelector('input')?.showPicker?.(); } catch (err) {}
-                  }}
-                  className={`bg-[#181818] border ${errors.endDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 flex justify-between items-center relative cursor-pointer`}
-                >
-                  <div className="flex-1">
+                <div className={`bg-[#181818] border ${errors.endDate ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 flex justify-between items-center relative cursor-pointer overflow-hidden`}>
+                  <div className="flex-1 pointer-events-none">
                     <span className="block text-gray-500 text-[10px] mb-1">End Date</span>
-                    <input 
-                      type="date" 
-                      min={localData.startDate || todayString}
-                      value={localData.endDate}
-                      onChange={(e) => handleChange('endDate', e.target.value)}
-                      className="bg-transparent text-white text-sm w-full focus:outline-none [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                    />
+                    <span className={`block text-sm ${localData.endDate ? 'text-white' : 'text-gray-500'}`}>
+                      {localData.endDate || 'YYYY-MM-DD'}
+                    </span>
                   </div>
                   <Calendar className="w-4 h-4 text-gray-400 pointer-events-none" />
+                  <input 
+                    type="date" 
+                    min={localData.startDate || todayString}
+                    value={localData.endDate}
+                    onChange={(e) => handleChange('endDate', e.target.value)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer m-0 p-0"
+                  />
                 </div>
                 {errors.endDate && <p className="text-red-500 text-[10px] mt-1">{errors.endDate}</p>}
               </div>
