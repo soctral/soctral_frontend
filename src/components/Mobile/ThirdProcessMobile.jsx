@@ -7,6 +7,7 @@ import sol from '../../assets/sol.svg';
 import bnb from '../../assets/bnb.svg';
 import trx from '../../assets/trx.svg';
 import usdc from '../../assets/usdc.svg';
+import { NETWORK_LABELS } from '../../services/escrowService';
 
 const paymentIcons = {
   btc: btc,
@@ -133,6 +134,11 @@ const ThirdProcessMobile = ({ formData, onNext, onBack, isSubmitting, submitErro
                   )}
                   <span className="text-white text-sm font-medium">{paymentLabels[formData.paymentMethod] || formData.paymentMethod?.toUpperCase()}</span>
                 </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 sm:gap-4 pb-4 border-b border-white/5">
+                <span className="text-gray-500 text-xs w-1/3">Network</span>
+                <span className="text-white text-sm font-medium flex-1 text-left sm:text-right">{NETWORK_LABELS[formData.network] || formData.network}</span>
               </div>
 
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 sm:gap-4 pb-4 border-b border-white/5">
