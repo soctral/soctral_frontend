@@ -236,10 +236,27 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
     if (!localData.dealName.trim()) newErrors.dealName = 'Deal Name is required';
     if (!localData.description.trim()) newErrors.description = 'Description is required';
     if (!localData.partnerId) newErrors.dealPartner = 'Please select a deal partner from the search results';
-    if (!localData.amount || isNaN(localData.amount) || Number(localData.amount) <= 0) newErrors.amount = 'Valid amount is required';
     if (!localData.network) newErrors.network = 'Network is required';
-    if (!localData.startDate) newErrors.startDate = 'Start Date is required';
-    if (!localData.endDate) newErrors.endDate = 'End Date is required';
+    
+    if (!localData.startDate) {
+      newErrors.startDate = 'Start Date is required';
+    } else {
+      const start = new Date(localData.startDate);
+      const today = new Date(todayString);
+      if (start < today) {
+        newErrors.startDate = 'Start Date cannot be in the past';
+      }
+    }
+    
+    if (!localData.endDate) {
+      newErrors.endDate = 'End Date is required';
+    } else {
+      const end = new Date(localData.endDate);
+      const today = new Date(todayString);
+      if (end < today) {
+        newErrors.endDate = 'End Date cannot be in the past';
+      }
+    }
     
     if (localData.startDate && localData.endDate && new Date(localData.startDate) > new Date(localData.endDate)) {
       newErrors.endDate = 'End Date must be after Start Date';
