@@ -152,7 +152,7 @@ const ThirdProcessMobile = ({ formData, onNext, onBack, isSubmitting, submitErro
                   {formData.dealImages.length > 0 ? (
                     formData.dealImages.map((img, idx) => (
                       <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-white/10">
-                        <img src={img.url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
+                        <img src={img.uploadedUrl || img.url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
                       </div>
                     ))
                   ) : (

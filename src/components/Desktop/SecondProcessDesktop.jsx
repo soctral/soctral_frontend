@@ -598,7 +598,7 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
                   <div className="flex flex-wrap gap-4">
                     {localData.dealImages.map((img, idx) => (
                       <div key={idx} className="relative w-28 h-28 rounded-xl overflow-hidden border border-white/10 group">
-                        <img src={img.url} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
+                        <img src={img.uploadedUrl || img.url} alt={`Upload ${idx}`} className="w-full h-full object-cover" />
                         {/* Upload loading overlay */}
                         {img.uploading && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">

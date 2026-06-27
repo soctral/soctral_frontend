@@ -157,7 +157,7 @@ const ThirdProcessDesktop = ({ formData, onNext, onBack, onClose, isSubmitting, 
                       {formData.dealImages.length > 0 ? (
                         formData.dealImages.map((img, idx) => (
                           <div key={idx} className="w-20 h-20 rounded-xl overflow-hidden border border-white/10">
-                            <img src={img.url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
+                            <img src={img.uploadedUrl || img.url} alt={`Preview ${idx}`} className="w-full h-full object-cover" />
                           </div>
                         ))
                       ) : (
