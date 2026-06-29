@@ -43,6 +43,7 @@ import chatService from '../../services/chatService';
 import TradeStateManager from '../../services/tradeStateManager';
 import transactionService from '../../services/transactionService';
 import walletService from '../../services/walletService';
+import escrowService from '../../services/escrowService';
 import SupportChatModal from './SupportChatModal';
 
 
@@ -174,6 +175,16 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const [showTransactionSuccessModal, setShowTransactionSuccessModal] = useState(false);
   const [transactionSuccessData, setTransactionSuccessData] = useState(null);
 
+  // 🔥 ESCROW DEAL states
+  const [escrowDeal, setEscrowDeal] = useState(null);
+  const [isLoadingEscrowDeal, setIsLoadingEscrowDeal] = useState(false);
+  const [escrowActionLoading, setEscrowActionLoading] = useState(null); // 'accepting' | 'declining' | 'releasing' | null
+  const [escrowDeclineReason, setEscrowDeclineReason] = useState('');
+  const [showEscrowDeclineModal, setShowEscrowDeclineModal] = useState(false);
+  const [showEscrowReleaseModal, setShowEscrowReleaseModal] = useState(false);
+  const [escrowReleasePin, setEscrowReleasePin] = useState('');
+  const [escrowError, setEscrowError] = useState('');
+
   const [channelMetadata, setChannelMetadata] = useState({
     platform: 'Unknown',
     accountUsername: 'N/A'
@@ -222,6 +233,70 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     setShowSellerInitiateModal(false);
     setShowSellerTradePrompt(true);
   }, []);
+
+  // 🔥 ESCROW DEAL Handlers
+  const fetchEscrowDeal = useCallback(async (channelId) => {
+    if (!channelId || !channelId.startsWith('escrow_')) return;
+    setIsLoadingEscrowDeal(true);
+    setEscrowError('');
+    try {
+      const deal = await escrowService.getDealByChannel(channelId);
+      setEscrowDeal(deal);
+    } catch (err) {
+      console.error('❌ Failed to fetch escrow deal:', err);
+      setEscrowDeal(null);
+      setEscrowError(err?.message || 'Failed to load escrow deal');
+    } finally {
+      setIsLoadingEscrowDeal(false);
+    }
+  }, []);
+
+  const handleEscrowAccept = useCallback(async (dealId) => {
+    setEscrowActionLoading('accepting');
+    setEscrowError('');
+    try {
+      await escrowService.acceptDeal(dealId);
+      // Re-fetch to get updated status
+      const channelId = currentChannelRef.current?.id;
+      if (channelId) await fetchEscrowDeal(channelId);
+    } catch (err) {
+      setEscrowError(err?.response?.data?.message || err?.message || 'Failed to accept deal');
+    } finally {
+      setEscrowActionLoading(null);
+    }
+  }, [fetchEscrowDeal]);
+
+  const handleEscrowDecline = useCallback(async (dealId, reason) => {
+    setEscrowActionLoading('declining');
+    setEscrowError('');
+    try {
+      await escrowService.declineDeal(dealId, reason);
+      setShowEscrowDeclineModal(false);
+      setEscrowDeclineReason('');
+      const channelId = currentChannelRef.current?.id;
+      if (channelId) await fetchEscrowDeal(channelId);
+    } catch (err) {
+      setEscrowError(err?.response?.data?.message || err?.message || 'Failed to decline deal');
+    } finally {
+      setEscrowActionLoading(null);
+    }
+  }, [fetchEscrowDeal]);
+
+  const handleEscrowRelease = useCallback(async (dealId, pin) => {
+    setEscrowActionLoading('releasing');
+    setEscrowError('');
+    try {
+      await escrowService.releasePayment(dealId, pin);
+      setShowEscrowReleaseModal(false);
+      setEscrowReleasePin('');
+      const channelId = currentChannelRef.current?.id;
+      if (channelId) await fetchEscrowDeal(channelId);
+    } catch (err) {
+      setEscrowError(err?.response?.data?.message || err?.message || 'Failed to release payment');
+    } finally {
+      setEscrowActionLoading(null);
+    }
+  }, [fetchEscrowDeal]);
 
 
   // Debounce search query
@@ -1574,6 +1649,16 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         // Set channel and messages
         setCurrentChannel(channel);
         currentChannelRef.current = channel;
+
+        // 🔥 ESCROW: Detect escrow channels and fetch deal data
+        const escrowChId = channel.id || (channel.cid ? channel.cid.split(':')[1] : '');
+        if (escrowChId && escrowChId.startsWith('escrow_')) {
+          console.log('🛡️ Escrow channel detected:', escrowChId);
+          fetchEscrowDeal(escrowChId);
+        } else {
+          setEscrowDeal(null);
+          setEscrowError('');
+        }
 
         // 🔥 NEW: Only show messages from the LATEST trade (after last funds_released)
         // When funds released and no new messages, show empty — list view uses same logic
@@ -7187,6 +7272,239 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           </div>
 
          
+
+          {/* 🛡️ ESCROW DEAL BANNER — shown when channel is an escrow channel */}
+          {(() => {
+            const channelId = currentChannel?.id || (currentChannel?.cid ? currentChannel.cid.split(':')[1] : '');
+            const isEscrowChannel = channelId && channelId.startsWith('escrow_');
+            if (!isEscrowChannel) return null;
+
+            const currentUserId = userData?._id || userData?.id;
+
+            if (isLoadingEscrowDeal) {
+              return (
+                <div className="mx-4 md:mx-auto max-w-[28rem] mb-4">
+                  <div className="bg-[#1a1a1a]/90 backdrop-blur-sm rounded-xl border border-white/10 p-5">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                      <span className="text-gray-400 text-sm">Loading escrow deal details...</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (escrowError && !escrowDeal) {
+              return (
+                <div className="mx-4 md:mx-auto max-w-[28rem] mb-4">
+                  <div className="bg-red-500/10 rounded-xl border border-red-500/20 p-4">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400" />
+                      <span className="text-red-300 text-sm">{escrowError}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (!escrowDeal) return null;
+
+            const deal = escrowDeal;
+            const isInitiator = String(deal.initiatorId?._id || deal.initiatorId) === String(currentUserId);
+            const isPartner = String(deal.partnerId?._id || deal.partnerId) === String(currentUserId);
+            const initiatorName = deal.initiatorId?.displayName || deal.initiatorId?.name || 'Initiator';
+            const partnerName = deal.partnerId?.displayName || deal.partnerId?.name || 'Partner';
+            const status = deal.status?.toLowerCase() || 'pending';
+
+            const statusColors = {
+              pending: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', label: 'Pending' },
+              accepted: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', label: 'Accepted' },
+              declined: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', label: 'Declined' },
+              released: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'Released' },
+              disputed: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400', label: 'Disputed' },
+              cancelled: { bg: 'bg-gray-500/10', border: 'border-gray-500/30', text: 'text-gray-400', label: 'Cancelled' },
+            };
+            const sc = statusColors[status] || statusColors.pending;
+
+            const paymentLabels = { btc: 'BTC', eth: 'ETH', usdt: 'USDT', sol: 'SOL', bnb: 'BNB', trx: 'TRX', usdc: 'USDC' };
+
+            return (
+              <div className="mx-4 md:mx-auto max-w-[28rem] mb-4">
+                <div className="bg-[#1a1a1a]/90 backdrop-blur-sm rounded-xl border border-white/10 overflow-hidden shadow-lg">
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-5 py-3 bg-primary/10 border-b border-white/5">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-primary" />
+                      <span className="text-white font-semibold text-sm">Escrow Deal</span>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${sc.bg} ${sc.text} ${sc.border} border`}>
+                      {sc.label}
+                    </span>
+                  </div>
+
+                  {/* Deal Details */}
+                  <div className="px-5 py-4 space-y-3">
+                    <div>
+                      <p className="text-white font-semibold text-base">{deal.dealName || 'Untitled Deal'}</p>
+                      {deal.description && <p className="text-gray-400 text-xs mt-1 line-clamp-2">{deal.description}</p>}
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-white/5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 text-xs">Amount</span>
+                        <span className="text-white font-semibold text-sm">${Number(deal.amount || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 text-xs">Payment</span>
+                        <span className="text-white text-sm font-medium">{paymentLabels[deal.paymentMethod?.toLowerCase()] || deal.paymentMethod || 'N/A'}</span>
+                      </div>
+                      {deal.network && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-500 text-xs">Network</span>
+                          <span className="text-white text-sm capitalize">{deal.network}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 text-xs">Initiator <span className="text-gray-600">(pays)</span></span>
+                        <span className={`text-sm font-medium ${isInitiator ? 'text-primary' : 'text-white'}`}>
+                          {isInitiator ? 'You' : initiatorName}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 text-xs">Receiver <span className="text-gray-600">(gets paid)</span></span>
+                        <span className={`text-sm font-medium ${isPartner ? 'text-primary' : 'text-white'}`}>
+                          {isPartner ? 'You' : partnerName}
+                        </span>
+                      </div>
+                      {deal.startDate && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-500 text-xs">Period</span>
+                          <span className="text-white text-xs">{new Date(deal.startDate).toLocaleDateString()} — {deal.endDate ? new Date(deal.endDate).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Error message */}
+                    {escrowError && (
+                      <div className="flex items-center gap-2 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                        <span className="text-red-300 text-xs">{escrowError}</span>
+                      </div>
+                    )}
+
+                    {/* Action Buttons — Partner sees Accept/Decline when pending */}
+                    {isPartner && status === 'pending' && (
+                      <div className="flex gap-3 pt-3 border-t border-white/5">
+                        <button
+                          onClick={() => handleEscrowAccept(deal._id || deal.id)}
+                          disabled={escrowActionLoading === 'accepting'}
+                          className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                        >
+                          {escrowActionLoading === 'accepting' ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>
+                          ) : (
+                            <><Check className="w-4 h-4" /> Accept</>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setShowEscrowDeclineModal(true)}
+                          disabled={!!escrowActionLoading}
+                          className="flex-1 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 disabled:opacity-50 text-red-400 text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                        >
+                          <X className="w-4 h-4" /> Decline
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Initiator sees Release Payment when accepted */}
+                    {isInitiator && status === 'accepted' && (
+                      <div className="pt-3 border-t border-white/5">
+                        <button
+                          onClick={() => setShowEscrowReleaseModal(true)}
+                          disabled={!!escrowActionLoading}
+                          className="w-full py-2.5 bg-primary hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Unlock className="w-4 h-4" /> Release Payment
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Completed states */}
+                    {status === 'released' && (
+                      <div className="flex items-center gap-2 bg-green-500/10 rounded-lg px-3 py-2 border border-green-500/20 mt-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                        <span className="text-green-300 text-xs font-medium">Payment has been released successfully.</span>
+                      </div>
+                    )}
+
+                    {status === 'declined' && (
+                      <div className="flex items-center gap-2 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20 mt-2">
+                        <Ban className="w-4 h-4 text-red-400" />
+                        <span className="text-red-300 text-xs font-medium">This deal was declined.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 🛡️ ESCROW Decline Modal */}
+          {showEscrowDeclineModal && escrowDeal && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowEscrowDeclineModal(false)}>
+              <div className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 mx-4 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-bold text-base mb-1">Decline Escrow Deal</h3>
+                <p className="text-gray-400 text-xs mb-4">Optionally provide a reason for declining.</p>
+                <textarea
+                  value={escrowDeclineReason}
+                  onChange={e => setEscrowDeclineReason(e.target.value)}
+                  placeholder="Reason (optional)..."
+                  className="w-full bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-gray-600 resize-none focus:outline-none focus:border-primary/50"
+                  rows={3}
+                />
+                {escrowError && <p className="text-red-400 text-xs mt-2">{escrowError}</p>}
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => { setShowEscrowDeclineModal(false); setEscrowError(''); }} className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium rounded-xl transition-colors">Cancel</button>
+                  <button
+                    onClick={() => handleEscrowDecline(escrowDeal._id || escrowDeal.id, escrowDeclineReason)}
+                    disabled={escrowActionLoading === 'declining'}
+                    className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    {escrowActionLoading === 'declining' ? 'Declining...' : 'Decline Deal'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🛡️ ESCROW Release Payment Modal */}
+          {showEscrowReleaseModal && escrowDeal && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowEscrowReleaseModal(false)}>
+              <div className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 mx-4 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-bold text-base mb-1">Release Payment</h3>
+                <p className="text-gray-400 text-xs mb-4">Enter your transaction PIN to release <span className="text-white font-semibold">${Number(escrowDeal.amount || 0).toLocaleString()}</span> to {escrowDeal.partnerId?.displayName || escrowDeal.partnerId?.name || 'the receiver'}.</p>
+                <input
+                  type="password"
+                  value={escrowReleasePin}
+                  onChange={e => setEscrowReleasePin(e.target.value)}
+                  placeholder="Enter PIN"
+                  maxLength={6}
+                  className="w-full bg-[#111] border border-white/10 rounded-xl px-4 py-3 text-white text-sm text-center tracking-[0.5em] placeholder:tracking-normal placeholder:text-gray-600 focus:outline-none focus:border-primary/50"
+                />
+                {escrowError && <p className="text-red-400 text-xs mt-2">{escrowError}</p>}
+                <div className="flex gap-3 mt-4">
+                  <button onClick={() => { setShowEscrowReleaseModal(false); setEscrowReleasePin(''); setEscrowError(''); }} className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-medium rounded-xl transition-colors">Cancel</button>
+                  <button
+                    onClick={() => handleEscrowRelease(escrowDeal._id || escrowDeal.id, escrowReleasePin)}
+                    disabled={escrowActionLoading === 'releasing' || !escrowReleasePin}
+                    className="flex-1 py-2.5 bg-primary hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+                  >
+                    {escrowActionLoading === 'releasing' ? 'Releasing...' : 'Release'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 🔥 PERMANENT: Account Info Banner - ONLY when there is an active invoice or transaction (hide when Unknown/N/A after refresh) */}
           {selectedUser && (() => {

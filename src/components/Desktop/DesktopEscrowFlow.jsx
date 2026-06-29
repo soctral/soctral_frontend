@@ -13,6 +13,8 @@ const DesktopEscrowFlow = ({ onClose, onBuySell }) => {
     dealPartner: '',
     partnerId: '',
     partnerAvatar: '',
+    initiatorRole: 'creator',
+    receiverRole: 'partner',
     amount: '',
     paymentMethod: 'btc',
     network: 'bitcoin',
@@ -65,6 +67,7 @@ const DesktopEscrowFlow = ({ onClose, onBuySell }) => {
         startDate: formData.startDate,
         endDate: formData.endDate,
         images: formData.uploadedImageUrls,
+        fundingParty: formData.initiatorRole === 'creator' ? 'initiator' : 'receiver',
       });
 
       setDealResponse(response);

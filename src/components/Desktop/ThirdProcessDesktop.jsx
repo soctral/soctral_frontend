@@ -127,6 +127,20 @@ const ThirdProcessDesktop = ({ formData, onNext, onBack, onClose, isSubmitting, 
                   </div>
 
                   <div className="flex justify-between items-center pb-4 border-b border-white/5">
+                    <span className="text-gray-500 text-sm">Initiator <span className="text-gray-600 text-xs">(pays)</span></span>
+                    <span className="text-white text-sm font-medium text-right">
+                      {formData.initiatorRole === 'creator' ? 'You' : formData.dealPartner}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pb-4 border-b border-white/5">
+                    <span className="text-gray-500 text-sm">Receiver <span className="text-gray-600 text-xs">(gets paid)</span></span>
+                    <span className="text-white text-sm font-medium text-right">
+                      {formData.receiverRole === 'creator' ? 'You' : formData.dealPartner}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center pb-4 border-b border-white/5">
                     <span className="text-gray-500 text-sm">Amount (USD)</span>
                     <span className="text-white text-sm font-medium text-right">${formData.amount}</span>
                   </div>

@@ -70,7 +70,7 @@ const escrowService = {
   // ──────────────────────────────────────
   // 3. Create Escrow Deal
   // ──────────────────────────────────────
-  async createDeal({ dealName, description, partnerId, amount, paymentMethod, network, startDate, endDate, images }) {
+  async createDeal({ dealName, description, partnerId, amount, paymentMethod, network, startDate, endDate, images, fundingParty }) {
     const payload = {
       dealName,
       description: description || undefined,
@@ -78,6 +78,7 @@ const escrowService = {
       amount: Number(amount),
       paymentMethod,
       network,
+      fundingParty,
       startDate: new Date(startDate).toISOString(),
       endDate: new Date(endDate).toISOString(),
       images: images && images.length > 0 ? images : undefined,

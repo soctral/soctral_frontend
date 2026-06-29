@@ -122,6 +122,20 @@ const ThirdProcessMobile = ({ formData, onNext, onBack, isSubmitting, submitErro
               </div>
 
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 sm:gap-4 pb-4 border-b border-white/5">
+                <span className="text-gray-500 text-xs w-1/3">Initiator <span className="text-gray-600 text-[10px]">(pays)</span></span>
+                <span className="text-white text-sm font-medium flex-1 text-left sm:text-right">
+                  {formData.initiatorRole === 'creator' ? 'You' : formData.dealPartner}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 sm:gap-4 pb-4 border-b border-white/5">
+                <span className="text-gray-500 text-xs w-1/3">Receiver <span className="text-gray-600 text-[10px]">(gets paid)</span></span>
+                <span className="text-white text-sm font-medium flex-1 text-left sm:text-right">
+                  {formData.receiverRole === 'creator' ? 'You' : formData.dealPartner}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 sm:gap-4 pb-4 border-b border-white/5">
                 <span className="text-gray-500 text-xs w-1/3">Amount (USD)</span>
                 <span className="text-white text-sm font-medium flex-1 text-left sm:text-right">${formData.amount}</span>
               </div>

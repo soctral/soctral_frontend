@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Info, Search, DollarSign, Calendar, Plus, Minus, X, Loader2, ChevronDown, Check } from 'lucide-react';
+import { ArrowLeft, Info, Search, DollarSign, Calendar, Plus, Minus, X, Loader2, ChevronDown, Check, UserCircle2 } from 'lucide-react';
 import btc from '../../assets/btc.svg';
 import eth from '../../assets/eth.svg';
 import usdt from '../../assets/usdt.svg';
@@ -8,6 +8,7 @@ import bnb from '../../assets/bnb.svg';
 import trx from '../../assets/trx.svg';
 import usdc from '../../assets/usdc.svg';
 import escrowService, { PAYMENT_NETWORK_MAP, TOKEN_NETWORKS, NETWORK_LABELS } from '../../services/escrowService';
+import { useUser } from '../../context/userContext';
 
 const PAYMENT_METHODS = [
   { id: 'btc', icon: btc, label: 'BTC' },
@@ -27,6 +28,8 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
   const [localData, setLocalData] = useState(formData);
   const [errors, setErrors] = useState({});
   const todayString = new Date().toISOString().split('T')[0];
+  const { user: userData } = useUser();
+  const currentUserName = userData?.displayName || userData?.name || userData?.email || 'You';
 
   // --- Payment dropdown state ---
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
@@ -35,6 +38,12 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
   // --- Network dropdown state ---
   const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
   const networkDropdownRef = useRef(null);
+
+  // --- Role dropdown state ---
+  const [showInitiatorDropdown, setShowInitiatorDropdown] = useState(false);
+  const initiatorDropdownRef = useRef(null);
+  const [showReceiverDropdown, setShowReceiverDropdown] = useState(false);
+  const receiverDropdownRef = useRef(null);
 
   // --- User search state ---
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,21 +110,46 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
       dealPartner: '',
       partnerId: '',
       partnerAvatar: '',
+      initiatorRole: 'creator',
+      receiverRole: 'partner',
     }));
     setSearchQuery('');
   };
 
+  // --- Initiator / Receiver Role Handlers ---
+  const handleInitiatorRoleChange = (role) => {
+    setLocalData(prev => ({
+      ...prev,
+      initiatorRole: role,
+      receiverRole: role === 'creator' ? 'partner' : 'creator',
+    }));
+  };
+
+  const handleReceiverRoleChange = (role) => {
+    setLocalData(prev => ({
+      ...prev,
+      receiverRole: role,
+      initiatorRole: role === 'creator' ? 'partner' : 'creator',
+    }));
+  };
+
   // Close dropdowns on outside click
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
-      if (paymentDropdownRef.current && !paymentDropdownRef.current.contains(e.target)) {
+      if (paymentDropdownRef.current && !paymentDropdownRef.current.contains(event.target)) {
         setShowPaymentDropdown(false);
       }
-      if (networkDropdownRef.current && !networkDropdownRef.current.contains(e.target)) {
+      if (networkDropdownRef.current && !networkDropdownRef.current.contains(event.target)) {
         setShowNetworkDropdown(false);
+      }
+      if (initiatorDropdownRef.current && !initiatorDropdownRef.current.contains(event.target)) {
+        setShowInitiatorDropdown(false);
+      }
+      if (receiverDropdownRef.current && !receiverDropdownRef.current.contains(event.target)) {
+        setShowReceiverDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -421,6 +455,141 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose }) => {
                     </div>
                   )}
                   {errors.dealPartner && <p className="text-red-500 text-xs mt-1.5">{errors.dealPartner}</p>}
+                </div>
+
+                {/* Initiator & Receiver Role Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Initiator Dropdown */}
+                  <div ref={initiatorDropdownRef} className="relative">
+                    <label className="block text-gray-400 text-sm mb-2">Initiator <span className="text-gray-600 text-xs">(who pays)</span></label>
+                    <button
+                      type="button"
+                      onClick={() => setShowInitiatorDropdown(prev => !prev)}
+                      className="w-full bg-[#181818] border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-left hover:border-white/20 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 overflow-hidden">
+                        {localData.initiatorRole === 'creator' ? (
+                          <>
+                            {userData?.avatarUrl ? (
+                              <img src={userData.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                            ) : (
+                              <UserCircle2 className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                            )}
+                            <span className="text-white text-sm font-medium truncate">{currentUserName} (You)</span>
+                          </>
+                        ) : (
+                          <>
+                            {localData.partnerAvatar ? (
+                              <img src={localData.partnerAvatar} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-primary/30 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                {localData.dealPartner ? localData.dealPartner.charAt(0).toUpperCase() : '?'}
+                              </div>
+                            )}
+                            <span className="text-white text-sm font-medium truncate">{localData.dealPartner || 'Select Partner'}</span>
+                          </>
+                        )}
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${showInitiatorDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showInitiatorDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-20 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={() => { handleInitiatorRoleChange('creator'); setShowInitiatorDropdown(false); }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${localData.initiatorRole === 'creator' ? 'bg-primary/10 border-l-2 border-primary' : 'hover:bg-white/5'}`}
+                        >
+                          {userData?.avatarUrl ? (
+                            <img src={userData.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
+                          ) : (
+                            <UserCircle2 className="w-5 h-5 text-gray-400" />
+                          )}
+                          <span className="text-white text-sm font-medium truncate">{currentUserName} (You)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { handleInitiatorRoleChange('partner'); setShowInitiatorDropdown(false); }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${localData.initiatorRole === 'partner' ? 'bg-primary/10 border-l-2 border-primary' : 'hover:bg-white/5'}`}
+                        >
+                          {localData.partnerAvatar ? (
+                            <img src={localData.partnerAvatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-primary/30 flex items-center justify-center text-white text-[10px] font-bold">
+                              {localData.dealPartner ? localData.dealPartner.charAt(0).toUpperCase() : '?'}
+                            </div>
+                          )}
+                          <span className="text-white text-sm font-medium truncate">{localData.dealPartner || 'Select Partner'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Receiver Dropdown */}
+                  <div ref={receiverDropdownRef} className="relative">
+                    <label className="block text-gray-400 text-sm mb-2">Receiver <span className="text-gray-600 text-xs">(gets paid)</span></label>
+                    <button
+                      type="button"
+                      onClick={() => setShowReceiverDropdown(prev => !prev)}
+                      className="w-full bg-[#181818] border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-left hover:border-white/20 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 overflow-hidden">
+                        {localData.receiverRole === 'creator' ? (
+                          <>
+                            {userData?.avatarUrl ? (
+                              <img src={userData.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                            ) : (
+                              <UserCircle2 className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                            )}
+                            <span className="text-white text-sm font-medium truncate">{currentUserName} (You)</span>
+                          </>
+                        ) : (
+                          <>
+                            {localData.partnerAvatar ? (
+                              <img src={localData.partnerAvatar} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-primary/30 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                {localData.dealPartner ? localData.dealPartner.charAt(0).toUpperCase() : '?'}
+                              </div>
+                            )}
+                            <span className="text-white text-sm font-medium truncate">{localData.dealPartner || 'Select Partner'}</span>
+                          </>
+                        )}
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${showReceiverDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showReceiverDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-20 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={() => { handleReceiverRoleChange('creator'); setShowReceiverDropdown(false); }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${localData.receiverRole === 'creator' ? 'bg-primary/10 border-l-2 border-primary' : 'hover:bg-white/5'}`}
+                        >
+                          {userData?.avatarUrl ? (
+                            <img src={userData.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
+                          ) : (
+                            <UserCircle2 className="w-5 h-5 text-gray-400" />
+                          )}
+                          <span className="text-white text-sm font-medium truncate">{currentUserName} (You)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { handleReceiverRoleChange('partner'); setShowReceiverDropdown(false); }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${localData.receiverRole === 'partner' ? 'bg-primary/10 border-l-2 border-primary' : 'hover:bg-white/5'}`}
+                        >
+                          {localData.partnerAvatar ? (
+                            <img src={localData.partnerAvatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-primary/30 flex items-center justify-center text-white text-[10px] font-bold">
+                              {localData.dealPartner ? localData.dealPartner.charAt(0).toUpperCase() : '?'}
+                            </div>
+                          )}
+                          <span className="text-white text-sm font-medium truncate">{localData.dealPartner || 'Select Partner'}</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
