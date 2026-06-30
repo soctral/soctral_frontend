@@ -584,6 +584,13 @@ const MobileHomePage = () => {
     };
   }, []);
 
+  // Open escrow creation flow when chat signals a "Create New Deal" from a declined channel
+  useEffect(() => {
+    const handleOpenEscrowFlow = () => setShowMobileEscrowFlow(true);
+    window.addEventListener('openEscrowFlow', handleOpenEscrowFlow);
+    return () => window.removeEventListener('openEscrowFlow', handleOpenEscrowFlow);
+  }, []);
+
   // Chat unread badge (same pattern as desktop Homepage + Navbar)
   useEffect(() => {
     const handleChatUnreadUpdate = (event) => {
@@ -1962,12 +1969,12 @@ const MobileHomePage = () => {
                 setHasSeenBuySellOnboarding(true);
                 localStorage.setItem('hasSeenBuySellOnboarding', 'true');
               } else {
-                handleTabChange('trade');
+                handleTabClick('trade');
               }
             }}
             onOpenChat={(channelId) => {
               setShowMobileEscrowFlow(false);
-              handleTabChange('chat');
+              handleTabClick('chat');
               localStorage.setItem('openEscrowChannel', channelId);
               // Small timeout to allow chat component to mount and attach listener
               setTimeout(() => {

@@ -505,6 +505,13 @@ const HomePage = () => {
     };
   }, []);
 
+  // Open escrow creation flow when chat signals a "Create New Deal" from a declined channel
+  useEffect(() => {
+    const handleOpenEscrowFlow = () => setShowDesktopEscrowFlow(true);
+    window.addEventListener('openEscrowFlow', handleOpenEscrowFlow);
+    return () => window.removeEventListener('openEscrowFlow', handleOpenEscrowFlow);
+  }, []);
+
   // Listen for chat unread count updates from Chat component (when Chat is mounted)
   useEffect(() => {
     const handleChatUnreadUpdate = (event) => {

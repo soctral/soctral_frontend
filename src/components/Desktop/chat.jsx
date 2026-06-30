@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeft, Ban, Check, CheckCheck, CheckCircle, Clock, Copy, Download, Eye, EyeOff, FileText, Flag, Loader2, Lock, MessageSquare, MoreVertical, Paperclip, Search, Send, Trash2, Unlock, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Ban, Check, CheckCheck, CheckCircle, Clock, Copy, Download, Eye, EyeOff, FileText, Flag, Loader2, Lock, MessageSquare, MoreVertical, Paperclip, Plus, Search, Send, Trash2, Unlock, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import base from "../../assets/base-logo.png";
 import bnb from "../../assets/bnb.svg";
@@ -82,6 +82,9 @@ const toId = (v) => {
 
 const extractChatTypeFromChannelId = (channelId) => {
   if (!channelId) return 'buy'; // default
+
+  // Escrow channels have the escrow_ prefix or _escrow suffix (legacy)
+  if (channelId.startsWith('escrow_') || channelId.endsWith('_escrow')) return 'escrow';
 
   const parts = channelId.split('_');
 
@@ -175,6 +178,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   const [showTransactionSuccessModal, setShowTransactionSuccessModal] = useState(false);
   const [transactionSuccessData, setTransactionSuccessData] = useState(null);
 
+  // 🔥 ESCROW SIDEBAR states
+
   // 🔥 ESCROW DEAL states
   const [escrowDeal, setEscrowDeal] = useState(null);
   const [isLoadingEscrowDeal, setIsLoadingEscrowDeal] = useState(false);
@@ -236,7 +241,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
   // 🔥 ESCROW DEAL Handlers
   const fetchEscrowDeal = useCallback(async (channelId) => {
-    if (!channelId || !channelId.startsWith('escrow_')) return;
+    if (!channelId || !(channelId.startsWith('escrow_') || channelId.endsWith('_escrow'))) return;
     setIsLoadingEscrowDeal(true);
     setEscrowError('');
     try {
@@ -444,7 +449,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
         const hasNoMessages = (channel.state?.messages || []).length === 0;
         const looksDeleted = hasNoMessages && recentlyUpdated;
         
-        const isEscrow = channelId && channelId.startsWith('escrow_');
+        const isEscrow = channelId && (channelId.startsWith('escrow_') || channelId.endsWith('_escrow'));
 
         const shouldInclude = !isHidden && (!looksDeleted || isEscrow) && isMember && hasValidState;
 
@@ -1087,6 +1092,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     // Debug wallet updates silently if needed
   }, [walletData]);
 
+
   // 🔥 NEW: Restore trade state from TradeStateManager on mount
   useEffect(() => {
     const restoreTradeState = async () => {
@@ -1180,59 +1186,73 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   }, [onSelectUser]);
 
   useEffect(() => {
-    const handleOpenSpecificChat = (event) => {
+    const handleOpenSpecificChat = async (event) => {
       const channelId = event?.detail?.channelId || localStorage.getItem('openEscrowChannel');
       if (!channelId) return;
 
-      console.log('📥 Request to open specific channel:', channelId);
-      
-      const foundChannel = channels.find(c => (c.id || c.cid?.split(':')[1]) === channelId);
-      if (foundChannel) {
-        const otherMembers = Object.values(foundChannel.state.members).filter(
-          (m) => m.user_id !== (userData?._id || userData?.id)
+      // If the Stream client isn't ready yet, park the channel ID and wait for
+      // isInitialized to flip — this effect re-runs when it does.
+      if (!isInitialized) {
+        localStorage.setItem('openEscrowChannel', channelId);
+        return;
+      }
+
+      const currentUserId = userData?._id || userData?.id;
+
+      const openChannel = (channel) => {
+        const otherMembers = Object.values(channel.state?.members || {}).filter(
+          (m) => m.user_id !== currentUserId
         );
         const otherUser = otherMembers[0]?.user;
-        const chatUser = {
+        const chId = channel.id || channel.cid?.split(':')[1] || '';
+        const chatType = (chId.startsWith('escrow_') || chId.endsWith('_escrow')) ? 'escrow' : (channel.data?.metadata?.chatType || 'buy');
+        handleUserSelect({
           id: otherUser?.id || '',
           name: otherUser?.name || otherUser?.displayName || 'Unknown User',
           username: otherUser?.username || otherUser?.handle || '',
           avatar: otherUser?.image || '',
-          _channel: foundChannel,
-          chatType: foundChannel.data?.metadata?.chatType || 'buy'
-        };
-        handleUserSelect(chatUser);
-        localStorage.removeItem('openEscrowChannel');
-      } else {
-        // If not found in current list, maybe we need to fetch it or wait for fetchChannels to finish
-        console.warn('⚠️ Channel not found in list, fetching directly...');
-        fetchChannels().then(() => {
-           const recheckChannel = chatService.client?.activeChannels?.[channelId] || chatService.client?.activeChannels?.[`messaging:${channelId}`];
-           if (recheckChannel) {
-             const otherMembers = Object.values(recheckChannel.state.members).filter(
-               (m) => m.user_id !== (userData?._id || userData?.id)
-             );
-             const otherUser = otherMembers[0]?.user;
-             handleUserSelect({
-               id: otherUser?.id || '',
-               name: otherUser?.name || otherUser?.displayName || 'Unknown User',
-               _channel: recheckChannel,
-               chatType: recheckChannel.data?.metadata?.chatType || 'buy'
-             });
-             localStorage.removeItem('openEscrowChannel');
-           }
+          _channel: channel,
+          chatType,
         });
+        localStorage.removeItem('openEscrowChannel');
+      };
+
+      // For escrow channels, switch to Escrow tab then directly watch by ID
+      if (channelId.startsWith('escrow_') || channelId.endsWith('_escrow')) {
+        setActiveTab('Escrow');
+        try {
+          const channel = await chatService.watchSupportChannel('messaging', channelId);
+          openChannel(channel);
+        } catch (err) {
+          console.error('❌ Failed to open escrow channel directly:', err);
+        }
+        return;
+      }
+
+      // For regular channels, check the cached list first then fall back to a direct watch
+      const foundChannel = channels.find(c => (c.id || c.cid?.split(':')[1]) === channelId);
+      if (foundChannel) {
+        openChannel(foundChannel);
+      } else {
+        try {
+          const channel = await chatService.watchSupportChannel('messaging', channelId);
+          openChannel(channel);
+        } catch (err) {
+          console.error('❌ Failed to open channel directly:', err);
+        }
       }
     };
 
     window.addEventListener('openSpecificChat', handleOpenSpecificChat);
-    
-    // Check if there is one pending in localStorage on mount or when channels change
-    if (localStorage.getItem('openEscrowChannel') && channels.length > 0) {
+
+    // Re-check whenever isInitialized, channels, or userData changes in case the
+    // event already fired (or we parked the channel ID waiting for initialization)
+    if (localStorage.getItem('openEscrowChannel')) {
       handleOpenSpecificChat();
     }
 
     return () => window.removeEventListener('openSpecificChat', handleOpenSpecificChat);
-  }, [channels, userData]);
+  }, [channels, userData, isInitialized]);
 
   useEffect(() => {
     if (!selectedUser) {
@@ -1300,6 +1320,37 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           currentUserId,
           tempMetadata
         });
+
+        // 🛡️ ESCROW SHORT-CIRCUIT: use the already-watched channel directly, skip buy/sell creation
+        if (chatType === 'escrow' && selectedUser._channel) {
+          const channel = selectedUser._channel;
+          const escrowChId = channel.id || channel.cid?.split(':')[1] || '';
+          const channelMessages = channel.state?.messages || [];
+          if (!mounted) return;
+          setCurrentChannel(channel);
+          setMessages(channelMessages);
+          setIsLoading(false);
+          setMetadataResolved(true);
+          fetchEscrowDeal(escrowChId);
+          await chatService.markAsRead(channel);
+
+          messageListener = async (event) => {
+            const newMessage = event.message;
+            setMessages((prev) => {
+              if (prev.some(msg => msg.id === newMessage.id)) return prev;
+              return [...prev, newMessage];
+            });
+            if (event.user?.id !== currentUserId) chatService.markAsRead(channel);
+            // Re-fetch deal so the status banner reflects any status change (accept, decline, etc.)
+            fetchEscrowDeal(escrowChId);
+          };
+          readListener = () => {};
+          updateListener = () => {};
+          channel.on('message.new', messageListener);
+          channel.on('message.read', readListener);
+          channel.on('channel.updated', updateListener);
+          return;
+        }
 
         // 🔥 CRITICAL: Detect if this is a NEW trade initiation vs opening existing chat
         // If selectedUser has _channel, they clicked from chat list (DON'T update initiator)
@@ -1715,7 +1766,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
         // 🔥 ESCROW: Detect escrow channels and fetch deal data
         const escrowChId = channel.id || (channel.cid ? channel.cid.split(':')[1] : '');
-        if (escrowChId && escrowChId.startsWith('escrow_')) {
+        if (escrowChId && (escrowChId.startsWith('escrow_') || escrowChId.endsWith('_escrow'))) {
           console.log('🛡️ Escrow channel detected:', escrowChId);
           fetchEscrowDeal(escrowChId);
         } else {
@@ -1812,6 +1863,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             console.log('💬 Channel: Skipping cancel_request_data - handled by global listener');
           }
 
+          // Re-fetch escrow deal on any new message so the status banner stays current
+          if (escrowChId && (escrowChId.startsWith('escrow_') || escrowChId.endsWith('_escrow'))) {
+            fetchEscrowDeal(escrowChId);
+          }
+
           // 🔥 React to invoice_declined — clear "Waiting for buyer", show Initiate trade when buyer declines
           if (newMessage.invoice_declined === true && newMessage.user?.id !== currentUserId) {
             setShowAcceptanceNotification(false);
@@ -1898,7 +1954,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
         channel.on('message.read', readListener);
 
-        const updateListener = (event) => {
+        const channelUpdateListener = (event) => {
           setMessages((prev) => prev.map(msg => {
             if (msg.id === event.message.id) {
               return { ...msg, ...event.message };
@@ -1906,8 +1962,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             return msg;
           }));
         };
+        updateListener = channelUpdateListener;
 
-        channel.on('message.updated', updateListener);
+        channel.on('message.updated', channelUpdateListener);
 
         setTimeout(scrollToBottom, 100);
 
@@ -4858,8 +4915,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     const visibleChannels = channels.filter(channel => {
       const channelId = channel.id || (channel.cid ? channel.cid.split(':')[1] : null);
 
-      // Support (appeal) channels are opened via Appeal button in a modal — do not show in chat list
-      if (channelId && String(channelId).startsWith('support_')) {
+      // Support (appeal) and escrow channels are handled separately — do not show in main chat list
+      if (channelId && (String(channelId).startsWith('support_') || String(channelId).startsWith('escrow_') || String(channelId).endsWith('_escrow'))) {
         return false;
       }
 
@@ -5104,7 +5161,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     // 🔥 CHANNEL-TYPE-BASED DISPLAY: Same section for both seller and buyer
     // - chatType 'buy' (sell_order) → always show in "Buy" tab
     // - chatType 'sell' (buy_order) → always show in "Sell" tab
-    const isEscrow = channel?.id?.startsWith('escrow_') || channel?.cid?.split(':')[1]?.startsWith('escrow_');
+    const isEscrow = channel?.id?.startsWith('escrow_') || channel?.id?.endsWith('_escrow')
+      || channel?.cid?.split(':')[1]?.startsWith('escrow_') || channel?.cid?.split(':')[1]?.endsWith('_escrow');
     const shouldShowInBuyTab = baseChatType === 'buy' || isEscrow;
     const shouldShowInSellTab = baseChatType === 'sell' || isEscrow;
 
@@ -6451,147 +6509,228 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
   // 🔥 REMOVED: AccountInfoModal without price - using permanent banner with price instead (lines 3723-3759)
 
   // 🔥 FIXED: Using useMemo instead of function component to prevent recreation on every render
-  const asideContent = useMemo(() => (
-    <div className="lg:bg-[#181818] w-full h-full lg:w-[22rem] z-50 lg:rounded-md lg:p-4">
-      <h2 className='flex items-center text-xl mb-2 mt-2 text-white font-bold'>Chats</h2>
+  const asideContent = useMemo(() => {
+    const currentUserId = userData?._id || userData?.id;
 
-      <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search For chats"
-          onChange={(e) => {
-            e.stopPropagation();
-            const value = e.target.value;
-            // 🔥 FIXED: Update debouncedSearchQuery directly with longer delay
-            // This prevents parent re-renders during typing
-            if (searchTimeoutRef.current) {
-              clearTimeout(searchTimeoutRef.current);
-            }
-            searchTimeoutRef.current = setTimeout(() => {
-              console.log('🔍 [SEARCH] Updating debouncedSearchQuery (500ms delay):', value);
-              setDebouncedSearchQuery(value);
-            }, 500);
-          }}
-          onFocus={(e) => e.stopPropagation()}
-          onBlur={(e) => {
-            // Immediately update on blur
-            if (searchTimeoutRef.current) {
-              clearTimeout(searchTimeoutRef.current);
-            }
-            setDebouncedSearchQuery(e.target.value);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="w-full bg-white/5 border text-sm border-white/10 rounded-full pl-10 pr-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-          autoComplete="off"
-        />
-      </div>
+    // Build escrow channel list from the already-fetched channels state
+    const escrowChannels = channels
+      .filter(c => {
+        const cid = c.id || c.cid?.split(':')[1];
+        return cid?.startsWith('escrow_') || cid?.endsWith('_escrow');
+      })
+      .map(channel => {
+        const otherMembers = Object.values(channel.state?.members || {}).filter(
+          m => m.user_id !== currentUserId
+        );
+        const otherUser = otherMembers[0]?.user;
+        const dealName = (channel.data?.name || '').replace(/^Escrow:\s*/i, '')
+          || channel.data?.metadata?.dealName
+          || 'Escrow Deal';
+        const channelMessages = channel.state?.messages || [];
+        const lastMessage = channelMessages[channelMessages.length - 1];
+        const unreadCount = chatService.getUnreadCount(channel);
+        return { channel, otherUser, dealName, lastMessage, unreadCount };
+      });
 
-      <div className="flex mb-4 rounded-lg p-1">
-        <button
-          onClick={() => setActiveTab('Buy')}
-          className={`text-sm font-medium transition-colors mr-6 pb-2 border-b-2 flex items-center gap-2 ${activeTab === 'Buy'
-            ? 'border-purple-600 text-white'
-            : 'border-transparent text-gray-400 hover:text-white'
+    return (
+      <div className="lg:bg-[#181818] w-full h-full lg:w-[22rem] z-50 lg:rounded-md lg:p-4">
+        {/* Chats heading */}
+        <h2 className="text-xl font-bold text-white mb-4 mt-2">Chats</h2>
+
+        {/* Search bar */}
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search For chats"
+            onChange={(e) => {
+              e.stopPropagation();
+              const value = e.target.value;
+              if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = setTimeout(() => {
+                setDebouncedSearchQuery(value);
+              }, 500);
+            }}
+            onFocus={(e) => e.stopPropagation()}
+            onBlur={(e) => {
+              if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+              setDebouncedSearchQuery(e.target.value);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full bg-white/5 border text-sm border-white/10 rounded-full pl-10 pr-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+            autoComplete="off"
+          />
+        </div>
+
+        {/* Buy | Sell | Escrow tabs */}
+        <div className="flex mb-4 rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab('Buy')}
+            className={`text-sm font-medium transition-colors mr-6 pb-2 border-b-2 flex items-center gap-2 ${
+              activeTab === 'Buy' ? 'border-purple-600 text-white' : 'border-transparent text-gray-400 hover:text-white'
             }`}
-        >
-          Buy
-          {buyUnreadCount > 0 && (
-            <span className="bg-[#DCD0FF] text-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">
-              {buyUnreadCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('Sell')}
-          className={`text-sm font-medium transition-colors pb-2 border-b-2 flex items-center gap-2 ${activeTab === 'Sell'
-            ? 'border-purple-600 text-white'
-            : 'border-transparent text-gray-400 hover:text-white'
+          >
+            Buy
+            {buyUnreadCount > 0 && (
+              <span className="bg-[#DCD0FF] text-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {buyUnreadCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('Sell')}
+            className={`text-sm font-medium transition-colors mr-6 pb-2 border-b-2 flex items-center gap-2 ${
+              activeTab === 'Sell' ? 'border-purple-600 text-white' : 'border-transparent text-gray-400 hover:text-white'
             }`}
-        >
-          Sell
-          {sellUnreadCount > 0 && (
-            <span className="bg-[#DCD0FF] text-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">
-              {sellUnreadCount}
-            </span>
-          )}
-        </button>
-      </div>
+          >
+            Sell
+            {sellUnreadCount > 0 && (
+              <span className="bg-[#DCD0FF] text-red-500 text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {sellUnreadCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('Escrow')}
+            className={`text-sm font-medium transition-colors pb-2 border-b-2 flex items-center gap-2 ${
+              activeTab === 'Escrow' ? 'border-purple-600 text-white' : 'border-transparent text-gray-400 hover:text-white'
+            }`}
+          >
+            Escrow
+          </button>
+        </div>
 
-      <div className="space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 250px)' }}>
-        {isLoading && channels.length === 0 ? (
-          <div className="text-center text-gray-400 py-4">Loading chats...</div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="text-center text-gray-400 py-4">
-            {debouncedSearchQuery ? 'No chats found' : `No ${activeTab.toLowerCase()} chats yet`}
-          </div>
-        ) : (
-          filteredUsers.map((user) => (
-            <div
-              key={`${user._channel?.id || user._channel?.cid || user.id}_${user.chatType}_${user.accountId || 'default'}`}
-              onClick={() => handleUserSelect(user)}
-              className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-white/5 ${
-                selectedUser?.id === user.id && (
-                  // 🔥 FIX: Match by channel ID to avoid highlighting multiple channels with same user
-                  !selectedUser?._channel || !user._channel ||
-                  (selectedUser._channel?.id || selectedUser._channel?.cid) === (user._channel?.id || user._channel?.cid)
-                ) ? 'bg-white/10' : ''
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className="relative">
-                  <img
-                    src={getUserImage(user)}
-                    alt={user.name}
-                    className="w-10 h-10 rounded-full object-cover"
-                    onError={(e) => {
-                      // Silently fallback to default image
-                      e.target.src = ug1;
-                    }}
-                  />
-                  {user.status === 'online' && (
-                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#181818]"></div>
-                  )}
-                </div>
+        {/* Channel list */}
+        <div className="space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+          {activeTab === 'Escrow' ? (
+            isLoading && channels.length === 0 ? (
+              <div className="text-center text-gray-400 py-4">Loading chats...</div>
+            ) : escrowChannels.length === 0 ? (
+              <div className="text-center text-gray-400 py-6 text-sm">No escrow deals yet</div>
+            ) : (
+              escrowChannels.map(({ channel, otherUser, dealName, lastMessage, unreadCount }) => {
+                const channelId = channel.id || channel.cid?.split(':')[1];
+                const selectedChannelId = selectedUser?._channel?.id || selectedUser?._channel?.cid?.split(':')[1];
+                const isSelected = selectedChannelId === channelId;
+                const time = lastMessage ? formatTime(new Date(lastMessage.created_at)) : '';
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="text-white font-medium text-sm truncate">{user.name}</h4>
-                    <span className="text-gray-400 text-xs">{user.time}</span>
+                return (
+                  <div
+                    key={channelId}
+                    onClick={() => handleUserSelect({
+                      id: otherUser?.id || '',
+                      name: otherUser?.name || otherUser?.displayName || 'Unknown User',
+                      username: otherUser?.username || '',
+                      avatar: otherUser?.image || '',
+                      _channel: channel,
+                      chatType: 'escrow',
+                    })}
+                    className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-white/5 ${isSelected ? 'bg-white/10' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="relative">
+                        <img
+                          src={otherUser?.image || ug1}
+                          alt={otherUser?.name || 'User'}
+                          className="w-10 h-10 rounded-full object-cover"
+                          onError={(e) => { e.target.src = ug1; }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="text-white font-medium text-sm truncate">
+                            {otherUser?.name || otherUser?.displayName || 'Unknown User'}
+                            <span className="text-gray-400 font-normal"> ({dealName})</span>
+                          </h4>
+                          <span className="text-gray-400 text-xs flex-shrink-0">{time}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-gray-400 text-xs truncate flex-1">
+                            {lastMessage?.text || 'No messages yet'}
+                          </p>
+                          {unreadCount > 0 && (
+                            <span className="bg-[#DCD0FF] text-red-500 text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 flex-shrink-0">
+                              {unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {user.isOutgoing && user.messageStatus && (
-                      <div className="flex-shrink-0">
-                        {user.messageStatus === 'read' ? (
-                          <CheckCheck className="w-3.5 h-3.5 text-blue-400" title="Read" />
-                        ) : user.messageStatus === 'delivered' ? (
-                          <CheckCheck className="w-3.5 h-3.5 text-gray-400" title="Delivered" />
-                        ) : (
-                          <Check className="w-3.5 h-3.5 text-gray-400" title="Sent" />
+                );
+              })
+            )
+          ) : (
+            isLoading && channels.length === 0 ? (
+              <div className="text-center text-gray-400 py-4">Loading chats...</div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center text-gray-400 py-4">
+                {debouncedSearchQuery ? 'No chats found' : `No ${activeTab.toLowerCase()} chats yet`}
+              </div>
+            ) : (
+              filteredUsers.map((user) => (
+                <div
+                  key={`${user._channel?.id || user._channel?.cid || user.id}_${user.chatType}_${user.accountId || 'default'}`}
+                  onClick={() => handleUserSelect(user)}
+                  className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-white/5 ${
+                    selectedUser?.id === user.id && (
+                      !selectedUser?._channel || !user._channel ||
+                      (selectedUser._channel?.id || selectedUser._channel?.cid) === (user._channel?.id || user._channel?.cid)
+                    ) ? 'bg-white/10' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="relative">
+                      <img
+                        src={getUserImage(user)}
+                        alt={user.name}
+                        className="w-10 h-10 rounded-full object-cover"
+                        onError={(e) => { e.target.src = ug1; }}
+                      />
+                      {user.status === 'online' && (
+                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#181818]"></div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="text-white font-medium text-sm truncate">{user.name}</h4>
+                        <span className="text-gray-400 text-xs">{user.time}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {user.isOutgoing && user.messageStatus && (
+                          <div className="flex-shrink-0">
+                            {user.messageStatus === 'read' ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-blue-400" title="Read" />
+                            ) : user.messageStatus === 'delivered' ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-gray-400" title="Delivered" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5 text-gray-400" title="Sent" />
+                            )}
+                          </div>
+                        )}
+                        <p className="text-gray-400 text-xs truncate flex-1">{user.lastMessage}</p>
+                        {user._tradeCompleted && (
+                          <span className="text-green-400 text-[10px] font-medium flex-shrink-0" title="Trade completed">
+                            ✅ Completed
+                          </span>
+                        )}
+                        {user.unreadCount > 0 && (
+                          <span className="bg-[#DCD0FF] text-red-500 text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 flex-shrink-0">
+                            {user.unreadCount}
+                          </span>
                         )}
                       </div>
-                    )}
-                    <p className="text-gray-400 text-xs truncate flex-1">{user.lastMessage}</p>
-                    {user._tradeCompleted && (
-                      <span className="text-green-400 text-[10px] font-medium flex-shrink-0" title="Trade completed">
-                        ✅ Completed
-                      </span>
-                    )}
-                    {user.unreadCount > 0 && (
-                      <span className="bg-[#DCD0FF] text-red-500 text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 flex-shrink-0">
-                        {user.unreadCount}
-                      </span>
-                    )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          ))
-        )}
+              ))
+            )
+          )}
+        </div>
       </div>
-    </div>
-  ), [filteredUsers, activeTab, buyUnreadCount, sellUnreadCount, isLoading, debouncedSearchQuery, selectedUser, channels, selectedChannelCanInitiateAgain, selectedChannelBadgeResolved, currentChannel?.id]);
+    );
+  }, [filteredUsers, activeTab, buyUnreadCount, sellUnreadCount, isLoading, debouncedSearchQuery, selectedUser, channels, selectedChannelCanInitiateAgain, selectedChannelBadgeResolved, currentChannel?.id, userData]);
 
   const MainContent = () => {
     // Show channel error modal
@@ -7339,8 +7478,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
           {/* 🛡️ ESCROW DEAL BANNER — shown when channel is an escrow channel */}
           {(() => {
-            const channelId = currentChannel?.id || (currentChannel?.cid ? currentChannel.cid.split(':')[1] : '');
-            const isEscrowChannel = channelId && channelId.startsWith('escrow_');
+            const channelId = currentChannel?.id || (currentChannel?.cid ? currentChannel.cid.split(':')[1] : '')
+              || selectedUser?._channel?.id || selectedUser?._channel?.cid?.split(':')[1];
+            const isEscrowChannel = (channelId && (channelId.startsWith('escrow_') || channelId.endsWith('_escrow'))) || selectedUser?.chatType === 'escrow';
             if (!isEscrowChannel) return null;
 
             const currentUserId = userData?._id || userData?.id;
@@ -7387,7 +7527,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               pending: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', label: 'Pending' },
               accepted: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', label: 'Accepted' },
               declined: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', label: 'Declined' },
-              released: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'Released' },
+              released: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'Completed' },
+              completed: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'Completed' },
               disputed: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400', label: 'Disputed' },
               cancelled: { bg: 'bg-gray-500/10', border: 'border-gray-500/30', text: 'text-gray-400', label: 'Cancelled' },
             };
@@ -7497,7 +7638,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                     )}
 
                     {/* Completed states */}
-                    {status === 'released' && (
+                    {(status === 'released' || status === 'completed') && (
                       <div className="flex items-center gap-2 bg-green-500/10 rounded-lg px-3 py-2 border border-green-500/20 mt-2">
                         <CheckCircle className="w-4 h-4 text-green-400" />
                         <span className="text-green-300 text-xs font-medium">Payment has been released successfully.</span>
@@ -7505,9 +7646,19 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                     )}
 
                     {status === 'declined' && (
-                      <div className="flex items-center gap-2 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20 mt-2">
-                        <Ban className="w-4 h-4 text-red-400" />
-                        <span className="text-red-300 text-xs font-medium">This deal was declined.</span>
+                      <div className="space-y-2 mt-2">
+                        <div className="flex items-center gap-2 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">
+                          <Ban className="w-4 h-4 text-red-400" />
+                          <span className="text-red-300 text-xs font-medium">This deal was declined.</span>
+                        </div>
+                        {isInitiator && (
+                          <button
+                            onClick={() => window.dispatchEvent(new CustomEvent('openEscrowFlow'))}
+                            className="w-full py-2.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" /> Create New Deal
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -7575,8 +7726,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
           {/* 🔥 PERMANENT: Account Info Banner - ONLY when there is an active invoice or transaction (hide when Unknown/N/A after refresh) */}
           {selectedUser && (() => {
-            const channelId = currentChannel?.id || (currentChannel?.cid ? currentChannel.cid.split(':')[1] : '');
-            if (channelId && channelId.startsWith('escrow_')) return null;
+            const channelId = currentChannel?.id || (currentChannel?.cid ? currentChannel.cid.split(':')[1] : '')
+              || selectedUser?._channel?.id || selectedUser?._channel?.cid?.split(':')[1];
+            if (channelId && (channelId.startsWith('escrow_') || channelId.endsWith('_escrow'))) return null;
+            if (selectedUser?.chatType === 'escrow') return null;
             
             const otherName = selectedUser.name || selectedUser.displayName || 'User';
             // Use role from loadChannel (includes cameFromTable fix); fallback to local computation

@@ -56,7 +56,7 @@ const FourthProcessMobile = ({ formData, dealResponse, onClose, onOpenChat }) =>
         <button 
           onClick={() => {
             const dealId = dealResponse?._id || dealResponse?.id || dealResponse?.deal?._id || dealResponse?.deal?.id;
-            const channelId = dealResponse?.channelId || `escrow_${dealId}`;
+            const channelId = dealResponse?.chatChannelId || dealResponse?.channelId || `escrow_${dealId}`;
             if (onOpenChat) onOpenChat(channelId);
             else onClose();
           }}
