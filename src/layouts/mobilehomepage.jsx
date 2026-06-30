@@ -1960,9 +1960,19 @@ const MobileHomePage = () => {
               if (!hasSeenBuySellOnboarding) {
                 setShowBuySellOnboarding(true);
                 setHasSeenBuySellOnboarding(true);
+                localStorage.setItem('hasSeenBuySellOnboarding', 'true');
               } else {
-                setShowBuySellModal(true);
+                handleTabChange('trade');
               }
+            }}
+            onOpenChat={(channelId) => {
+              setShowMobileEscrowFlow(false);
+              handleTabChange('chat');
+              localStorage.setItem('openEscrowChannel', channelId);
+              // Small timeout to allow chat component to mount and attach listener
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('openSpecificChat', { detail: { channelId } }));
+              }, 500);
             }}
           />
         )}

@@ -1956,6 +1956,16 @@ const HomePage = () => {
               setActiveTab('trade');
               setActiveMenuSection('wallet');
             }}
+            onOpenChat={(channelId) => {
+              setShowDesktopEscrowFlow(false);
+              setActiveTab('chat');
+              setActiveMenuSection('chat');
+              localStorage.setItem('openEscrowChannel', channelId);
+              // Small timeout to allow chat component to mount and attach listener
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('openSpecificChat', { detail: { channelId } }));
+              }, 500);
+            }}
           />
         )}
 

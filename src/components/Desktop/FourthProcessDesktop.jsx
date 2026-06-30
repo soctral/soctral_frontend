@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Send, CheckCircle2, XCircle, MessageCircle } from 'lucide-react';
 
-const FourthProcessDesktop = ({ formData, dealResponse, onClose }) => {
+const FourthProcessDesktop = ({ formData, dealResponse, onClose, onOpenChat }) => {
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50 transition-opacity duration-300" />
@@ -54,7 +54,12 @@ const FourthProcessDesktop = ({ formData, dealResponse, onClose }) => {
 
             <div className="w-full space-y-4">
               <button 
-                onClick={onClose}
+                onClick={() => {
+                  const dealId = dealResponse?._id || dealResponse?.id || dealResponse?.deal?._id || dealResponse?.deal?.id;
+                  const channelId = dealResponse?.channelId || `escrow_${dealId}`;
+                  if (onOpenChat) onOpenChat(channelId);
+                  else onClose();
+                }}
                 className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-4 rounded-xl transition-colors text-sm"
               >
                 Open Chat

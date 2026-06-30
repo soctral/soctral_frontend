@@ -240,8 +240,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     setIsLoadingEscrowDeal(true);
     setEscrowError('');
     try {
-      const deal = await escrowService.getDealByChannel(channelId);
-      setEscrowDeal(deal);
+      const response = await escrowService.getDealByChannel(channelId);
+      const actualDeal = response?.deal || response;
+      setEscrowDeal(actualDeal);
     } catch (err) {
       console.error('❌ Failed to fetch escrow deal:', err);
       setEscrowDeal(null);
@@ -442,8 +443,10 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
         const hasNoMessages = (channel.state?.messages || []).length === 0;
         const looksDeleted = hasNoMessages && recentlyUpdated;
+        
+        const isEscrow = channelId && channelId.startsWith('escrow_');
 
-        const shouldInclude = !isHidden && !looksDeleted && isMember && hasValidState;
+        const shouldInclude = !isHidden && (!looksDeleted || isEscrow) && isMember && hasValidState;
 
         if (!shouldInclude) {
           console.log(`🚫 Excluding channel ${channelId}:`, {
@@ -1044,14 +1047,21 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             }
           };
 
+          const handleNewChannel = (event) => {
+            console.log('🎉 Added to new channel globally:', event);
+            fetchChannels();
+          };
+
           // Listen to all message.new events globally
           client.on('message.new', handleGlobalMessage);
-          console.log('✅ Global trade initiation listener set up');
+          client.on('notification.added_to_channel', handleNewChannel);
+          console.log('✅ Global trade initiation and new channel listener set up');
 
           // Cleanup function
           return () => {
             client.off('message.new', handleGlobalMessage);
-            console.log('🧹 Global trade initiation listener cleaned up');
+            client.off('notification.added_to_channel', handleNewChannel);
+            console.log('🧹 Global trade initiation and new channel listener cleaned up');
           };
         }
 
@@ -1169,7 +1179,60 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     };
   }, [onSelectUser]);
 
+  useEffect(() => {
+    const handleOpenSpecificChat = (event) => {
+      const channelId = event?.detail?.channelId || localStorage.getItem('openEscrowChannel');
+      if (!channelId) return;
 
+      console.log('📥 Request to open specific channel:', channelId);
+      
+      const foundChannel = channels.find(c => (c.id || c.cid?.split(':')[1]) === channelId);
+      if (foundChannel) {
+        const otherMembers = Object.values(foundChannel.state.members).filter(
+          (m) => m.user_id !== (userData?._id || userData?.id)
+        );
+        const otherUser = otherMembers[0]?.user;
+        const chatUser = {
+          id: otherUser?.id || '',
+          name: otherUser?.name || otherUser?.displayName || 'Unknown User',
+          username: otherUser?.username || otherUser?.handle || '',
+          avatar: otherUser?.image || '',
+          _channel: foundChannel,
+          chatType: foundChannel.data?.metadata?.chatType || 'buy'
+        };
+        handleUserSelect(chatUser);
+        localStorage.removeItem('openEscrowChannel');
+      } else {
+        // If not found in current list, maybe we need to fetch it or wait for fetchChannels to finish
+        console.warn('⚠️ Channel not found in list, fetching directly...');
+        fetchChannels().then(() => {
+           const recheckChannel = chatService.client?.activeChannels?.[channelId] || chatService.client?.activeChannels?.[`messaging:${channelId}`];
+           if (recheckChannel) {
+             const otherMembers = Object.values(recheckChannel.state.members).filter(
+               (m) => m.user_id !== (userData?._id || userData?.id)
+             );
+             const otherUser = otherMembers[0]?.user;
+             handleUserSelect({
+               id: otherUser?.id || '',
+               name: otherUser?.name || otherUser?.displayName || 'Unknown User',
+               _channel: recheckChannel,
+               chatType: recheckChannel.data?.metadata?.chatType || 'buy'
+             });
+             localStorage.removeItem('openEscrowChannel');
+           }
+        });
+      }
+    };
+
+    window.addEventListener('openSpecificChat', handleOpenSpecificChat);
+    
+    // Check if there is one pending in localStorage on mount or when channels change
+    if (localStorage.getItem('openEscrowChannel') && channels.length > 0) {
+      handleOpenSpecificChat();
+    }
+
+    return () => window.removeEventListener('openSpecificChat', handleOpenSpecificChat);
+  }, [channels, userData]);
 
   useEffect(() => {
     if (!selectedUser) {
@@ -5041,8 +5104,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     // 🔥 CHANNEL-TYPE-BASED DISPLAY: Same section for both seller and buyer
     // - chatType 'buy' (sell_order) → always show in "Buy" tab
     // - chatType 'sell' (buy_order) → always show in "Sell" tab
-    const shouldShowInBuyTab = baseChatType === 'buy';
-    const shouldShowInSellTab = baseChatType === 'sell';
+    const isEscrow = channel?.id?.startsWith('escrow_') || channel?.cid?.split(':')[1]?.startsWith('escrow_');
+    const shouldShowInBuyTab = baseChatType === 'buy' || isEscrow;
+    const shouldShowInSellTab = baseChatType === 'sell' || isEscrow;
 
     const matchesTab = activeTab === 'Buy' ? shouldShowInBuyTab : shouldShowInSellTab;
 
@@ -7310,8 +7374,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             if (!escrowDeal) return null;
 
             const deal = escrowDeal;
-            const isInitiator = String(deal.initiatorId?._id || deal.initiatorId) === String(currentUserId);
-            const isPartner = String(deal.partnerId?._id || deal.partnerId) === String(currentUserId);
+            const currentUserIdStr = String(currentUserId);
+            const getEscrowUserId = (u) => typeof u === 'string' ? u : (u?._id || u?.id || '');
+            const isInitiator = String(getEscrowUserId(deal.initiatorId)) === currentUserIdStr;
+            const isPartner = String(getEscrowUserId(deal.partnerId)) === currentUserIdStr;
+            const isFunder = deal.fundingParty === 'receiver' ? isPartner : isInitiator;
             const initiatorName = deal.initiatorId?.displayName || deal.initiatorId?.name || 'Initiator';
             const partnerName = deal.partnerId?.displayName || deal.partnerId?.name || 'Partner';
             const status = deal.status?.toLowerCase() || 'pending';
@@ -7416,8 +7483,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       </div>
                     )}
 
-                    {/* Initiator sees Release Payment when accepted */}
-                    {isInitiator && status === 'accepted' && (
+                    {/* Funder sees Release Payment when accepted */}
+                    {isFunder && status === 'accepted' && (
                       <div className="pt-3 border-t border-white/5">
                         <button
                           onClick={() => setShowEscrowReleaseModal(true)}
@@ -7482,7 +7549,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowEscrowReleaseModal(false)}>
               <div className="bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 mx-4 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h3 className="text-white font-bold text-base mb-1">Release Payment</h3>
-                <p className="text-gray-400 text-xs mb-4">Enter your transaction PIN to release <span className="text-white font-semibold">${Number(escrowDeal.amount || 0).toLocaleString()}</span> to {escrowDeal.partnerId?.displayName || escrowDeal.partnerId?.name || 'the receiver'}.</p>
+                <p className="text-gray-400 text-xs mb-4">Enter your transaction PIN to release <span className="text-white font-semibold">${Number(escrowDeal.amount || 0).toLocaleString()}</span> to {escrowDeal.fundingParty === 'receiver' ? (escrowDeal.initiatorId?.displayName || escrowDeal.initiatorId?.name || 'the initiator') : (escrowDeal.partnerId?.displayName || escrowDeal.partnerId?.name || 'the receiver')}.</p>
                 <input
                   type="password"
                   value={escrowReleasePin}
@@ -7508,6 +7575,9 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
           {/* 🔥 PERMANENT: Account Info Banner - ONLY when there is an active invoice or transaction (hide when Unknown/N/A after refresh) */}
           {selectedUser && (() => {
+            const channelId = currentChannel?.id || (currentChannel?.cid ? currentChannel.cid.split(':')[1] : '');
+            if (channelId && channelId.startsWith('escrow_')) return null;
+            
             const otherName = selectedUser.name || selectedUser.displayName || 'User';
             // Use role from loadChannel (includes cameFromTable fix); fallback to local computation
             let isBuyer = accountCardIsBuyer;

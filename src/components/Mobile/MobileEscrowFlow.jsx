@@ -5,7 +5,7 @@ import ThirdProcessMobile from './ThirdProcessMobile';
 import FourthProcessMobile from './FourthProcessMobile';
 import escrowService, { PAYMENT_NETWORK_MAP } from '../../services/escrowService';
 
-const MobileEscrowFlow = ({ onClose, onBuySell }) => {
+const MobileEscrowFlow = ({ onClose, onBuySell, onOpenChat }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     dealName: '',
@@ -110,6 +110,7 @@ const MobileEscrowFlow = ({ onClose, onBuySell }) => {
           formData={formData}
           dealResponse={dealResponse}
           onClose={onClose} 
+          onOpenChat={onOpenChat}
         />
       )}
     </>
