@@ -169,10 +169,12 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
           "Solana Network": ""
         },
         Tether: {
-          "Ethereum Network": ""
+          "Ethereum Network": "",
+          "BNB Network": ""
         },
         USDCoin: {
-          "Base Network": ""
+          "Base Network": "",
+          "Solana Network": ""
         },
         "Binance Coin": {
           "BEP20 Network": ""
@@ -197,10 +199,12 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
         "Solana Network": addresses.solana || ""
       },
       Tether: {
-        "Ethereum Network": addresses.ethereum || ""
+        "Ethereum Network": addresses.ethereum || "",
+        "BNB Network": addresses.binance || addresses.ethereum || ""
       },
       USDCoin: {
-        "Base Network": addresses.base || addresses.ethereum || ""
+        "Base Network": addresses.base || addresses.ethereum || "",
+        "Solana Network": addresses.solana || ""
       },
       "Binance Coin": {
         "BEP20 Network": addresses.binance || ""
@@ -268,6 +272,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
     'Solana Network': 'solana',
     'Ethereum Network': 'ethereum',
     'BEP20 Network': 'binance',
+    'BNB Network': 'binance',
     'Tron Network': 'tron',
   };
   useEffect(() => {
@@ -379,11 +384,23 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
         confirmations: "12 block confirmation/s",
         minDeposit: ">1 USDT",
         arrival: "=2 min"
+      },
+      {
+        name: "BNB Network",
+        confirmations: "15 block confirmation/s",
+        minDeposit: ">1 USDT",
+        arrival: "=1 min"
       }
     ],
     USDCoin: [
       {
         name: "Base Network",
+        confirmations: "1 block confirmation/s",
+        minDeposit: ">0.001 USDC",
+        arrival: "=30 sec"
+      },
+      {
+        name: "Solana Network",
         confirmations: "1 block confirmation/s",
         minDeposit: ">0.001 USDC",
         arrival: "=30 sec"
@@ -426,13 +443,15 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
       "Base Network": "0.0001"
     },
     Tether: {
-      "Ethereum Network": "2"
+      "Ethereum Network": "2",
+      "BNB Network": "0.5"
     },
     Solana: {
       "Solana Network": "0.00001"
     },
     USDCoin: {
-      "Base Network": "0.001"
+      "Base Network": "0.001",
+      "Solana Network": "0.001"
     },
     "Binance Coin": {
       "BEP20 Network": "0.0005"
@@ -490,6 +509,7 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
       "Solana Network": "solana",
       "Ethereum Network": "ethereum",
       "BEP20 Network": "binance",
+      "BNB Network": "binance",
       "Tron Network": "tron"
     };
     
@@ -552,8 +572,9 @@ const WalletTransactionModal = ({ isOpen, onClose, onBack, walletData }) => {
         "Ethereum Main Network": "ethereum",
         "Base Network": "base",
         "Solana Network": "solana",
-        "Ethereum Network": "ethereum", // For USDT
-        "BEP20 Network": "binance", // For BNB
+        "Ethereum Network": "ethereum",
+        "BEP20 Network": "binance",
+        "BNB Network": "binance",
         "Tron Network": "tron"
       };
 
@@ -718,6 +739,7 @@ const handleVerifyPinAndProceed = async () => {
       "Solana Network": "solana",
       "Ethereum Network": "ethereum",
       "BEP20 Network": "binance",
+      "BNB Network": "binance",
       "Tron Network": "tron"
     };
     
