@@ -114,7 +114,16 @@ const escrowService = {
   },
 
   // ──────────────────────────────────────
-  // 7. Raise Dispute
+  // 7. Cancel Deal (initiator only)
+  // ──────────────────────────────────────
+  async cancelDeal(dealId, reason) {
+    const payload = reason ? { reason } : {};
+    const res = await api.patch(`/escrow/${dealId}/cancel`, payload);
+    return res?.data || res;
+  },
+
+  // ──────────────────────────────────────
+  // 8. Raise Dispute
   // ──────────────────────────────────────
   async raiseDispute(dealId, reason) {
     const res = await api.patch(`/escrow/${dealId}/dispute`, { reason });
