@@ -7031,7 +7031,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => setShowEscrowAcceptModal(true)} disabled={escrowActionLoading === 'accepting'} className="px-4 py-2 bg-primary text-white rounded-full hover:bg-purple-700 text-sm transition-colors font-medium disabled:opacity-50">Accept</button>
-                        <button onClick={() => setShowEscrowDeclineModal(true)} disabled={!!escrowActionLoading} className="px-4 py-2 bg-red-700/20 text-red-600 rounded-full text-sm hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50">Decline</button>
+                        <button onClick={() => { setEscrowError(''); setShowEscrowDeclineModal(true); }} disabled={!!escrowActionLoading} className="px-4 py-2 bg-red-700/20 text-red-600 rounded-full text-sm hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50">Decline</button>
                       </div>
                     </>
                   )}
@@ -7419,7 +7419,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
                   <div className="flex gap-2 w-full">
                     <button onClick={() => setShowEscrowAcceptModal(true)} disabled={escrowActionLoading === 'accepting'} className="flex-1 px-3 py-1.5 bg-primary text-white rounded-full hover:bg-purple-700 text-xs transition-colors font-medium disabled:opacity-50">Accept</button>
-                    <button onClick={() => setShowEscrowDeclineModal(true)} disabled={!!escrowActionLoading} className="flex-1 px-3 py-1.5 bg-red-700/20 text-red-600 rounded-full text-xs hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50">Decline</button>
+                    <button onClick={() => { setEscrowError(''); setShowEscrowDeclineModal(true); }} disabled={!!escrowActionLoading} className="flex-1 px-3 py-1.5 bg-red-700/20 text-red-600 rounded-full text-xs hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50">Decline</button>
                   </div>
                 </div>
               );
