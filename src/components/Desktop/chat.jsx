@@ -7899,8 +7899,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
 
           {/* 🛡️ ESCROW Accept Confirmation Modal — matches buy/sell Trade Details style */}
           {showEscrowAcceptModal && escrowDeal && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowEscrowAcceptModal(false); setEscrowAcceptAgree1(false); setEscrowAcceptAgree2(false); setEscrowError(''); }}>
-              <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 touch-none" onClick={() => { setShowEscrowAcceptModal(false); setEscrowAcceptAgree1(false); setEscrowAcceptAgree2(false); setEscrowError(''); }} onTouchMove={e => e.preventDefault()}>
+              <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
                 <div className="p-6">
 
                   {/* Deal Details card */}

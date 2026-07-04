@@ -5,7 +5,7 @@ import ThirdProcessDesktop from './ThirdProcessDesktop';
 import FourthProcessDesktop from './FourthProcessDesktop';
 import escrowService, { PAYMENT_NETWORK_MAP } from '../../services/escrowService';
 
-const DesktopEscrowFlow = ({ onClose, onBuySell, onOpenChat }) => {
+const DesktopEscrowFlow = ({ onClose, onBuySell, onOpenChat, walletData }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     dealName: '',
@@ -89,11 +89,12 @@ const DesktopEscrowFlow = ({ onClose, onBuySell, onOpenChat }) => {
         />
       )}
       {currentStep === 2 && (
-        <SecondProcessDesktop 
-          formData={formData} 
-          onNext={handleNext} 
-          onBack={handleBack} 
+        <SecondProcessDesktop
+          formData={formData}
+          onNext={handleNext}
+          onBack={handleBack}
           onClose={onClose}
+          walletData={walletData}
         />
       )}
       {currentStep === 3 && (
