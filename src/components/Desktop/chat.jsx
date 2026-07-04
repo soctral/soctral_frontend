@@ -7775,14 +7775,14 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       )}
                       <div className="flex justify-between items-center">
                         <span className="text-gray-500 text-xs">Initiator <span className="text-gray-600">(pays)</span></span>
-                        <span className={`text-sm font-medium ${isInitiator ? 'text-primary' : 'text-white'}`}>
-                          {isInitiator ? 'You' : initiatorName}
+                        <span className={`text-sm font-medium ${isFunder ? 'text-primary' : 'text-white'}`}>
+                          {isFunder ? 'You' : (deal.fundingParty === 'receiver' ? partnerName : initiatorName)}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-gray-500 text-xs">Receiver <span className="text-gray-600">(gets paid)</span></span>
-                        <span className={`text-sm font-medium ${isPartner ? 'text-primary' : 'text-white'}`}>
-                          {isPartner ? 'You' : partnerName}
+                        <span className={`text-sm font-medium ${!isFunder && (isInitiator || isPartner) ? 'text-primary' : 'text-white'}`}>
+                          {!isFunder && (isInitiator || isPartner) ? 'You' : (deal.fundingParty === 'receiver' ? initiatorName : partnerName)}
                         </span>
                       </div>
                       {deal.startDate && (
