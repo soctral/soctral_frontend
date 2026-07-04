@@ -7,25 +7,106 @@ import sol from '../../assets/sol.svg';
 import bnb from '../../assets/bnb.svg';
 import trx from '../../assets/trx.svg';
 import usdc from '../../assets/usdc.svg';
-import escrowService, { PAYMENT_NETWORK_MAP, TOKEN_NETWORKS, NETWORK_LABELS } from '../../services/escrowService';
+import escrowService, { PAYMENT_NETWORK_MAP } from '../../services/escrowService';
 import { useUser } from '../../context/userContext';
 
-const PAYMENT_METHODS = [
+const ALL_PAYMENT_METHODS = [
   { id: 'btc', icon: btc, label: 'BTC' },
   { id: 'eth', icon: eth, label: 'ETH' },
   { id: 'usdt', icon: usdt, label: 'USDT' },
   { id: 'sol', icon: sol, label: 'SOL' },
   { id: 'bnb', icon: bnb, label: 'BNB' },
   { id: 'trx', icon: trx, label: 'TRX' },
-  { id: 'usdc', icon: usdc, label: 'USDC' }
+  { id: 'usdc', icon: usdc, label: 'USDC' },
 ];
+
+const ICON_MAP = { btc, eth, usdt, sol, bnb, trx, usdc };
+
+const NETWORK_DISPLAY_MAP = {
+  ethereum: 'Ethereum (ERC20)',
+  base: 'Base',
+  bitcoin: 'Bitcoin',
+  solana: 'Solana',
+  binance: 'BNB Smart Chain',
+  bsc: 'BNB Smart Chain',
+  bnb: 'BNB Smart Chain',
+  tron: 'Tron (TRC20)',
+  trx: 'Tron (TRC20)',
+};
+
+const STATIC_TOKEN_NETWORKS = {
+  btc: ['bitcoin'],
+  eth: ['ethereum', 'base'],
+  usdt: ['ethereum', 'base', 'tron', 'solana'],
+  sol: ['solana'],
+  bnb: ['binance'],
+  trx: ['tron'],
+  usdc: ['ethereum', 'base', 'solana'],
+};
+
+const TOKEN_TO_CURRENCY_KEY = {
+  btc: ['btc', 'bitcoin'],
+  eth: ['eth', 'ethereum'],
+  usdt: ['usdt', 'tether'],
+  usdc: ['usdc'],
+  sol: ['sol', 'solana'],
+  bnb: ['bnb', 'binance'],
+  trx: ['trx', 'tron'],
+};
+
+function buildPaymentMethods(currenciesData) {
+  if (!currenciesData) return ALL_PAYMENT_METHODS;
+  const tokenSymbolMap = {
+    bitcoin: 'btc', ethereum: 'eth', tether: 'usdt',
+    solana: 'sol', binance: 'bnb', tron: 'trx', usdc: 'usdc',
+  };
+  const seen = new Set();
+  const methods = [];
+  Object.keys(currenciesData).forEach(key => {
+    const id = tokenSymbolMap[key.toLowerCase()] || key.toLowerCase();
+    if (!seen.has(id) && ICON_MAP[id]) {
+      seen.add(id);
+      methods.push({ id, icon: ICON_MAP[id], label: id.toUpperCase() });
+    }
+  });
+  return methods.length > 0 ? methods : ALL_PAYMENT_METHODS;
+}
+
+function buildNetworkOptions(currenciesData, paymentMethodId) {
+  const networkOptions = [];
+  if (currenciesData && paymentMethodId) {
+    const keys = TOKEN_TO_CURRENCY_KEY[paymentMethodId] || [];
+    for (const key of keys) {
+      const currencyData = currenciesData[key];
+      if (currencyData?.networks) {
+        Object.keys(currencyData.networks).forEach(netKey => {
+          const label = NETWORK_DISPLAY_MAP[netKey.toLowerCase()] ||
+            netKey.charAt(0).toUpperCase() + netKey.slice(1);
+          const value = netKey.toLowerCase();
+          if (!networkOptions.find(n => n.value === value)) {
+            networkOptions.push({ value, label });
+          }
+        });
+      }
+    }
+  }
+  if (networkOptions.length === 0) {
+    (STATIC_TOKEN_NETWORKS[paymentMethodId] || []).forEach(net => {
+      networkOptions.push({ value: net, label: NETWORK_DISPLAY_MAP[net] || net });
+    });
+  }
+  return networkOptions;
+}
 
 const MAX_IMAGES = 5;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-const SecondProcessMobile = ({ formData, onNext, onBack }) => {
+const SecondProcessMobile = ({ formData, onNext, onBack, walletData }) => {
   const [localData, setLocalData] = useState(formData);
+  const currenciesData = walletData?.balances?.currencies;
+  const paymentMethods = buildPaymentMethods(currenciesData);
+  const networkOptions = buildNetworkOptions(currenciesData, localData.paymentMethod);
   const [errors, setErrors] = useState({});
   const todayString = new Date().toISOString().split('T')[0];
   const { user: userData } = useUser();
@@ -258,10 +339,11 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
 
   // --- Payment Method ---
   const handlePaymentSelect = (methodId) => {
+    const nets = buildNetworkOptions(currenciesData, methodId);
     setLocalData(prev => ({
       ...prev,
       paymentMethod: methodId,
-      network: PAYMENT_NETWORK_MAP[methodId] || 'ethereum',
+      network: nets[0]?.value || PAYMENT_NETWORK_MAP[methodId] || 'ethereum',
     }));
   };
 
@@ -634,12 +716,12 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
               >
                 <div className="flex items-center gap-2.5">
                   <img
-                    src={PAYMENT_METHODS.find(m => m.id === localData.paymentMethod)?.icon}
+                    src={paymentMethods.find(m => m.id === localData.paymentMethod)?.icon}
                     alt={localData.paymentMethod}
                     className="w-5 h-5 object-contain"
                   />
                   <span className="text-white text-sm font-medium">
-                    {PAYMENT_METHODS.find(m => m.id === localData.paymentMethod)?.label || 'Select Token'}
+                    {paymentMethods.find(m => m.id === localData.paymentMethod)?.label || 'Select Token'}
                   </span>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showPaymentDropdown ? 'rotate-180' : ''}`} />
@@ -647,7 +729,7 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
 
               {showPaymentDropdown && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-10 max-h-56 overflow-y-auto shadow-xl">
-                  {PAYMENT_METHODS.map((method) => (
+                  {paymentMethods.map((method) => (
                     <button
                       key={method.id}
                       onClick={() => {
@@ -680,7 +762,7 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
               >
                 <div className="flex items-center gap-2.5">
                   <span className="text-white text-sm font-medium">
-                    {NETWORK_LABELS[localData.network] || localData.network || 'Select Network'}
+                    {NETWORK_DISPLAY_MAP[localData.network] || localData.network || 'Select Network'}
                   </span>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${showNetworkDropdown ? 'rotate-180' : ''}`} />
@@ -688,22 +770,22 @@ const SecondProcessMobile = ({ formData, onNext, onBack }) => {
 
               {showNetworkDropdown && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl overflow-hidden z-10 max-h-56 overflow-y-auto shadow-xl">
-                  {(TOKEN_NETWORKS[localData.paymentMethod] || []).map((net) => (
+                  {networkOptions.map((net) => (
                     <button
-                      key={net}
+                      key={net.value}
                       onClick={() => {
-                        handleChange('network', net);
+                        handleChange('network', net.value);
                         setShowNetworkDropdown(false);
                       }}
                       className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
-                        localData.network === net
+                        localData.network === net.value
                           ? 'bg-primary/10 border-l-2 border-primary'
                           : 'hover:bg-white/5 border-l-2 border-transparent'
                       }`}
                     >
                       <span className={`text-sm font-medium ${
-                        localData.network === net ? 'text-white' : 'text-gray-300'
-                      }`}>{NETWORK_LABELS[net] || net}</span>
+                        localData.network === net.value ? 'text-white' : 'text-gray-300'
+                      }`}>{net.label}</span>
                     </button>
                   ))}
                 </div>

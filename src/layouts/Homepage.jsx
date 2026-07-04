@@ -1958,6 +1958,7 @@ const HomePage = () => {
         {showDesktopEscrowFlow && (
           <DesktopEscrowFlow
             onClose={() => setShowDesktopEscrowFlow(false)}
+            walletData={walletData}
             onBuySell={() => {
               // User chose Buy/Sell from the picker — navigate to the trade tab
               setActiveTab('trade');

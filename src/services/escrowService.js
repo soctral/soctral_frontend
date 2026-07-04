@@ -19,8 +19,8 @@ export const PAYMENT_NETWORK_MAP = {
 
 export const TOKEN_NETWORKS = {
   btc: ['bitcoin'],
-  eth: ['ethereum', 'base', 'binance'],
-  usdt: ['ethereum', 'tron', 'solana', 'binance'],
+  eth: ['ethereum', 'base'],
+  usdt: ['ethereum', 'base', 'tron', 'solana'],
   sol: ['solana'],
   bnb: ['binance'],
   trx: ['tron'],
@@ -30,7 +30,7 @@ export const TOKEN_NETWORKS = {
 export const NETWORK_LABELS = {
   ethereum: 'Ethereum (ERC20)',
   bitcoin: 'Bitcoin',
-  binance: 'Binance Smart Chain (BEP20)',
+  binance: 'BNB Smart Chain',
   base: 'Base',
   tron: 'Tron (TRC20)',
   solana: 'Solana'

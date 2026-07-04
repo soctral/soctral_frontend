@@ -1962,6 +1962,7 @@ const MobileHomePage = () => {
         {showMobileEscrowFlow && (
           <MobileEscrowFlow
             onClose={() => setShowMobileEscrowFlow(false)}
+            walletData={walletData}
             onBuySell={() => {
               // User chose Buy/Sell from the picker — open existing buy/sell flow
               if (!hasSeenBuySellOnboarding) {
