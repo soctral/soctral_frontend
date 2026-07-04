@@ -8011,10 +8011,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             const _payerName = _isFunderInit
               ? (escrowDeal.initiatorId?.displayName || escrowDeal.initiatorId?.name || 'Initiator')
               : (escrowDeal.partnerId?.displayName || escrowDeal.partnerId?.name || 'Receiver');
-            const _totalAmt = Number(escrowDeal.amount || 0);
-            const _netAmt = Number(escrowDeal.partnerNetAmount || escrowDeal.amount || 0);
-            const _feeAmt = Number(escrowDeal.feeAmount || 0);
+            const _totalUSD = Number(escrowDeal.amountUSD || 0);
+            const _feeUSD = Number(escrowDeal.feeUSD || 0);
+            const _netUSD = _totalUSD - _feeUSD;
             const _feePct = escrowDeal.feePercentage ? `${escrowDeal.feePercentage}%` : null;
+            const _token = (escrowDeal.paymentMethod || '').toUpperCase();
             return (
               <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowEscrowReleaseConfirmModal(false); setEscrowReleaseAgree(false); }}>
                 <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -8065,15 +8066,15 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         <div className="flex gap-6">
                           <div className="flex-1 min-w-0">
                             <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Recipient receives</p>
-                            <p className="text-white font-semibold text-base">{_netAmt.toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</p>
+                            <p className="text-white font-semibold text-base">${_netUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
-                          {_feeAmt > 0 && (
+                          {_feeUSD > 0 && (
                             <>
                               <div className="w-px bg-white/10 flex-shrink-0" aria-hidden />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline justify-between gap-2 mb-1">
                                   <p className="text-gray-400 text-xs uppercase tracking-wider">Platform fee</p>
-                                  <span className="text-white font-semibold text-base tabular-nums">{_feeAmt.toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</span>
+                                  <span className="text-white font-semibold text-base tabular-nums">${_feeUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                                 {_feePct && (
                                   <div className="flex items-center justify-between gap-3 text-sm mt-1">
@@ -8088,7 +8089,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       </div>
                       <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/5">
                         <span className="text-gray-400 font-semibold text-sm">Total amount</span>
-                        <span className="text-white font-bold text-base">{_totalAmt.toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</span>
+                        <span className="text-white font-bold text-base">${_totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_token}</span>
                       </div>
                     </div>
 
