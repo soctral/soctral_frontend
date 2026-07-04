@@ -7078,8 +7078,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                               <Unlock className="w-4 h-4" /> Release Funds
                             </button>
                           )}
-                          {_isFund && (
-                            <button onClick={() => setShowEscrowCancelModal(true)} disabled={!!escrowActionLoading} className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
+                          {_isInit && !_isFund && (
+                            <button onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }} disabled={!!escrowActionLoading} className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
                               Cancel
                             </button>
                           )}
@@ -7466,8 +7466,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                           <Unlock className="w-3.5 h-3.5" /> Release
                         </button>
                       )}
-                      {_isFund && (
-                        <button onClick={() => setShowEscrowCancelModal(true)} disabled={!!escrowActionLoading} className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
+                      {_isInit && !_isFund && (
+                        <button onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }} disabled={!!escrowActionLoading} className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
                           Cancel
                         </button>
                       )}
