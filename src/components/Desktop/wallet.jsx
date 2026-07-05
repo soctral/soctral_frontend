@@ -69,7 +69,7 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
     });
 
     // Listen for wallet balance updates
-    socketRef.current.on('walletUpdate', (data) => {
+    socketRef.current.on('wallet-balance-update', (data) => {
       
       if (data && data.walletBalances) {
         setWalletData(prev => ({
@@ -149,7 +149,7 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
   const getWalletBalance = () => {
     if (!isAuthenticated) return "0.00";
     if (walletData.error) return "0.00";
-    
+
     const portfolio = walletData.balances?.portfolio;
     if (portfolio && portfolio.totalValueUSD) {
       return parseFloat(portfolio.totalValueUSD).toLocaleString('en-US', {
@@ -157,17 +157,20 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
         maximumFractionDigits: 2
       });
     }
-    
-    // If no portfolio data, calculate from individual balances
-    const balances = walletData.balances;
+
+    // Calculate from currencies.networks structure
+    const currencies = walletData.balances?.currencies;
     let totalUSD = 0;
-    
-    Object.entries(balances).forEach(([key, data]) => {
-      if (key !== 'total' && key !== 'portfolio' && data?.valueUSD) {
-        totalUSD += parseFloat(data.valueUSD);
-      }
-    });
-    
+    if (currencies && typeof currencies === 'object') {
+      Object.values(currencies).forEach(currencyData => {
+        if (currencyData?.networks) {
+          Object.values(currencyData.networks).forEach(network => {
+            totalUSD += parseFloat(network.valueUSD || '0');
+          });
+        }
+      });
+    }
+
     return totalUSD.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
@@ -205,49 +208,53 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
     if (!isAuthenticated || !walletData.balances || Object.keys(walletData.balances).length === 0) {
       return [
         { name: "USDT", rate: "0.00", change: "+0.00%", symbol: "$", priceUSD: 0, changePercent: 0, currencyKey: "usdt" },
-        { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", priceUSD: 0, changePercent: 0, currencyKey: "bitcoin" },
-        { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", priceUSD: 0, changePercent: 0, currencyKey: "ethereum" }
+        { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", priceUSD: 0, changePercent: 0, currencyKey: "btc" },
+        { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", priceUSD: 0, changePercent: 0, currencyKey: "eth" }
       ];
     }
 
     const currencies = [];
-    const balances = walletData.balances;
-
     const currencyMapping = {
+      eth: { name: "ETH", symbol: "Ξ" },
+      btc: { name: "BTC", symbol: "₿" },
       usdt: { name: "USDT", symbol: "$" },
-      tether: { name: "USDT", symbol: "$" },
-      bitcoin: { name: "BTC", symbol: "₿" },
-      ethereum: { name: "ETH", symbol: "Ξ" },
-      solana: { name: "SOL", symbol: "SOL" },
-      binance: { name: "BNB", symbol: "BNB" },
-      base: { name: "BASE", symbol: "ETH" },
-      tron: { name: "TRX", symbol: "TRX" }
+      usdc: { name: "USDC", symbol: "USDC" },
+      sol: { name: "SOL", symbol: "SOL" },
+      bnb: { name: "BNB", symbol: "BNB" },
+      trx: { name: "TRX", symbol: "TRX" }
     };
 
-    Object.entries(balances).forEach(([key, data]) => {
-      if (key === 'total' || key === 'portfolio') return;
-      
-      const mapping = currencyMapping[key.toLowerCase()];
-      if (mapping && data && typeof data === 'object' && data.priceUSD !== undefined) {
-        const priceUSD = parseFloat(data.priceUSD || '0');
-        const changePercent = parseFloat(data.percentageChange24h || '0');
-        
-        currencies.push({
-          name: mapping.name,
-          rate: priceUSD.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: priceUSD < 1 ? 6 : 2
-          }),
-          change: `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`,
-          symbol: mapping.symbol,
-          priceUSD: priceUSD,
-          changePercent: changePercent,
-          currencyKey: key
-        });
-      }
-    });
+    const currenciesData = walletData.balances?.currencies;
+    if (currenciesData && typeof currenciesData === 'object') {
+      Object.entries(currenciesData).forEach(([key, currencyData]) => {
+        const mapping = currencyMapping[key.toLowerCase()];
+        if (mapping && currencyData?.networks) {
+          let priceUSD = 0;
+          let changePercent = 0;
+          Object.values(currencyData.networks).forEach(network => {
+            if (!priceUSD && network.priceUSD) {
+              priceUSD = parseFloat(network.priceUSD);
+              changePercent = parseFloat(network.percentageChange24h || '0');
+            }
+          });
 
-    const priorityOrder = ['BTC', 'ETH', 'USDT', 'SOL', 'BNB', 'BASE', 'TRX'];
+          currencies.push({
+            name: mapping.name,
+            rate: priceUSD.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: priceUSD < 1 ? 6 : 2
+            }),
+            change: `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`,
+            symbol: mapping.symbol,
+            priceUSD,
+            changePercent,
+            currencyKey: key
+          });
+        }
+      });
+    }
+
+    const priorityOrder = ['BTC', 'ETH', 'USDT', 'SOL', 'BNB', 'TRX', 'USDC'];
     currencies.sort((a, b) => {
       const aIndex = priorityOrder.indexOf(a.name);
       const bIndex = priorityOrder.indexOf(b.name);
@@ -259,8 +266,8 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
 
     return currencies.length > 0 ? currencies : [
       { name: "USDT", rate: "0.00", change: "+0.00%", symbol: "$", priceUSD: 0, changePercent: 0, currencyKey: "usdt" },
-      { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", priceUSD: 0, changePercent: 0, currencyKey: "bitcoin" },
-      { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", priceUSD: 0, changePercent: 0, currencyKey: "ethereum" }
+      { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", priceUSD: 0, changePercent: 0, currencyKey: "btc" },
+      { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", priceUSD: 0, changePercent: 0, currencyKey: "eth" }
     ];
   };
 
@@ -268,63 +275,66 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
   const getDynamicCryptoCurrencies = () => {
     if (!isAuthenticated || !walletData.balances || Object.keys(walletData.balances).length === 0) {
       return [
-        { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", balance: "0.0000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "bitcoin" },
-        { name: "USDT", rate: "0.00", change: "+0.00%", symbol: "$", balance: "0.0000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "usdt" },
-        { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", balance: "0.0000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "ethereum" }
+        { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", balance: "0.000000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "btc" },
+        { name: "USDT", rate: "0.00", change: "+0.00%", symbol: "$", balance: "0.000000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "usdt" },
+        { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", balance: "0.000000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "eth" }
       ];
     }
 
     const cryptoCurrencies = [];
-    const balances = walletData.balances;
-
     const currencyMapping = {
-      bitcoin: { name: "BTC", symbol: "₿" },
-      ethereum: { name: "ETH", symbol: "Ξ" },
+      eth: { name: "ETH", symbol: "Ξ" },
+      btc: { name: "BTC", symbol: "₿" },
       usdt: { name: "USDT", symbol: "$" },
-      tether: { name: "USDT", symbol: "$" },
-      solana: { name: "SOL", symbol: "SOL" },
-      binance: { name: "BNB", symbol: "BNB" },
-      base: { name: "BASE", symbol: "ETH" },
-      tron: { name: "TRX", symbol: "TRX" }
+      usdc: { name: "USDC", symbol: "USDC" },
+      sol: { name: "SOL", symbol: "SOL" },
+      bnb: { name: "BNB", symbol: "BNB" },
+      trx: { name: "TRX", symbol: "TRX" }
     };
 
-    Object.entries(balances).forEach(([key, data]) => {
-      if (key === 'total' || key === 'portfolio') return;
-      
-      const mapping = currencyMapping[key.toLowerCase()];
-      if (mapping && data && typeof data === 'object') {
-        const priceUSD = parseFloat(data.priceUSD || '0');
-        const changePercent = parseFloat(data.percentageChange24h || '0');
-        const balance = data.balance || '0';
-        const valueUSD = data.valueUSD || '0.00';
-        
-        cryptoCurrencies.push({
-          name: mapping.name,
-          rate: priceUSD.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: priceUSD < 1 ? 6 : 2
-          }),
-          change: `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`,
-          symbol: mapping.symbol,
-          balance: parseFloat(balance).toFixed(4),
-          valueUSD: parseFloat(valueUSD).toFixed(2),
-          priceUSD: priceUSD,
-          changePercent: changePercent,
-          rawBalance: balance,
-          currencyKey: key
-        });
-      }
-    });
+    const currenciesData = walletData.balances?.currencies;
+    if (currenciesData && typeof currenciesData === 'object') {
+      Object.entries(currenciesData).forEach(([key, currencyData]) => {
+        const mapping = currencyMapping[key.toLowerCase()];
+        if (mapping && currencyData?.networks) {
+          let totalBalance = 0;
+          let totalValueUSD = 0;
+          let priceUSD = 0;
+          let changePercent = 0;
 
-    const priorityOrder = ['BTC', 'ETH', 'USDT', 'SOL', 'BNB', 'BASE', 'TRX'];
+          Object.values(currencyData.networks).forEach(network => {
+            totalBalance += parseFloat(network.balance || '0');
+            totalValueUSD += parseFloat(network.valueUSD || '0');
+            if (!priceUSD && network.priceUSD) {
+              priceUSD = parseFloat(network.priceUSD);
+              changePercent = parseFloat(network.percentageChange24h || '0');
+            }
+          });
+
+          cryptoCurrencies.push({
+            name: mapping.name,
+            rate: priceUSD.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: priceUSD < 1 ? 6 : 2
+            }),
+            change: `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`,
+            symbol: mapping.symbol,
+            balance: totalBalance.toFixed(6),
+            valueUSD: totalValueUSD.toFixed(2),
+            priceUSD,
+            changePercent,
+            rawBalance: totalBalance.toString(),
+            currencyKey: key
+          });
+        }
+      });
+    }
+
+    const priorityOrder = ['BTC', 'ETH', 'USDT', 'SOL', 'BNB', 'TRX', 'USDC'];
     cryptoCurrencies.sort((a, b) => {
       const aValue = parseFloat(a.valueUSD);
       const bValue = parseFloat(b.valueUSD);
-      
-      if (Math.abs(aValue - bValue) > 0.01) {
-        return bValue - aValue;
-      }
-      
+      if (Math.abs(aValue - bValue) > 0.01) return bValue - aValue;
       const aIndex = priorityOrder.indexOf(a.name);
       const bIndex = priorityOrder.indexOf(b.name);
       if (aIndex === -1 && bIndex === -1) return 0;
@@ -334,9 +344,9 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
     });
 
     return cryptoCurrencies.length > 0 ? cryptoCurrencies : [
-      { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", balance: "0.0000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "bitcoin" },
-      { name: "USDT", rate: "0.00", change: "+0.00%", symbol: "$", balance: "0.0000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "usdt" },
-      { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", balance: "0.0000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "ethereum" }
+      { name: "BTC", rate: "0.00", change: "+0.00%", symbol: "₿", balance: "0.000000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "btc" },
+      { name: "USDT", rate: "0.00", change: "+0.00%", symbol: "$", balance: "0.000000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "usdt" },
+      { name: "ETH", rate: "0.00", change: "+0.00%", symbol: "Ξ", balance: "0.000000", valueUSD: "0.00", priceUSD: 0, changePercent: 0, rawBalance: "0", currencyKey: "eth" }
     ];
   };
 

@@ -14,6 +14,16 @@ async function getEncryptionService() {
   return _encryptionService;
 }
 
+// Lazy-load authService to avoid circular import (authService also lazy-imports api.js)
+let _authService = null;
+async function getAuthService() {
+  if (!_authService) {
+    const mod = await import("./authService.js");
+    _authService = mod.default;
+  }
+  return _authService;
+}
+
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
@@ -244,6 +254,17 @@ class ApiService {
 
       // Handle error responses
       if (!response.ok) {
+        // Auto-refresh on 401 (expired token) — retry the original request once
+        if (response.status === 401 && !options._isRetry) {
+          try {
+            const authService = await getAuthService();
+            await authService.refreshToken();
+            return this.request(endpoint, { ...options, _isRetry: true });
+          } catch (_refreshErr) {
+            // Refresh failed — fall through to throw the 401 error normally
+          }
+        }
+
         let rawResponseText = "";
         try {
           rawResponseText = await responseClone.text();

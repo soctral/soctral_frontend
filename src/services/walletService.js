@@ -102,11 +102,14 @@ class WalletService {
         }
 
         // Try localStorage walletInfo cache (from previous Socket.IO updates)
+        // Only use if fresh (within 5 minutes) to avoid showing stale balances
         try {
           const cachedWalletInfo = localStorage.getItem("walletInfo");
           if (cachedWalletInfo) {
             const parsed = JSON.parse(cachedWalletInfo);
+            const ageMs = parsed.lastUpdated ? Date.now() - new Date(parsed.lastUpdated).getTime() : Infinity;
             if (
+              ageMs < 5 * 60 * 1000 &&
               parsed.walletAddresses &&
               typeof parsed.walletAddresses === "object"
             ) {

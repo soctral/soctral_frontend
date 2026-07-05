@@ -65,6 +65,7 @@ import pushNotificationService from '../services/pushNotificationService';
 import { RefreshCw } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../config.js';
+import DesktopEscrowFlow from '../components/Desktop/DesktopEscrowFlow';
 
 
 
@@ -106,6 +107,7 @@ const HomePage = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [viewAccountData, setViewAccountData] = useState(null);
   const [chatUnreadCount, setChatUnreadCount] = useState(0); // Track chat unread count for navbar badge
+  const [showDesktopEscrowFlow, setShowDesktopEscrowFlow] = useState(false);
 
   // Authentication states
   const [showScrollHint, setShowScrollHint] = useState(true);
@@ -161,6 +163,8 @@ const HomePage = () => {
   const closePostAuthPrompt = () => {
     setShowPostAuthGetStarted(false);
   };
+
+  // Escrow flow is now triggered by user action, not auto-shown
 
   const openManageAccountsDeepLink = (initial) => {
     closePostAuthPrompt();
@@ -499,6 +503,13 @@ const HomePage = () => {
     return () => {
       window.removeEventListener('navigate-to-history', handleNavigateToHistory);
     };
+  }, []);
+
+  // Open escrow creation flow when chat signals a "Create New Deal" from a declined channel
+  useEffect(() => {
+    const handleOpenEscrowFlow = () => setShowDesktopEscrowFlow(true);
+    window.addEventListener('openEscrowFlow', handleOpenEscrowFlow);
+    return () => window.removeEventListener('openEscrowFlow', handleOpenEscrowFlow);
   }, []);
 
   // Listen for chat unread count updates from Chat component (when Chat is mounted)
@@ -1724,6 +1735,7 @@ const HomePage = () => {
           onShowSignUp={() => setShowSignUpModal(true)}
           chatUnreadCount={chatUnreadCount}
           walletData={walletData}
+          onTradeClick={() => setShowDesktopEscrowFlow(true)}
         />
 
         {/* Menu Component */}
@@ -1942,6 +1954,28 @@ const HomePage = () => {
           viewAccountData={viewAccountData}
           walletData={walletData}
         />
+
+        {showDesktopEscrowFlow && (
+          <DesktopEscrowFlow
+            onClose={() => setShowDesktopEscrowFlow(false)}
+            walletData={walletData}
+            onBuySell={() => {
+              // User chose Buy/Sell from the picker — navigate to the trade tab
+              setActiveTab('trade');
+              setActiveMenuSection('wallet');
+            }}
+            onOpenChat={(channelId) => {
+              setShowDesktopEscrowFlow(false);
+              setActiveTab('chat');
+              setActiveMenuSection('chat');
+              localStorage.setItem('openEscrowChannel', channelId);
+              // Small timeout to allow chat component to mount and attach listener
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('openSpecificChat', { detail: { channelId } }));
+              }, 500);
+            }}
+          />
+        )}
 
       </div>
     </>

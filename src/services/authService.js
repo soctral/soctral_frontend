@@ -889,18 +889,21 @@ class AuthService {
         console.error('❌ Get wallet info failed:', error.message);
       }
 
-      // Try to return cached data if available
+      // Try to return cached data if available (only if fresh — within 5 minutes)
       try {
         const cachedWalletInfo = this.storage.getItem('walletInfo');
         if (cachedWalletInfo) {
           const parsed = JSON.parse(cachedWalletInfo);
-          return {
-            status: true,
-            walletAddresses: parsed.walletAddresses,
-            walletBalances: parsed.walletBalances,
-            message: 'Cached wallet info retrieved (API unavailable)',
-            cached: true
-          };
+          const ageMs = parsed.lastUpdated ? Date.now() - new Date(parsed.lastUpdated).getTime() : Infinity;
+          if (ageMs < 5 * 60 * 1000) {
+            return {
+              status: true,
+              walletAddresses: parsed.walletAddresses,
+              walletBalances: parsed.walletBalances,
+              message: 'Cached wallet info retrieved (API unavailable)',
+              cached: true
+            };
+          }
         }
       } catch (cacheError) {
         // Silent
