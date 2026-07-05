@@ -7942,13 +7942,53 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       </span>
                     </div>
 
-                    {/* Amount row */}
-                    <div className="border-t border-white/10 py-4 mt-1">
-                      <div className="flex items-center justify-between px-1">
-                        <span className="text-gray-400 font-semibold text-sm">Total Amount</span>
-                        <span className="text-white font-bold text-base">${Number(escrowDeal.amount || 0).toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</span>
-                      </div>
-                    </div>
+                    {/* Amount breakdown */}
+                    {(() => {
+                      const _amt = Number(escrowDeal.amount || 0);
+                      const _feeUSD = Number(escrowDeal.feeUSD || 0);
+                      const _gasFeeUSD = Number(escrowDeal.gasFeeUSD || 0);
+                      const _netUSD = _amt - _feeUSD - _gasFeeUSD;
+                      const _feePct = escrowDeal.feePercentage ? `${escrowDeal.feePercentage}%` : null;
+                      const _tok = (escrowDeal.paymentMethod || '').toUpperCase();
+                      const _fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                      return (
+                        <div className="border-t border-white/10 pt-4 mt-1">
+                          {/* Total — top */}
+                          <div className="flex items-center justify-between px-1 mb-3">
+                            <span className="text-gray-400 font-semibold text-sm">Total Amount</span>
+                            <span className="text-white font-bold text-base">${_fmt(_amt)} {_tok}</span>
+                          </div>
+                          {/* Breakdown */}
+                          {(_feeUSD > 0 || _gasFeeUSD > 0) && (
+                            <div className="flex gap-4 bg-white/5 rounded-lg px-3 py-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Recipient receives</p>
+                                <p className="text-white font-semibold text-sm">${_fmt(_netUSD)}</p>
+                              </div>
+                              <div className="w-px bg-white/10 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline justify-between gap-1 mb-1">
+                                  <p className="text-gray-400 text-xs uppercase tracking-wider">Fees</p>
+                                  <span className="text-white font-semibold text-sm tabular-nums">${_fmt(_feeUSD + _gasFeeUSD)}</span>
+                                </div>
+                                {_feeUSD > 0 && (
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-gray-500">Platform{_feePct ? ` (${_feePct})` : ''}</span>
+                                    <span className="text-white/80 tabular-nums">${_fmt(_feeUSD)}</span>
+                                  </div>
+                                )}
+                                {_gasFeeUSD > 0 && (
+                                  <div className="flex items-center justify-between gap-2 text-xs mt-0.5">
+                                    <span className="text-gray-500">Gas fee</span>
+                                    <span className="text-white/80 tabular-nums">${_fmt(_gasFeeUSD)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Disclaimer */}
@@ -8064,40 +8104,40 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       </div>
 
                       {/* Funds breakdown */}
-                      <div className="border-t border-white/10 py-4 mt-3">
-                        <div className="flex gap-6">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Recipient receives</p>
-                            <p className="text-white font-semibold text-base">${_fmt(_netUSD)}</p>
-                          </div>
-                          {(_feeUSD > 0 || _gasFeeUSD > 0) && (
-                            <>
-                              <div className="w-px bg-white/10 flex-shrink-0" aria-hidden />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-baseline justify-between gap-2 mb-1">
-                                  <p className="text-gray-400 text-xs uppercase tracking-wider">Transaction fees</p>
-                                  <span className="text-white font-semibold text-base tabular-nums">${_fmt(_feeUSD + _gasFeeUSD)}</span>
-                                </div>
-                                {_feeUSD > 0 && (
-                                  <div className="flex items-center justify-between gap-3 text-sm mt-1">
-                                    <span className="text-gray-500">Platform fee{_feePct ? ` (${_feePct})` : ''}</span>
-                                    <span className="text-white/90 tabular-nums">${_fmt(_feeUSD)}</span>
-                                  </div>
-                                )}
-                                {_gasFeeUSD > 0 && (
-                                  <div className="flex items-center justify-between gap-3 text-sm mt-1">
-                                    <span className="text-gray-500">Gas fee</span>
-                                    <span className="text-white/90 tabular-nums">${_fmt(_gasFeeUSD)}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
+                      <div className="border-t border-white/10 pt-4 mt-3">
+                        {/* Total — top */}
+                        <div className="flex items-center justify-between px-1 mb-3">
+                          <span className="text-gray-400 font-semibold text-sm">Total amount</span>
+                          <span className="text-white font-bold text-base">${_fmt(_totalUSD)} {_token}</span>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/5">
-                        <span className="text-gray-400 font-semibold text-sm">Total amount</span>
-                        <span className="text-white font-bold text-base">${_fmt(_totalUSD)} {_token}</span>
+                        {/* Breakdown */}
+                        {(_feeUSD > 0 || _gasFeeUSD > 0) && (
+                          <div className="flex gap-4 bg-white/5 rounded-lg px-3 py-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Recipient receives</p>
+                              <p className="text-white font-semibold text-sm">${_fmt(_netUSD)}</p>
+                            </div>
+                            <div className="w-px bg-white/10 flex-shrink-0" aria-hidden />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-baseline justify-between gap-2 mb-1">
+                                <p className="text-gray-400 text-xs uppercase tracking-wider">Fees</p>
+                                <span className="text-white font-semibold text-sm tabular-nums">${_fmt(_feeUSD + _gasFeeUSD)}</span>
+                              </div>
+                              {_feeUSD > 0 && (
+                                <div className="flex items-center justify-between gap-2 text-xs mt-0.5">
+                                  <span className="text-gray-500">Platform{_feePct ? ` (${_feePct})` : ''}</span>
+                                  <span className="text-white/80 tabular-nums">${_fmt(_feeUSD)}</span>
+                                </div>
+                              )}
+                              {_gasFeeUSD > 0 && (
+                                <div className="flex items-center justify-between gap-2 text-xs mt-0.5">
+                                  <span className="text-gray-500">Gas fee</span>
+                                  <span className="text-white/80 tabular-nums">${_fmt(_gasFeeUSD)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
