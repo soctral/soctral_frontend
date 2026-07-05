@@ -7865,6 +7865,23 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         )}
                       </div>
                     )}
+
+                    {status === 'cancelled' && (
+                      <div className="space-y-2 mt-2">
+                        <div className="flex items-center gap-2 bg-gray-500/10 rounded-lg px-3 py-2 border border-gray-500/20">
+                          <Ban className="w-4 h-4 text-gray-400" />
+                          <span className="text-gray-300 text-xs font-medium">This deal was cancelled.</span>
+                        </div>
+                        {isInitiator && (
+                          <button
+                            onClick={() => window.dispatchEvent(new CustomEvent('openEscrowFlow'))}
+                            className="w-full py-2.5 bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" /> Create New Deal
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
