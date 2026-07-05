@@ -7080,7 +7080,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                               <Unlock className="w-4 h-4" /> Release Funds
                             </button>
                           )}
-                          {_isInit && !_isFund && (
+                          {!_isFund && (_isInit || _isPart) && (
                             <button onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }} disabled={!!escrowActionLoading} className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
                               Cancel
                             </button>
@@ -7468,7 +7468,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                           <Unlock className="w-3.5 h-3.5" /> Release
                         </button>
                       )}
-                      {_isInit && !_isFund && (
+                      {!_isFund && (_isInit || _isPart) && (
                         <button onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }} disabled={!!escrowActionLoading} className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
                           Cancel
                         </button>
@@ -8013,9 +8013,11 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               : (escrowDeal.partnerId?.displayName || escrowDeal.partnerId?.name || 'Receiver');
             const _totalUSD = Number(escrowDeal.amountUSD || 0);
             const _feeUSD = Number(escrowDeal.feeUSD || 0);
-            const _netUSD = _totalUSD - _feeUSD;
+            const _gasFeeUSD = Number(escrowDeal.gasFeeUSD || 0);
+            const _netUSD = _totalUSD - _feeUSD - _gasFeeUSD;
             const _feePct = escrowDeal.feePercentage ? `${escrowDeal.feePercentage}%` : null;
             const _token = (escrowDeal.paymentMethod || '').toUpperCase();
+            const _fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             return (
               <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowEscrowReleaseConfirmModal(false); setEscrowReleaseAgree(false); }}>
                 <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -8066,20 +8068,26 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         <div className="flex gap-6">
                           <div className="flex-1 min-w-0">
                             <p className="text-gray-400 text-xs uppercase tracking-wider mb-0.5">Recipient receives</p>
-                            <p className="text-white font-semibold text-base">${_netUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-white font-semibold text-base">${_fmt(_netUSD)}</p>
                           </div>
-                          {_feeUSD > 0 && (
+                          {(_feeUSD > 0 || _gasFeeUSD > 0) && (
                             <>
                               <div className="w-px bg-white/10 flex-shrink-0" aria-hidden />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline justify-between gap-2 mb-1">
-                                  <p className="text-gray-400 text-xs uppercase tracking-wider">Platform fee</p>
-                                  <span className="text-white font-semibold text-base tabular-nums">${_feeUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                  <p className="text-gray-400 text-xs uppercase tracking-wider">Transaction fees</p>
+                                  <span className="text-white font-semibold text-base tabular-nums">${_fmt(_feeUSD + _gasFeeUSD)}</span>
                                 </div>
-                                {_feePct && (
+                                {_feeUSD > 0 && (
                                   <div className="flex items-center justify-between gap-3 text-sm mt-1">
-                                    <span className="text-gray-500">Fee rate</span>
-                                    <span className="text-white/90 tabular-nums">{_feePct}</span>
+                                    <span className="text-gray-500">Platform fee{_feePct ? ` (${_feePct})` : ''}</span>
+                                    <span className="text-white/90 tabular-nums">${_fmt(_feeUSD)}</span>
+                                  </div>
+                                )}
+                                {_gasFeeUSD > 0 && (
+                                  <div className="flex items-center justify-between gap-3 text-sm mt-1">
+                                    <span className="text-gray-500">Gas fee</span>
+                                    <span className="text-white/90 tabular-nums">${_fmt(_gasFeeUSD)}</span>
                                   </div>
                                 )}
                               </div>
@@ -8089,7 +8097,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                       </div>
                       <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-white/5">
                         <span className="text-gray-400 font-semibold text-sm">Total amount</span>
-                        <span className="text-white font-bold text-base">${_totalUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_token}</span>
+                        <span className="text-white font-bold text-base">${_fmt(_totalUSD)} {_token}</span>
                       </div>
                     </div>
 
