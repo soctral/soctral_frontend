@@ -142,9 +142,7 @@ const escrowService = {
   // 9. Get Deal by Channel ID
   // ──────────────────────────────────────
   async getDealByChannel(channelId) {
-    const res = await api.get(`/escrow/by-channel/${encodeURIComponent(channelId)}`, {
-      params: { _t: Date.now() },
-    });
+    const res = await api.get(`/escrow/by-channel/${encodeURIComponent(channelId)}`);
     return res?.data || null;
   },
 
