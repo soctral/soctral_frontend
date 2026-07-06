@@ -1,5 +1,4 @@
-import React from 'react';
-import { X, Send, CheckCircle2, XCircle, MessageCircle } from 'lucide-react';
+import { CheckCircle2, MessageCircle, Send, X, XCircle } from 'lucide-react';
 
 const FourthProcessMobile = ({ formData, dealResponse, onClose, onOpenChat }) => {
   return (
@@ -9,7 +8,7 @@ const FourthProcessMobile = ({ formData, dealResponse, onClose, onOpenChat }) =>
         <button onClick={onClose} className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors">
           <X className="w-6 h-6 text-white" />
         </button>
-        <h1 className="text-white text-lg font-bold">Soctra</h1>
+        <h1 className="text-white text-lg font-bold">Soctral</h1>
         <div className="w-10"></div> {/* Spacer for centering */}
       </div>
 
