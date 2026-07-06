@@ -7919,7 +7919,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
           {/* 🛡️ ESCROW Accept Confirmation Modal — matches buy/sell Trade Details style */}
           {showEscrowAcceptModal && escrowDeal && (
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 touch-none" onClick={() => { setShowEscrowAcceptModal(false); setEscrowAcceptAgree1(false); setEscrowAcceptAgree2(false); setEscrowError(''); }} onTouchMove={e => e.preventDefault()}>
-              <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
+              <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[85vh] flex flex-col" style={{maxHeight:'min(85dvh,85vh)'}} onClick={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()}>
 
                 {/* Scrollable content */}
                 <div className="overflow-y-auto overscroll-contain flex-1 p-6 pb-0">
@@ -8035,18 +8035,18 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                 </div>
 
                 {/* Sticky footer — always visible */}
-                <div className="p-6 pt-4 flex flex-col gap-3 flex-shrink-0">
-                  {escrowError && <p className="text-red-400 text-xs">{escrowError}</p>}
+                <div className="p-4 pt-3 flex flex-col gap-2 flex-shrink-0">
+                  {escrowError && <p className="text-red-400 text-xs px-1">{escrowError}</p>}
                   <button
                     onClick={() => { setShowEscrowAcceptModal(false); handleEscrowAccept(escrowDeal._id || escrowDeal.id); setEscrowAcceptAgree1(false); setEscrowAcceptAgree2(false); }}
                     disabled={!escrowAcceptAgree1 || !escrowAcceptAgree2 || escrowActionLoading === 'accepting'}
-                    className="w-full py-3.5 bg-primary hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-primary hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-colors flex items-center justify-center gap-2"
                   >
                     {escrowActionLoading === 'accepting' ? <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</> : 'Proceed with Escrow'}
                   </button>
                   <button
                     onClick={() => { setShowEscrowAcceptModal(false); setEscrowAcceptAgree1(false); setEscrowAcceptAgree2(false); setEscrowError(''); }}
-                    className="w-full py-3.5 border border-white/20 hover:bg-white/5 text-white font-semibold rounded-full transition-colors"
+                    className="w-full py-3 border border-white/20 hover:bg-white/5 text-white font-semibold rounded-full transition-colors"
                   >
                     Cancel
                   </button>
@@ -8077,7 +8077,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             const _fmt = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             return (
               <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowEscrowReleaseConfirmModal(false); setEscrowReleaseAgree(false); }}>
-                <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="bg-[rgba(13,13,13,1)] rounded-2xl max-w-lg w-full border border-white/10 shadow-2xl max-h-[85vh] flex flex-col" style={{maxHeight:'min(85dvh,85vh)'}} onClick={e => e.stopPropagation()}>
                   <div className="overflow-y-auto overscroll-contain flex-1 p-6 pb-0">
                     <h2 className="text-xl font-bold text-white mb-6">Review Deal Details</h2>
 
@@ -8187,17 +8187,17 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                     </div>
                   </div>
 
-                  <div className="p-6 pt-4 flex flex-col gap-3 flex-shrink-0">
+                  <div className="p-4 pt-3 flex flex-col gap-2 flex-shrink-0">
                     <button
                       onClick={() => { setShowEscrowReleaseConfirmModal(false); setShowEscrowReleaseModal(true); }}
                       disabled={!escrowReleaseAgree}
-                      className="w-full py-3.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-colors"
+                      className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-colors"
                     >
                       Continue to Release Funds
                     </button>
                     <button
                       onClick={() => { setShowEscrowReleaseConfirmModal(false); setEscrowReleaseAgree(false); }}
-                      className="w-full py-3.5 border border-white/20 hover:bg-white/5 text-white font-semibold rounded-full transition-colors"
+                      className="w-full py-3 border border-white/20 hover:bg-white/5 text-white font-semibold rounded-full transition-colors"
                     >
                       Cancel
                     </button>
