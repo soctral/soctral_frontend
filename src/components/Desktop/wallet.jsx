@@ -145,36 +145,39 @@ const WalletBalance = ({ setShowFundModal, onWithdrawClick }) => {
     }
   }, [isAuthenticated]);
 
-  // Get dynamic wallet balance
+  // Get wallet balance for the currently selected currency only
   const getWalletBalance = () => {
     if (!isAuthenticated) return "0.00";
     if (walletData.error) return "0.00";
 
+    const currenciesData = walletData.balances?.currencies;
+    const nameToKey = {
+      ETH: 'eth', BTC: 'btc', USDT: 'usdt', USDC: 'usdc',
+      SOL: 'sol', BNB: 'bnb', TRX: 'trx',
+    };
+    const key = nameToKey[selectedCurrency];
+
+    if (key && currenciesData?.[key]?.networks) {
+      let totalUSD = 0;
+      Object.values(currenciesData[key].networks).forEach(network => {
+        totalUSD += parseFloat(network.valueUSD || '0');
+      });
+      return totalUSD.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    // Fallback to total portfolio if currency not found
     const portfolio = walletData.balances?.portfolio;
-    if (portfolio && portfolio.totalValueUSD) {
+    if (portfolio?.totalValueUSD) {
       return parseFloat(portfolio.totalValueUSD).toLocaleString('en-US', {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       });
     }
 
-    // Calculate from currencies.networks structure
-    const currencies = walletData.balances?.currencies;
-    let totalUSD = 0;
-    if (currencies && typeof currencies === 'object') {
-      Object.values(currencies).forEach(currencyData => {
-        if (currencyData?.networks) {
-          Object.values(currencyData.networks).forEach(network => {
-            totalUSD += parseFloat(network.valueUSD || '0');
-          });
-        }
-      });
-    }
-
-    return totalUSD.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+    return "0.00";
   };
 
   // Enhanced crypto image mapping
