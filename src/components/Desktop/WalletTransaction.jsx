@@ -790,7 +790,11 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
   const feeUSDForSuccess = withdrawalFeeEstimate?.gasFeeInNative != null
     ? (withdrawalFeeEstimate.gasFeeUSD ?? 0)
     : (networkFees[selectedAsset?.name]?.[selectedNetwork?.name] ?? 0);
-  const feeDisplay = `$${Number(feeUSDForSuccess).toFixed(2)}`;
+  const successTokenPrice = parseFloat(selectedAsset?.priceUSD || '1') || 1;
+  const successGasInToken = successTokenPrice > 0 ? feeUSDForSuccess / successTokenPrice : 0;
+  const successTokenSymbol = selectedAsset?.abbreviation || '';
+  const successFeeToken = successGasInToken > 0 ? ` (≈ ${successGasInToken.toFixed(6).replace(/\.?0+$/, '')} ${successTokenSymbol})` : '';
+  const feeDisplay = `$${Number(feeUSDForSuccess).toFixed(2)}${successFeeToken}`;
   // 🔥 FIX: Store the withdrawal data BEFORE clearing form
   setWithdrawalSuccessData({
     amount: withdrawalResponse.data?.amount || fixedAmount,
@@ -1223,7 +1227,11 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
     const gasFeeUSD = withdrawalFeeEstimate?.gasFeeInNative != null
       ? (withdrawalFeeEstimate.gasFeeUSD ?? 0)
       : (networkFees[selectedAsset?.name]?.[selectedNetwork?.name] ?? 0);
+    const step1TokenPrice = parseFloat(selectedAsset?.priceUSD || '1') || 1;
+    const step1GasInToken = step1TokenPrice > 0 ? gasFeeUSD / step1TokenPrice : 0;
+    const step1TokenSymbol = selectedAsset?.abbreviation || '';
     const networkFeeDisplay = `$${Number(gasFeeUSD).toFixed(2)}`;
+    const networkFeeTokenDisplay = step1GasInToken > 0 ? `≈ ${step1GasInToken.toFixed(6).replace(/\.?0+$/, '')} ${step1TokenSymbol}` : '';
     const availableNetworks = networkConfigs[selectedAsset?.name] || [];
 
     return (
@@ -1310,7 +1318,7 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
                               <div className="rounded-lg p-4 space-y-3">
                                 <div className="flex justify-between text-sm">
                                   <span className="text-gray-400">Network Fee:</span>
-                                  <span className="text-white">{networkFeeDisplay}</span>
+                                  <span className="text-white">{networkFeeDisplay}{networkFeeTokenDisplay ? <span className="text-gray-400 ml-1">({networkFeeTokenDisplay})</span> : ''}</span>
                                 </div>
                               </div>
 
@@ -1334,9 +1342,11 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
       ? (withdrawalFeeEstimate.gasFeeUSD ?? 0)
       : (networkFees[selectedAsset?.name]?.[selectedNetwork?.name] ?? 0);
     const gasFeeUsd = Number(gasFeeUSD).toFixed(2);
-    const gasFeeDisplay = `$${gasFeeUsd}`;
     const tokenPrice = parseFloat(selectedAsset?.priceUSD || '1') || 1;
     const gasInToken = tokenPrice > 0 ? gasFeeUSD / tokenPrice : 0;
+    const tokenSymbol = selectedAsset?.abbreviation || '';
+    const gasInTokenDisplay = gasInToken > 0 ? `≈ ${gasInToken.toFixed(6).replace(/\.?0+$/, '')} ${tokenSymbol}` : '';
+    const gasFeeDisplay = `$${gasFeeUsd}`;
     const amountReceived = withdrawAmount
       ? Math.max(0, parseFloat(withdrawAmount) - gasInToken).toFixed(8)
       : '0.00';
@@ -1427,7 +1437,7 @@ if (withdrawalResponse.status || withdrawalResponse.success) {
                             <div className="rounded-lg p-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Gas Fee:</span>
-                  <span className="text-white">{gasFeeDisplay}</span>
+                  <span className="text-white">{gasFeeDisplay}{gasInTokenDisplay ? <span className="text-gray-400 ml-1">({gasInTokenDisplay})</span> : ''}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400 font-medium">Amount Received:</span>
