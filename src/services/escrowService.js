@@ -115,7 +115,15 @@ const escrowService = {
   },
 
   // ──────────────────────────────────────
-  // 7. Cancel Deal (initiator only)
+  // 7. Mark Work Complete (workman only)
+  // ──────────────────────────────────────
+  async markWorkComplete(dealId) {
+    const res = await api.patch(`/escrow/${dealId}/work-complete`);
+    return res?.data || res;
+  },
+
+  // ──────────────────────────────────────
+  // 8. Cancel Deal (workman only)
   // ──────────────────────────────────────
   async cancelDeal(dealId, reason) {
     const payload = reason ? { reason } : {};

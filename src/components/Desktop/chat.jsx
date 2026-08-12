@@ -339,6 +339,20 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
     }
   }, [fetchEscrowDeal]);
 
+  const handleEscrowWorkComplete = useCallback(async (dealId) => {
+    setEscrowActionLoading('completing');
+    setEscrowError('');
+    try {
+      await escrowService.markWorkComplete(dealId);
+      const channelId = currentChannelRef.current?.id;
+      if (channelId) await fetchEscrowDeal(channelId);
+    } catch (err) {
+      setEscrowError(err?.response?.data?.message || err?.message || 'Failed to mark work as complete');
+    } finally {
+      setEscrowActionLoading(null);
+    }
+  }, [fetchEscrowDeal]);
+
 
   // Debounce search query
   // 🔥 FIXED: Removed searchQuery -> debouncedSearchQuery sync
@@ -7021,6 +7035,7 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
             const _isFund = escrowDeal.fundingParty === 'receiver' ? _isPart : _isInit;
             const _isWork = !_isFund && (_isInit || _isPart);
             const _status = escrowDeal.status?.toLowerCase() || 'pending';
+            const _initName = escrowDeal.initiatorId?.displayName || escrowDeal.initiatorId?.name || 'Initiator';
 
             const EscrowCountdownTimer = ({ deadlineIso, label }) => {
               const endMs = deadlineIso ? new Date(deadlineIso).getTime() : 0;
@@ -7053,44 +7068,45 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               <div className="hidden lg:flex items-center justify-center z-[60] px-4">
                 <div className="flex gap-2 items-center w-full">
 
-                  {/* Stage 1 — pending: show acceptance countdown + partner actions */}
-                  {_status === 'pending' && (_isInit || _isPart) && (() => {
-                    const acceptDeadlineMs = escrowDeal.acceptanceDeadline ? new Date(escrowDeal.acceptanceDeadline).getTime() : 0;
-                    const acceptExpired = acceptDeadlineMs > 0 && Date.now() > acceptDeadlineMs;
-                    return (
-                      <>
-                        <div className="flex-1 flex items-center gap-2 min-w-0">
-                          <Lock className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                          <p className="text-white text-sm whitespace-nowrap">Pending Escrow:</p>
-                          <p className="text-gray-400 text-sm font-semibold truncate">${Number(escrowDeal.amount || 0).toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</p>
-                        </div>
-                        {escrowDeal.acceptanceDeadline && (
-                          <EscrowCountdownTimer deadlineIso={escrowDeal.acceptanceDeadline} label="Accept by" />
-                        )}
-                        {_isPart && (
-                          <div className="flex gap-2 flex-shrink-0">
-                            <button
-                              onClick={() => setShowEscrowAcceptModal(true)}
-                              disabled={escrowActionLoading === 'accepting' || acceptExpired}
-                              className="px-4 py-2 bg-primary text-white rounded-full hover:bg-purple-700 text-sm transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {acceptExpired ? 'Expired' : 'Proceed'}
-                            </button>
-                            <button
-                              onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }}
-                              disabled={!!escrowActionLoading}
-                              className="px-4 py-2 bg-red-700/20 text-red-500 rounded-full text-sm hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
+                  {/* Pending — partner sees Accept + Decline */}
+                  {_status === 'pending' && _isPart && (
+                    <>
+                      <div className="flex-1 flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-yellow-500" />
+                        <p className="text-white text-sm">{_initName} sent an escrow deal:</p>
+                        <p className="text-gray-400 text-sm font-semibold">${Number(escrowDeal.amount || 0).toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowEscrowAcceptModal(true)} disabled={escrowActionLoading === 'accepting'} className="px-4 py-2 bg-primary text-white rounded-full hover:bg-purple-700 text-sm transition-colors font-medium disabled:opacity-50">Accept</button>
+                        <button onClick={() => { setEscrowError(''); setShowEscrowDeclineModal(true); }} disabled={!!escrowActionLoading} className="px-4 py-2 bg-red-700/20 text-red-600 rounded-full text-sm hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50">Decline</button>
+                      </div>
+                    </>
+                  )}
 
-                  {/* Stage 2 — accepted: funder sees release+appeal, workman sees cancel+appeal */}
-                  {_status === 'accepted' && (_isInit || _isPart) && (
+                  {/* Accepted stage 1 — workman marks work done */}
+                  {_status === 'accepted' && !escrowDeal.workCompleted && (_isInit || _isPart) && (
+                    <>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <Lock className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                        <p className="text-white text-sm whitespace-nowrap">Locked Escrow:</p>
+                        <p className="text-gray-400 text-sm truncate">${Number(escrowDeal.amount || 0).toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()} · {escrowDeal.network}</p>
+                      </div>
+                      {escrowDeal.endDate && <EscrowCountdownTimer deadlineIso={escrowDeal.endDate} label="Time Left" />}
+                      {_isWork && (
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                          <button onClick={() => handleEscrowWorkComplete(escrowDeal._id || escrowDeal.id)} disabled={!!escrowActionLoading} className="px-4 py-2 bg-primary text-white rounded-full hover:bg-purple-700 text-sm transition-colors font-medium disabled:opacity-50">
+                            {escrowActionLoading === 'completing' ? 'Sending…' : 'Proceed'}
+                          </button>
+                          <button onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }} disabled={!!escrowActionLoading} className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Accepted stage 2 — workman signalled done; funder releases */}
+                  {_status === 'accepted' && escrowDeal.workCompleted && (_isInit || _isPart) && (
                     <>
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
                         <Lock className="w-4 h-4 text-yellow-500 flex-shrink-0" />
@@ -7466,31 +7482,34 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               );
             };
 
-            // Stage 1 — pending
-            if (_status === 'pending' && (_isInit || _isPart)) {
-              const acceptExpired = escrowDeal.acceptanceDeadline && Date.now() > new Date(escrowDeal.acceptanceDeadline).getTime();
+            // Pending — partner sees Accept + Decline
+            if (_status === 'pending' && _isPart) {
+              return (
+                <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
+                  <div className="flex gap-2 w-full">
+                    <button onClick={() => setShowEscrowAcceptModal(true)} disabled={escrowActionLoading === 'accepting'} className="flex-1 px-3 py-1.5 bg-primary text-white rounded-full hover:bg-purple-700 text-xs transition-colors font-medium disabled:opacity-50">Accept</button>
+                    <button onClick={() => { setEscrowError(''); setShowEscrowDeclineModal(true); }} disabled={!!escrowActionLoading} className="flex-1 px-3 py-1.5 bg-red-700/20 text-red-600 rounded-full text-xs hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50">Decline</button>
+                  </div>
+                </div>
+              );
+            }
+
+            // Accepted stage 1 — workman marks work done
+            if (_status === 'accepted' && !escrowDeal.workCompleted && (_isInit || _isPart)) {
               return (
                 <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
                   <div className="flex items-center gap-2 w-full">
                     <div className="flex items-center gap-1 min-w-0 flex-1">
                       <Lock className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
-                      <p className="text-white text-xs truncate">Pending: ${Number(escrowDeal.amount || 0).toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</p>
+                      <p className="text-white text-xs truncate">Locked: ${Number(escrowDeal.amount || 0).toLocaleString()} {(escrowDeal.paymentMethod || '').toUpperCase()}</p>
                     </div>
-                    {escrowDeal.acceptanceDeadline && <MiniTimer deadlineIso={escrowDeal.acceptanceDeadline} />}
-                    {_isPart && (
-                      <div className="flex gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => setShowEscrowAcceptModal(true)}
-                          disabled={escrowActionLoading === 'accepting' || acceptExpired}
-                          className="px-3 py-1.5 bg-primary text-white rounded-full hover:bg-purple-700 text-xs transition-colors font-medium disabled:opacity-50"
-                        >
-                          {acceptExpired ? 'Expired' : 'Proceed'}
+                    {escrowDeal.endDate && <MiniTimer deadlineIso={escrowDeal.endDate} />}
+                    {_isWork && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+                        <button onClick={() => handleEscrowWorkComplete(escrowDeal._id || escrowDeal.id)} disabled={!!escrowActionLoading} className="px-3 py-1.5 bg-primary text-white rounded-full hover:bg-purple-700 text-xs transition-colors font-medium disabled:opacity-50">
+                          {escrowActionLoading === 'completing' ? '…' : 'Proceed'}
                         </button>
-                        <button
-                          onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }}
-                          disabled={!!escrowActionLoading}
-                          className="px-3 py-1.5 bg-red-700/20 text-red-500 rounded-full text-xs hover:bg-red-600/40 transition-colors font-medium disabled:opacity-50"
-                        >
+                        <button onClick={() => { setEscrowError(''); setShowEscrowCancelModal(true); }} disabled={!!escrowActionLoading} className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-full transition-colors">
                           Cancel
                         </button>
                       </div>
@@ -7500,8 +7519,8 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
               );
             }
 
-            // Stage 2 — accepted
-            if (_status === 'accepted' && (_isInit || _isPart)) {
+            // Accepted stage 2 — workman signalled done; funder releases
+            if (_status === 'accepted' && escrowDeal.workCompleted && (_isInit || _isPart)) {
               return (
                 <div className="lg:hidden w-full border-t border-white/10 pt-2 mt-2">
                   <div className="flex items-center gap-2 w-full">
@@ -7840,6 +7859,37 @@ const Chat = ({ section = 'aside', selectedUser = null, onSelectUser, onBackToLi
                         </div>
                       )}
                     </div>
+
+                    {/* Acceptance deadline timer — shown when deal is pending */}
+                    {status === 'pending' && deal.acceptanceDeadline && (() => {
+                      const AcceptTimer = () => {
+                        const [timeLeft, setTimeLeft] = React.useState(() => Math.max(0, Math.floor((new Date(deal.acceptanceDeadline).getTime() - Date.now()) / 1000)));
+                        React.useEffect(() => {
+                          if (timeLeft <= 0) return;
+                          const id = setInterval(() => setTimeLeft(p => Math.max(0, p - 1)), 1000);
+                          return () => clearInterval(id);
+                        }, [timeLeft]);
+                        const hrs = Math.floor(timeLeft / 3600);
+                        const mins = Math.floor((timeLeft % 3600) / 60);
+                        const secs = timeLeft % 60;
+                        const pad = n => String(n).padStart(2, '0');
+                        const isLow = timeLeft < 600;
+                        return (
+                          <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                            <span className="text-gray-500 text-xs">Accept by</span>
+                            <div className={`flex items-center gap-1.5 bg-[#222125] text-xs py-1.5 px-3 rounded-full font-mono ${isLow ? 'border border-red-500/50' : 'border border-yellow-500/50'}`}>
+                              <Clock className={`w-3.5 h-3.5 ${isLow ? 'text-red-400 animate-pulse' : 'text-yellow-400'}`} />
+                              {timeLeft <= 0 ? (
+                                <span className="text-red-400 font-bold">Expired</span>
+                              ) : (
+                                <span className={`font-bold ${isLow ? 'text-red-400' : 'text-yellow-400'}`}>{pad(hrs)}:{pad(mins)}:{pad(secs)}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      };
+                      return <AcceptTimer />;
+                    })()}
 
                     {/* Error message */}
                     {escrowError && (
