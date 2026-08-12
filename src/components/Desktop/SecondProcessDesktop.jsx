@@ -441,11 +441,20 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose, walletData })
             <div className="pb-6">
               <h2 className="text-white text-base font-bold mb-4">Deal Information</h2>
               
-              <div className="bg-[#181818] rounded-xl p-4 border border-white/5 mb-6 flex gap-3">
+              <div className="bg-[#181818] rounded-xl p-4 border border-white/5 flex gap-3">
                 <Info className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
                 <p className="text-gray-400 text-sm leading-relaxed">
                   This transaction is protected by Soctral Escrow. Funds are held securely until both parties confirm the terms of the trade have been met. Nothing moves until everyone agrees.
                 </p>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-3 mb-6">
+                <p className="text-yellow-400 text-xs font-semibold mb-1.5">Important — Please read before creating</p>
+                <ul className="space-y-1 text-gray-400 text-xs list-disc list-inside">
+                  <li>Provide accurate transaction terms, descriptions, and proof (photos / receipts).</li>
+                  <li>Provide and double-check all external links, addresses, and any information relevant to this deal.</li>
+                  <li>Any missing or incorrect details may result in loss of funds or an unfavourable dispute resolution.</li>
+                </ul>
               </div>
 
               <div className="space-y-5">
@@ -923,15 +932,7 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose, walletData })
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-white/5 shrink-0 bg-[#0D0D0D] space-y-4">
-            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-4 py-3">
-              <p className="text-yellow-400 text-xs font-semibold mb-1.5">Important — Please read before creating</p>
-              <ul className="space-y-1 text-gray-400 text-xs list-disc list-inside">
-                <li>Provide accurate transaction terms, descriptions, and proof (photos / receipts).</li>
-                <li>Provide and double-check all external links, addresses, and any information relevant to this deal.</li>
-                <li>Any missing or incorrect details may result in loss of funds or an unfavourable dispute resolution.</li>
-              </ul>
-            </div>
+          <div className="p-6 border-t border-white/5 shrink-0 bg-[#0D0D0D]">
             <button
               onClick={handleSubmit}
               className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-4 rounded-xl transition-colors text-sm"
