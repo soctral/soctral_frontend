@@ -440,20 +440,21 @@ const SecondProcessMobile = ({ formData, onNext, onBack, walletData }) => {
         <div className="px-5">
           <h2 className="text-white text-base font-bold mb-4">Deal Information</h2>
           
-          <div className="bg-[#181818] rounded-xl p-4 border border-white/5 flex gap-3">
-            <Info className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
-            <p className="text-gray-400 text-xs leading-relaxed">
-              This transaction is protected by Soctral Escrow. Funds are held securely until both parties confirm the terms of the trade have been met. Nothing moves until everyone agrees.
-            </p>
-          </div>
-
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2.5 mb-6">
-            <p className="text-yellow-400 text-[10px] font-semibold mb-1">Important — Please read before creating</p>
-            <ul className="space-y-0.5 text-gray-400 text-[10px] list-disc list-inside">
-              <li>Provide accurate transaction terms, descriptions, and proof (photos / receipts).</li>
-              <li>Double-check all external links, addresses, and relevant information.</li>
-              <li>Missing or incorrect details may result in loss of funds or unfavourable dispute resolution.</li>
-            </ul>
+          <div className="bg-[#181818] rounded-xl p-4 border border-white/5 mb-6">
+            <div className="flex gap-3">
+              <Info className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+              <p className="text-gray-400 text-xs leading-relaxed">
+                This transaction is protected by Soctral Escrow. Funds are held securely until both parties confirm the terms of the trade have been met. Nothing moves until everyone agrees.
+              </p>
+            </div>
+            <div className="mt-3 pt-3 border-t border-white/10">
+              <p className="text-yellow-400 text-[10px] font-semibold mb-1">Important — Please read before creating</p>
+              <ul className="space-y-0.5 text-gray-400 text-[10px] list-disc list-inside">
+                <li>Provide accurate transaction terms, descriptions, and proof (photos / receipts).</li>
+                <li>Double-check all external links, addresses, and relevant information.</li>
+                <li>Missing or incorrect details may result in loss of funds or unfavourable dispute resolution.</li>
+              </ul>
+            </div>
           </div>
 
           <div className="space-y-5">
