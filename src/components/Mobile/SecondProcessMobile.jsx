@@ -379,7 +379,10 @@ const SecondProcessMobile = ({ formData, onNext, onBack, walletData }) => {
       newErrors.endDate = 'End Date must be after Start Date';
     }
 
-    // Check if any images are still uploading
+    const uploadedCount = (localData.dealImages || []).filter(img => img.uploadedUrl).length;
+    if (uploadedCount === 0) {
+      newErrors.dealImages = 'At least one image is required';
+    }
     const anyUploading = localData.dealImages.some(img => img.uploading);
     if (anyUploading) {
       newErrors.dealImages = 'Please wait for images to finish uploading';
@@ -835,9 +838,38 @@ const SecondProcessMobile = ({ formData, onNext, onBack, walletData }) => {
               </div>
             </div>
 
+            {/* Acceptance Timer */}
+            <div>
+              <label className="block text-gray-400 text-xs mb-1">Acceptance Window <span className="text-gray-600 text-[10px]">(time partner has to accept)</span></label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-[#181818] border border-white/10 rounded-xl px-3 py-3 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="167"
+                    value={localData.acceptanceDurationHours ?? 1}
+                    onChange={(e) => handleChange('acceptanceDurationHours', Math.max(0, parseInt(e.target.value) || 0))}
+                    className="bg-transparent text-white text-sm w-full focus:outline-none"
+                  />
+                  <span className="text-gray-500 text-xs shrink-0">hrs</span>
+                </div>
+                <div className="bg-[#181818] border border-white/10 rounded-xl px-3 py-3 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={localData.acceptanceDurationMinutes ?? 0}
+                    onChange={(e) => handleChange('acceptanceDurationMinutes', Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))}
+                    className="bg-transparent text-white text-sm w-full focus:outline-none"
+                  />
+                  <span className="text-gray-500 text-xs shrink-0">min</span>
+                </div>
+              </div>
+            </div>
+
             {/* Upload Images */}
             <div>
-              <label className="block text-gray-400 text-xs mb-2">Upload Deal Image(s) <span className="text-gray-600">({localData.dealImages.length}/{MAX_IMAGES})</span></label>
+              <label className="block text-gray-400 text-xs mb-2">Upload Deal Image(s) <span className="text-red-400 text-[10px]">*required</span> <span className="text-gray-600">({localData.dealImages.length}/{MAX_IMAGES})</span></label>
               <div className="flex flex-wrap gap-3">
                 {localData.dealImages.map((img, idx) => (
                   <div key={idx} className="relative w-24 h-24 rounded-xl overflow-hidden border border-white/10">
@@ -877,8 +909,16 @@ const SecondProcessMobile = ({ formData, onNext, onBack, walletData }) => {
       </div>
 
       {/* Footer */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#0D0D0D] border-t border-white/5 shrink-0">
-        <button 
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#0D0D0D] border-t border-white/5 shrink-0 space-y-3">
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3 py-2.5">
+          <p className="text-yellow-400 text-[10px] font-semibold mb-1">Important — Please read before creating</p>
+          <ul className="space-y-0.5 text-gray-400 text-[10px] list-disc list-inside">
+            <li>Provide accurate transaction terms, descriptions, and proof (photos / receipts).</li>
+            <li>Double-check all external links, addresses, and relevant information.</li>
+            <li>Missing or incorrect details may result in loss of funds or unfavourable dispute resolution.</li>
+          </ul>
+        </div>
+        <button
           onClick={handleSubmit}
           className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-4 rounded-full transition-colors text-sm"
         >

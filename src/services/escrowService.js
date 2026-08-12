@@ -70,7 +70,7 @@ const escrowService = {
   // ──────────────────────────────────────
   // 3. Create Escrow Deal
   // ──────────────────────────────────────
-  async createDeal({ dealName, description, partnerId, amount, paymentMethod, network, startDate, endDate, images, fundingParty }) {
+  async createDeal({ dealName, description, partnerId, amount, paymentMethod, network, startDate, endDate, images, fundingParty, acceptanceDuration }) {
     const payload = {
       dealName,
       description: description || undefined,
@@ -82,6 +82,7 @@ const escrowService = {
       startDate: new Date(startDate).toISOString(),
       endDate: new Date(endDate).toISOString(),
       images: images && images.length > 0 ? images : undefined,
+      acceptanceDuration: acceptanceDuration ? Number(acceptanceDuration) : 60,
     };
 
     const res = await api.post("/escrow", payload);
