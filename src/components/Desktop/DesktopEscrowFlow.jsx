@@ -21,7 +21,9 @@ const DesktopEscrowFlow = ({ onClose, onBuySell, onOpenChat, walletData }) => {
     startDate: '',
     endDate: '',
     dealImages: [],
-    uploadedImageUrls: []
+    uploadedImageUrls: [],
+    acceptanceDurationHours: 1,
+    acceptanceDurationMinutes: 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -57,6 +59,7 @@ const DesktopEscrowFlow = ({ onClose, onBuySell, onOpenChat, walletData }) => {
     setSubmitError('');
 
     try {
+      const acceptanceDuration = (parseInt(formData.acceptanceDurationHours) || 0) * 60 + (parseInt(formData.acceptanceDurationMinutes) || 0);
       const response = await escrowService.createDeal({
         dealName: formData.dealName,
         description: formData.description,
@@ -68,6 +71,7 @@ const DesktopEscrowFlow = ({ onClose, onBuySell, onOpenChat, walletData }) => {
         endDate: formData.endDate,
         images: formData.uploadedImageUrls,
         fundingParty: formData.initiatorRole === 'creator' ? 'initiator' : 'receiver',
+        acceptanceDuration: acceptanceDuration > 0 ? acceptanceDuration : 60,
       });
 
       setDealResponse(response);

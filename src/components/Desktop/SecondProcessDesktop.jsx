@@ -373,6 +373,10 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose, walletData })
       newErrors.endDate = 'End Date must be after Start Date';
     }
 
+    const uploadedCount = (localData.dealImages || []).filter(img => img.uploadedUrl).length;
+    if (uploadedCount === 0) {
+      newErrors.dealImages = 'At least one image is required';
+    }
     const anyUploading = localData.dealImages.some(img => img.uploading);
     if (anyUploading) {
       newErrors.dealImages = 'Please wait for images to finish uploading';
@@ -437,11 +441,21 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose, walletData })
             <div className="pb-6">
               <h2 className="text-white text-base font-bold mb-4">Deal Information</h2>
               
-              <div className="bg-[#181818] rounded-xl p-4 border border-white/5 mb-6 flex gap-3">
-                <Info className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  This transaction is protected by Soctral Escrow. Funds are held securely until both parties confirm the terms of the trade have been met. Nothing moves until everyone agrees.
-                </p>
+              <div className="bg-[#181818] rounded-xl p-4 border border-white/5 mb-6">
+                <div className="flex gap-3">
+                  <Info className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+                  <p className="text-gray-400 text-sm leading-relaxed">
+                    This transaction is protected by Soctral Escrow. Funds are held securely until both parties confirm the terms of the trade have been met. Nothing moves until everyone agrees.
+                  </p>
+                </div>
+                <div className="mt-3 pt-3 border-t border-white/10">
+                  <p className="text-yellow-400 text-xs font-semibold mb-1.5">Important — Please read before creating</p>
+                  <ul className="space-y-1 text-gray-400 text-xs list-disc list-inside">
+                    <li>Provide accurate transaction terms, descriptions, and proof (photos / receipts).</li>
+                    <li>Provide and double-check all external links, addresses, and any information relevant to this deal.</li>
+                    <li>Any missing or incorrect details may result in loss of funds or an unfavourable dispute resolution.</li>
+                  </ul>
+                </div>
               </div>
 
               <div className="space-y-5">
@@ -846,9 +860,38 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose, walletData })
                   </div>
                 </div>
 
+                {/* Acceptance Timer */}
+                <div>
+                  <label className="block text-gray-400 text-sm mb-1">Acceptance Window <span className="text-gray-600 text-xs">(how long the partner has to accept)</span></label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-[#181818] border border-white/10 rounded-xl px-4 py-3 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="167"
+                        value={localData.acceptanceDurationHours ?? 1}
+                        onChange={(e) => handleChange('acceptanceDurationHours', Math.max(0, parseInt(e.target.value) || 0))}
+                        className="bg-transparent text-white text-sm w-full focus:outline-none"
+                      />
+                      <span className="text-gray-500 text-sm shrink-0">hrs</span>
+                    </div>
+                    <div className="bg-[#181818] border border-white/10 rounded-xl px-4 py-3 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="59"
+                        value={localData.acceptanceDurationMinutes ?? 0}
+                        onChange={(e) => handleChange('acceptanceDurationMinutes', Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))}
+                        className="bg-transparent text-white text-sm w-full focus:outline-none"
+                      />
+                      <span className="text-gray-500 text-sm shrink-0">min</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Upload Images */}
                 <div>
-                  <label className="block text-gray-400 text-sm mb-2">Upload Deal Image(s) <span className="text-gray-600">({localData.dealImages.length}/{MAX_IMAGES})</span></label>
+                  <label className="block text-gray-400 text-sm mb-2">Upload Deal Image(s) <span className="text-red-400 text-xs">*required</span> <span className="text-gray-600">({localData.dealImages.length}/{MAX_IMAGES})</span></label>
                   <div className="flex flex-wrap gap-4">
                     {localData.dealImages.map((img, idx) => (
                       <div key={idx} className="relative w-28 h-28 rounded-xl overflow-hidden border border-white/10 group">
@@ -891,7 +934,7 @@ const SecondProcessDesktop = ({ formData, onNext, onBack, onClose, walletData })
 
           {/* Footer */}
           <div className="p-6 border-t border-white/5 shrink-0 bg-[#0D0D0D]">
-            <button 
+            <button
               onClick={handleSubmit}
               className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-4 rounded-xl transition-colors text-sm"
             >
